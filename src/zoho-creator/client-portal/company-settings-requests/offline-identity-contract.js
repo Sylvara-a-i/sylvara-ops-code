@@ -43,10 +43,11 @@ function onlyMatch(values, matches) {
   return found[0];
 }
 
-// Offline structural resolution, NOT authentication or live link discovery.
-function resolveExplicitCompanyIdentity(accountSelector, evidence) {
+// Internal producer seam: authorize protected links before reading any CRM record.
+// This remains structural resolution, NOT authentication or live link discovery.
+function resolveProtectedCompanyLinks(accountSelector, evidence) {
   identifier(accountSelector);
-  record(evidence, ["principal", "complete", "grants", "accountLinks", "contactLinks", "crmContacts", "crmAccounts"]);
+  record(evidence, ["principal", "complete", "grants", "accountLinks", "contactLinks"]);
   record(evidence.principal, ["id", "auditActorId"]);
   identifier(evidence.principal.id);
   identifier(evidence.principal.auditActorId);
@@ -58,8 +59,6 @@ function resolveExplicitCompanyIdentity(accountSelector, evidence) {
   }
   rows(evidence.accountLinks, ["creatorAccountId", "crmAccountId", "revision"]);
   rows(evidence.contactLinks, ["creatorContactId", "creatorAccountId", "crmContactId", "revision"]);
-  rows(evidence.crmContacts, ["id", "accountId"]);
-  rows(evidence.crmAccounts, ["id", "previousServiceArea"], ["id"]);
 
   const grant = onlyMatch(evidence.grants, (row) =>
     row.principalId === evidence.principal.id && row.creatorAccountId === accountSelector);
@@ -69,22 +68,33 @@ function resolveExplicitCompanyIdentity(accountSelector, evidence) {
   const contactLink = onlyMatch(evidence.contactLinks, (row) => row.creatorContactId === grant.creatorContactId);
   onlyMatch(evidence.contactLinks, (row) => row.crmContactId === contactLink.crmContactId);
   if (contactLink.creatorAccountId !== accountSelector) deny();
-  const contact = onlyMatch(evidence.crmContacts, (row) => row.id === contactLink.crmContactId);
-  if (contact.accountId !== accountLink.crmAccountId) deny();
-  const account = onlyMatch(evidence.crmAccounts, (row) => row.id === accountLink.crmAccountId);
-  validateRequestedServiceArea(account.previousServiceArea);
   return Object.freeze({
     principalId: evidence.principal.id,
     auditActorId: evidence.principal.auditActorId,
     creatorAccountId: accountSelector,
     creatorContactId: grant.creatorContactId,
-    crmAccountId: account.id,
-    crmContactId: contact.id,
+    crmAccountId: accountLink.crmAccountId,
+    crmContactId: contactLink.crmContactId,
     grantRevision: grant.revision,
     accountLinkRevision: accountLink.revision,
     contactLinkRevision: contactLink.revision,
-    previousServiceArea: account.previousServiceArea,
   });
+}
+
+// Offline structural resolution, NOT authentication or live link discovery.
+function resolveExplicitCompanyIdentity(accountSelector, evidence) {
+  record(evidence, ["principal", "complete", "grants", "accountLinks", "contactLinks", "crmContacts", "crmAccounts"]);
+  const identity = resolveProtectedCompanyLinks(accountSelector, {
+    principal: evidence.principal, complete: evidence.complete, grants: evidence.grants,
+    accountLinks: evidence.accountLinks, contactLinks: evidence.contactLinks,
+  });
+  rows(evidence.crmContacts, ["id", "accountId"]);
+  rows(evidence.crmAccounts, ["id", "previousServiceArea"], ["id"]);
+  const contact = onlyMatch(evidence.crmContacts, (row) => row.id === identity.crmContactId);
+  if (contact.accountId !== identity.crmAccountId) deny();
+  const account = onlyMatch(evidence.crmAccounts, (row) => row.id === identity.crmAccountId);
+  validateRequestedServiceArea(account.previousServiceArea);
+  return Object.freeze({ ...identity, previousServiceArea: account.previousServiceArea });
 }
 
 function digest(tuple) {
@@ -143,6 +153,7 @@ function assertSameReplayBinding(storedBinding, candidateBinding) {
 }
 
 module.exports = {
+  resolveProtectedCompanyLinks,
   resolveExplicitCompanyIdentity,
   prepareOfflineRequestBinding,
   assertSameReplayBinding,

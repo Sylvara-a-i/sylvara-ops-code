@@ -56,9 +56,54 @@ The vectors lock normalization-equivalent requested text to the same digest, pre
 
 Do not silently rebaseline these vectors. Changes to tuple order, version labels, encoding, normalization or bound values require an explicit compatibility review and deliberate version/migration decisions **before durable adoption**. That decision must define how stored claims and exact retries remain interpretable without permitting a second side effect under a new key or digest. Passing these vectors preserves the existing offline v1 algorithm; it does not approve that algorithm or its metadata for durable or live use.
 
+## Offline exact-ID CRM read producer
+
+[`service-area-request-producer.js`](service-area-request-producer.js) exports `produceServiceAreaRequest(input, trusted, issuance, policy, get)`, a synthetic GET composition seam for the existing identity contract and planner. Evidence status: offline synthetic behavior, 2026-10-11. It implements no HTTP transport, credential handling, SDK client, writer, durable acceptance or native form save. Its successful return is the unchanged `{ request, attribution, requestId, issuedAt, binding }` result from `prepareOfflineRequestBinding`.
+
+`input` remains exactly `{ Account, Requested_Service_Area }`. `Account` is an untrusted Creator company selector checked against protected grants and links; it never establishes identity or authority. Reject all client overrides of CRM IDs, baseline, status, actor, issuance, environment, organization or policy. `issuance` retains the server-only contract above.
+
+`trusted` is exactly `{ environment, organizationId, observedAt, complete, principal, grants, accountLinks, contactLinks }`. The principal, grant and link shapes and uniqueness rules are the same as the minimum producer contract above. `complete` must be `true`. These facts must come from an independently protected server source; neither client JSON nor a CRM record can create or amend them. The producer reuses the existing grant/link resolver to derive the exact CRM Contact and Account IDs before any GET. It does not invent records or a placeholder baseline to satisfy the planner.
+
+`policy` is exactly `{ expectedEnvironment, expectedOrganizationId, asOf, maxAgeMs }`, supplied independently by the server composition root. Environments are `development`, `staging` or `production`; `maxAgeMs` is an explicit positive safe integer with no default. `asOf` and every `observedAt` must be exact canonical UTC timestamps (`YYYY-MM-DDTHH:mm:ss.sssZ`). Trusted evidence and both GET receipts must match the independently pinned organization/environment, must not be observed after `asOf`, and must be no older than `maxAgeMs`. The CRM response body cannot assert the tenant, environment, freshness or authenticity of its own receipt. No implicit clock is read.
+
+The injected `get` receives a frozen descriptor, including its fixed field array:
+
+```js
+{
+  method: "GET", module: "Contacts", recordId: "synthetic-crm-contact",
+  fields: ["id", "Account_Name"], environment: "development",
+  organizationId: "synthetic-org"
+}
+```
+
+The first read is the exact linked Contact. Only after its `id` matches the requested ID and `Account_Name.id` matches the independently linked CRM Account does the producer issue the second descriptor: module `Accounts`, that linked Account's `recordId`, and fields `["id", "Primary_Service_Area"]`. It never follows a different lookup target, lists or searches records, falls back to names, or accepts caller-selected modules, fields, URLs or filters. The callback itself must be installed by the protected server composition root; a descriptor does not constrain arbitrary callback internals.
+
+Each successful synthetic receipt is exactly:
+
+```js
+{
+  state: "available", environment: "development", organizationId: "synthetic-org",
+  observedAt: "2026-10-11T00:00:00.000Z", module: "Contacts",
+  recordId: "synthetic-crm-contact", complete: true,
+  response: { data: [
+    { id: "synthetic-crm-contact", Account_Name: { id: "synthetic-crm-account" } }
+  ] }
+}
+```
+
+The receipt's module and record ID must match the request. `response` contains only `data`, a dense ordinary array with exactly one record; empty, duplicate, partial and paginated results fail closed. No `info` or pagination metadata is accepted by this seam. The Contact record is exactly `{ id, Account_Name }`, with a lookup `{ id, name? }`; the optional display name has no authority and is not used for the join. A null lookup cannot establish a company relationship. The Account record is exactly `{ id, Primary_Service_Area }`. Its exact nonblank service-area text becomes `previousServiceArea` without trimming or newline normalization. Malformed, unavailable, mismatched, stale or incomplete receipts and transport failures produce no prepared request; there is no partial result, fallback baseline or acceptance claim.
+
+Inputs are validated and copied before the first asynchronous read. Each response is validated and detached before another asynchronous continuation can mutate its facts; accessors, unexpected keys and nonordinary arrays are rejected. These snapshots prevent in-flight object mutation from changing the selected company, provenance or bound values. They do **not** enforce current authorization or revocation. The identity resolver, planner, v1 tuple serialization and fixed golden vectors remain the existing contracts; no additional runtime dependency is needed.
+
+Field provenance supplied in the 2026-10-11 user audit: `Contacts.Account_Name` is an Accounts lookup; CRM `Accounts.Primary_Service_Area` is the candidate canonical textarea. Creator `Accounts.Service_Area` remains an unverified mirror and is not a baseline source. This handoff is not a fresh live read by the offline producer. The native form remains gated until the protected identity, read, permission, attribution and acceptance boundaries are verified.
+
+The official [Zoho CRM V8 Get Records documentation](https://www.zoho.com/crm/developer/docs/api/v8/get-records.html), reviewed 2026-10-11, documents exact-ID GETs, response `data` arrays and lookup objects containing an ID/name or null. It establishes generic provider capability only. The pinned GET descriptors, receipt provenance fields, single-record shape and completeness assertion above are this repository's **synthetic adapter protocol**, not a claim that Zoho emits that envelope or that a live connector is qualified. A future adapter must separately establish exact response/error semantics, field completeness, transport bounds and server-owned tenant provenance before translating provider evidence into this receipt.
+
 ## Unimplemented live gates
 
 Before enabling acceptance, a separately approved adapter must authenticate the stable principal, independently verify human attribution and current operation grant, resolve complete explicit links and authoritative CRM relationships, and deny stale or revoked evidence. Producer revisions must identify real reviewed grant/link versions; caller-generated version labels are not authority. For an exact replay, authoritative readback must retain the original bound issuance/request snapshot, while current authentication and revocation are independently enforced; reconstructing from a changed fresh baseline must conflict, not silently overwrite the original claim.
+
+The GET producer does not supply the protected provisioner, authenticated principal resolver, current grant/revocation authority or durable attribution. Before any future acceptance, the composition root must freshly recheck authentication, current operation authorization and revocation, including changes during an in-flight read. A frozen prior snapshot is insufficient. Native form field visibility or validation alone does not establish these server boundaries, and no save flow is enabled by this source increment.
 
 Persistence must atomically claim `claimKey` under a durable UNIQUE constraint, bind `bindingDigest` and the complete attributed envelope, and keep the claim through success, failure or ambiguous timeout. An exact replay returns only the known durable outcome; a different digest must fail without a second side effect. Concurrent losers must read authoritative claim state. Append-only attribution/request persistence and the four-field Creator outcome must be atomic or governed by a reviewed outbox/reconciliation contract that never reports acceptance before the durable outcome is known. Do not release a claim and retry after an unknown result. Retention, least-privilege visibility, correction by a new audit event, independent readback and failure containment require separate decisions. The approved form is unchanged by this proposal.
 
@@ -68,7 +113,10 @@ The offline identity test modules are imported by the existing canonical/CI test
 
 ```sh
 node --check src/zoho-creator/client-portal/company-settings-requests/offline-identity-contract.js
+node --check src/zoho-creator/client-portal/company-settings-requests/service-area-request-producer.js
 node --test src/zoho-creator/client-portal/company-settings-requests/test/service-area-request-contract.test.js
 ```
 
 Tests exercise every identity join's zero/multiple matches, reverse ambiguity, inactive/cross-company grants, duplicate grants, independent two-company selection and forged cross-company selectors, Billing/portal-user/role shortcuts, incomplete/hostile evidence, attributed copies, fixed serialization vectors, deterministic normalization-equivalent replay, immutable binding and conflicts for each consequential value, invalid issuance/readback and zero transport/clock calls. The existing planner tests continue to own text boundaries and four-field behavior. Durable concurrency, live authentication, schema visibility and append-only acceptance remain untested/unimplemented. Errors do not print principal, record IDs or payloads. All examples are synthetic. Revert the source commit for offline containment; no live rollback is needed.
+
+Producer regressions cover zero GETs for invalid input/protected evidence/issuance/policy, exact Contact-then-Account descriptors, company/tenant/environment/record mismatches, stale and future observations, missing or multiple rows, null or forged lookups, blank and whitespace-sensitive baselines, hostile descriptors and in-flight mutation. They also pin exact 19-digit string IDs, reject rounded numeric IDs, and preserve the requested-text 2000/2001 emoji boundary. Successful preparation equals the existing planner/binding result and all fixed vectors remain unchanged. Offline receipts do not test provider permissions, current revocation, native form acceptance or durable side effects.

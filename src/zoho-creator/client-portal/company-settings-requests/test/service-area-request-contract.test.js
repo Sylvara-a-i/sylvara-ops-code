@@ -4,6 +4,7 @@
 require("./offline-identity-contract.test");
 require("./offline-identity-vectors.test");
 require("./offline-company-isolation.test");
+require("./service-area-request-producer.test");
 require("../../billing-plans/test/billing-plan-view-contract.test");
 
 const test = require("node:test");
