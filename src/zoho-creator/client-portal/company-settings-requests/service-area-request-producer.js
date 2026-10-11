@@ -138,4 +138,99 @@ async function produceServiceAreaRequest(input, trusted, issuance, policy, get) 
   }
 }
 
-module.exports = { produceServiceAreaRequest };
+// Separate protocol: legacy callers retain their fixed-asOf snapshot semantics.
+async function produceTimedServiceAreaRequest(input, requestId, policy, services) {
+  let timer, expired = false;
+  try {
+    const client = Object.freeze(record(input, ["Account", "Requested_Service_Area"]));
+    validateRequestedServiceArea(client.Requested_Service_Area);
+    identifier(requestId);
+    const config = record(policy, ["protocol", "expectedEnvironment", "expectedOrganizationId", "maxAgeMs", "maxDurationMs"]);
+    if (config.protocol !== "timed-read-v2" || !Number.isSafeInteger(config.maxDurationMs) ||
+        config.maxDurationMs <= 0 || config.maxDurationMs > 2147483647) deny();
+    const callbacks = record(services, ["now", "readAuthorization", "get"]);
+    if (Object.values(callbacks).some((value) => typeof value !== "function")) deny();
+    const elapsedDeadline = performance.now() + config.maxDurationMs;
+    let last = instant(callbacks.now());
+    const started = last;
+    const deadline = started + config.maxDurationMs;
+    if (!Number.isSafeInteger(deadline)) deny();
+    const issuedAt = new Date(started).toISOString();
+    const deadlineAt = new Date(deadline).toISOString();
+    readPolicy({ expectedEnvironment: config.expectedEnvironment,
+      expectedOrganizationId: config.expectedOrganizationId, maxAgeMs: config.maxAgeMs, asOf: issuedAt });
+    function clock() {
+      const next = instant(callbacks.now());
+      if (expired || performance.now() >= elapsedDeadline || next < last || next >= deadline) deny();
+      last = next;
+      return new Date(next).toISOString();
+    }
+    function limits(asOf) {
+      return readPolicy({ expectedEnvironment: config.expectedEnvironment,
+        expectedOrganizationId: config.expectedOrganizationId, maxAgeMs: config.maxAgeMs, asOf });
+    }
+    let identity, authorizationObservedAt;
+    async function authorize() {
+      const began = instant(clock());
+      const raw = await callbacks.readAuthorization();
+      const current = limits(clock());
+      const observed = record(raw, ["environment", "organizationId", "observedAt", "complete",
+        "principal", "grants", "accountLinks", "contactLinks"]);
+      if (instant(observed.observedAt) < began) deny();
+      const snapshot = protectedSnapshot(observed, current);
+      const resolved = resolveProtectedCompanyLinks(client.Account, snapshot);
+      if (identity && Object.keys(identity).some((key) => identity[key] !== resolved[key])) deny();
+      identity = resolved;
+      authorizationObservedAt = observed.observedAt;
+      return snapshot;
+    }
+    async function run() {
+      await authorize();
+      async function read(module, id, fields, keys) {
+        const began = instant(clock());
+        const request = Object.freeze({ ...descriptor(module, id, fields, limits(new Date(began).toISOString())),
+          protocol: config.protocol, requestStartedAt: issuedAt, deadlineAt });
+        const raw = await callbacks.get(request);
+        const current = limits(clock());
+        const row = receiptRow(raw, request, current, keys);
+        if (instant(raw.observedAt) < began) deny();
+        // Detach before another callback can mutate the accepted facts.
+        if (module === "Contacts") {
+          const lookup = record(row.Account_Name, Object.hasOwn(row.Account_Name || {}, "name")
+            ? ["id", "name"] : ["id"]);
+          if (lookup.id !== identity.crmAccountId ||
+              (Object.hasOwn(lookup, "name") && typeof lookup.name !== "string")) deny();
+          return Object.freeze({ observedAt: raw.observedAt,
+            fact: Object.freeze({ id: row.id, accountId: lookup.id }) });
+        }
+        validateRequestedServiceArea(row.Primary_Service_Area);
+        return Object.freeze({ observedAt: raw.observedAt,
+          fact: Object.freeze({ id: row.id, previousServiceArea: row.Primary_Service_Area }) });
+      }
+      const contact = await read("Contacts", identity.crmContactId, ["id", "Account_Name"], ["id", "Account_Name"]);
+      await authorize();
+      const account = await read("Accounts", identity.crmAccountId, ["id", "Primary_Service_Area"], ["id", "Primary_Service_Area"]);
+      const finalAuthorization = await authorize();
+      const prepared = prepareOfflineRequestBinding(client, { ...finalAuthorization,
+        crmContacts: [contact.fact], crmAccounts: [account.fact] }, { requestId, issuedAt });
+      const finalPolicy = limits(clock());
+      for (const result of [contact, account, { observedAt: authorizationObservedAt }]) {
+        checkScopeAndFreshness({ environment: config.expectedEnvironment,
+          organizationId: config.expectedOrganizationId, observedAt: result.observedAt }, finalPolicy);
+      }
+      return prepared;
+    }
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => { expired = true; reject(new TypeError("Invalid service-area read evidence")); },
+        Math.max(0, elapsedDeadline - performance.now()));
+    });
+    return await Promise.race([run(), timeout]);
+  } catch {
+    deny();
+  } finally {
+    clearTimeout(timer);
+    expired = true;
+  }
+}
+
+module.exports = { produceServiceAreaRequest, produceTimedServiceAreaRequest };

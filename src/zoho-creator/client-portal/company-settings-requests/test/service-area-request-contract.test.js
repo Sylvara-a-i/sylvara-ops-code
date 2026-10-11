@@ -5,6 +5,7 @@ require("./offline-identity-contract.test");
 require("./offline-identity-vectors.test");
 require("./offline-company-isolation.test");
 require("./service-area-request-producer.test");
+require("./timed-service-area-request-producer.test");
 require("./crm-service-area-response.test");
 require("../../billing-plans/test/billing-plan-view-contract.test");
 
