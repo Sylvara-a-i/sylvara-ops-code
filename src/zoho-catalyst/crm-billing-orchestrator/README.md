@@ -139,6 +139,73 @@ Then run the repository verifier as documented in the root README. Tests use
 synthetic metadata only; private independently collected evidence stays outside
 Git and CI.
 
+### Offline Paired-ID Metadata Normalization
+
+[`tools/normalize-paid-crm-metadata.js`](tools/normalize-paid-crm-metadata.js)
+exports the pure `normalizePaidCrmMetadata(readbacks, expected)` helper for the
+bounded case where a raw option readback contains one global ID and one local
+field ID for each actual API value. It reconciles four independently collected
+inventories before projecting the single local field option. It does not change
+the validator's rejection of duplicate normalized option values, including
+identical duplicates.
+
+`expected` contains `organizationId`, `layoutId`, `notBefore`, `evaluatedAt`, and
+exactly two `fields` binding rows with `apiName`, `fieldId`, `globalSetId` for
+`Plan` and `Subscription_Status`. Field IDs and global-set IDs must each be
+unique. Each of the following four readbacks has its own nonempty, distinct
+`readbackId`, plus `organizationId`, `moduleApiName: "Deals"`,
+`source: "independent_readback"`, `complete: true`, and canonical `capturedAt`
+within the expected interval. A readback ID identifies a private capture, not
+an option or an assertion of cryptographic authenticity. A collector must not
+invent four capture IDs for copies of the same response.
+
+| Readback | Payload beyond its envelope |
+| --- | --- |
+| `globalSets` | `sets`: exactly the two bound `{ globalSetId, options }` inventories |
+| `fields` | `fields`: binding rows plus `dataType`, optional boolean `apiUpdate`/`readOnly`, and `options` |
+| `rawOptions` | `fields`: binding rows plus the expected `layoutId` and raw paired `options` |
+| `layout` | Expected `layoutId`, boolean `active`, `fields`: binding rows plus optional boolean `readOnly` and `options` |
+
+Every option contains `id`, `actualValue`, boolean `active`, and optional
+`displayValue`. These are allowlisted projections of already collected metadata,
+not provider responses: the collector maps `actual_value`/`display_value` to
+`actualValue`/`displayValue` and preserves every option row, ID and explicit
+status. An omitted or unfamiliar status cannot be guessed as active. Exclude
+all unrelated provider keys, records and credentials before calling the helper.
+Labels never establish stored API values or ID namespace membership.
+
+The global and field inventories must each have unique IDs and actual values;
+their actual values and active states must agree exactly. No inventory ID may
+belong to multiple rows or namespaces. Raw IDs must resolve to this exact
+field's global or local inventory, once each, with matching actual value and
+active state. Missing, repeated, unknown or cross-field IDs fail closed.
+Configured layout options must resolve exclusively to local field IDs, once
+each, with matching actual values and active states. This bounded normalizer
+requires the whole local inventory in the configured layout; a restricted
+layout subset is rejected as unsupported, never filled from the global set.
+
+Success returns `status: "normalized"`, validator-compatible `fieldInventory`
+containing only the `fields` and `picklists` sections, and a separate
+`layoutInventory` describing configured metadata. Projected envelopes retain
+the oldest contributing capture time. Failure returns `status: "rejected"`,
+fixed reason codes and null inventories, without echoing input values. Successful
+inventories contain private scope and metadata; keep them outside Git and logs.
+Normalization does not imply compatibility: consistently missing Scheduled
+stays absent and fails the validator's `futureStatus` check.
+
+Pass `fieldInventory` to `validatePaidCrmReadback` with the validator's separately
+established expected principal and scope. Add `effectiveLayout` and `permissions`
+only from independent evidence for that executing principal. Configured layout
+metadata is never promoted to effective-layout or permission evidence. Without
+those readbacks the corresponding checks remain `unknown`; without a known
+expected principal the existing validator keeps all checks `unknown`.
+
+The helper has no CLI, IO, provider calls, runtime wiring or live configuration
+effect. Report-only v0.5 remains independent. Run both focused suites with
+`node --test test/paid-crm-readback.test.js test/paid-crm-metadata.test.js`, then
+`npm run ci` and the repository verifier. All fixtures are synthetic. Rollback
+is removal of the helper, its tests, syntax-check entry and this documentation.
+
 ## Approved Commercial Contract
 
 Exact paid amounts are not duplicated in this component. Catalyst Development must provide
