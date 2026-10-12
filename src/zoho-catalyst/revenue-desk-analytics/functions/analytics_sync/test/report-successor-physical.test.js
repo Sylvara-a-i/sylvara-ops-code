@@ -4,6 +4,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const {createRequire}=require('node:module');
 const {installSocketFixture}=require('./helpers/report-physical-socket-fixture.js');
 const {loadBootstrap}=require('./helpers/report-physical-bootstrap-fixture.js');
+const diagnostic=require('../lib/report-storage-diagnostic');
 // Inherited seam/mutation regressions. Actual process must be v24.19.0 for positives.
 // SDK class definitions are confined in VM mocks; the separate entrypoint suite loads the real SDK.
 const root=path.resolve(__dirname,'..'),base=root;
@@ -17,11 +18,12 @@ const capability=Object.freeze({origin:'https://api.catalyst.zoho.com',controlle
 const query={query:`SELECT * FROM ReportRuns WHERE IdempotencyKey = 'revenue-desk-report-v1:${key}' LIMIT 2`};
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 function app(){return new CatalystApp({projectId:'123456789',projectKey:'synthetic-project-key',environment:'Development',credential:new CatalystCredential({adminType:'token',adminToken:'synthetic-admin-token','x-zc-user-cred-type':'token','x-zc-user-cred-token':'synthetic-user-token','x-zc-user-type':'admin'})});}
-function load({httpsObject=require('node:https'),onSdkImport,sourcePath=path.join(root,'lib/report-successor-physical.js'),version=process.version,initializeBootstrap=true,scope={projectId:'123456789',organizationId:'987654321',controllerFunctionId:'123456786'}}={}){
+function load({httpsObject=require('node:https'),onSdkImport,diagnosticModule=diagnostic,sourcePath=path.join(root,'lib/report-successor-physical.js'),version=process.version,initializeBootstrap=true,scope={projectId:'123456789',organizationId:'987654321',controllerFunctionId:'123456786'}}={}){
  const bootstrap=loadBootstrap(httpsObject);if(initializeBootstrap)bootstrap.initializeHttpsBootstrap();
  const mod={exports:{}};const r=id=>{
   if(id==='node:https')return httpsObject;
   if(id==='./report-https-bootstrap')return bootstrap;
+  if(id==='./report-storage-diagnostic')return diagnosticModule;
   if(id==='./report-storage-capability')return {getIssuedCapabilityScope(c){assert.equal(c,capability);return scope;},validateReportInsert:()=>{}};
   const value=sdkFixture.requireSdk(id,fromSdk);if(path.isAbsolute(id)&&id.startsWith(sdk+path.sep))onSdkImport?.(id);return value;
  };
@@ -32,11 +34,16 @@ function load({httpsObject=require('node:https'),onSdkImport,sourcePath=path.joi
  return mod.exports.createSuccessorPhysicalTransport;
 }
 async function using(t,plans,opts={}){
- const f=installSocketFixture({plans});t.after(()=>f.restore());
+ const f=installSocketFixture({plans,onRequest:opts.onRequest});t.after(()=>f.restore());
  const a=opts.app||app();let admitted=true;
- const create=load();const io=create({app:a,capability,operationKey:key,assertActive:()=>{if(!admitted)throw Error('AUTHORITY_HELD');},timeoutMs:opts.timeoutMs||1000});
+ const tracker=diagnostic.createStorageDiagnostic();
+ const create=load();const io=create({app:a,capability,operationKey:key,storageDiagnostic:tracker,assertActive:()=>{if(!admitted)throw Error('AUTHORITY_HELD');},timeoutMs:opts.timeoutMs||1000});
  t.after(async()=>{io.stop();for(let i=0;i<f.sockets.length;i++)f.releaseClose(i);await io.stopAndDrain();});
- return {f,io,a,hold:()=>{admitted=false;}};
+ return {f,io,a,tracker,hold:()=>{admitted=false;}};
+}
+function physicalDiagnostic(tracker){
+ const snapshot=diagnostic.storageFailureDiagnostic(diagnostic.storageDiagnosticError(tracker));
+ return Object.fromEntries(['schemaVersion','firstFailure','constructorAttempts','insertConstructorAttempts','drain'].map(k=>[k,snapshot[k]]));
 }
 test('real Node ClientRequest/parser returns rows only after request and response close',async t=>{
  const {f,io}=await using(t,[{statusCode:200,body:{data:[{ROWID:'123'}]},holdClose:true}]);
@@ -54,20 +61,23 @@ test('two concurrent constructors overlap and retain both permits through close'
  assert.equal(io.snapshot().quiescent,true);
 });
 test('third simultaneous admission is held before constructor and cancels both active requests',async t=>{
- const {f,io}=await using(t,[{manual:true},{manual:true}]);
+ const {f,io,tracker}=await using(t,[{manual:true},{manual:true}]);
  const a=io.send('/query',query,true),b=io.send('/query',query,true);a.catch(()=>{});b.catch(()=>{});await wait(15);
  await assert.rejects(io.send('/query',query,true));await Promise.allSettled([a,b]);
  assert.equal(f.requests.length,2);assert.equal(io.snapshot().maxConcurrent,2);assert.equal(io.snapshot().held,true);
+ await io.stopAndDrain();assert.deepEqual(physicalDiagnostic(tracker),{schemaVersion:1,firstFailure:'request_limit',constructorAttempts:2,insertConstructorAttempts:0,drain:'owned_quiescent'});
 });
 test('13 total physical starts admit no fourteenth',async t=>{
- const {f,io}=await using(t,Array.from({length:13},()=>({statusCode:200,body:{data:[]}})));
+ const {f,io,tracker}=await using(t,Array.from({length:13},()=>({statusCode:200,body:{data:[]}})));
  for(let i=0;i<13;i++)await io.send('/query',query,true);
  await assert.rejects(io.send('/query',query,true));assert.equal(f.requests.length,13);
+ await io.stopAndDrain();assert.deepEqual(physicalDiagnostic(tracker),{schemaVersion:1,firstFailure:'request_limit',constructorAttempts:13,insertConstructorAttempts:0,drain:'owned_quiescent'});
 });
 test('five insert starts admit no sixth',async t=>{
- const {f,io}=await using(t,Array.from({length:5},()=>({statusCode:200,body:{data:[]}})));
+ const {f,io,tracker}=await using(t,Array.from({length:5},()=>({statusCode:200,body:{data:[]}})));
  for(let i=0;i<5;i++)await io.send('/table/123456789/row',[{EVENT_KEY:eventKey}],false);
  await assert.rejects(io.send('/table/123456789/row',[{EVENT_KEY:eventKey}],false));assert.equal(f.requests.length,5);
+ await io.stopAndDrain();assert.deepEqual(physicalDiagnostic(tracker),{schemaVersion:1,firstFailure:'request_limit',constructorAttempts:5,insertConstructorAttempts:5,drain:'owned_quiescent'});
 });
 test('fully settled exact duplicate is the only non-success that permits next read',async t=>{
  const {f,io}=await using(t,[{statusCode:409,body:{data:{error_code:'DUPLICATE_VALUE'}}},{statusCode:200,body:{data:[]}}]);const trace=[];
@@ -106,7 +116,8 @@ test('timeout after possible commit destroys request and forbids readback retry'
  await assert.rejects(io.send('/query',query,true));assert.equal(f.requests.length,1);
 });
 test('already aborted signal performs zero constructors',async t=>{
- const {f,io}=await using(t,[]);const c=new AbortController();c.abort();await assert.rejects(io.send('/query',query,true,{signal:c.signal}));assert.equal(io.snapshot().physicalStarts,0);assert.equal(f.requests.length,0);
+ const {f,io,tracker}=await using(t,[]);const c=new AbortController();c.abort();await assert.rejects(io.send('/query',query,true,{signal:c.signal}));assert.equal(io.snapshot().physicalStarts,0);assert.equal(f.requests.length,0);
+ await io.stopAndDrain();assert.deepEqual(physicalDiagnostic(tracker),{schemaVersion:1,firstFailure:'cancelled',constructorAttempts:0,insertConstructorAttempts:0,drain:'owned_quiescent'});
 });
 test('synchronous guard expiry before constructor performs zero physical starts',async t=>{
  const {f,io,hold}=await using(t,[]);hold();await assert.rejects(io.send('/query',query,true));assert.equal(f.requests.length,0);assert.equal(io.snapshot().physicalStarts,0);
@@ -274,4 +285,122 @@ test('physical SQL guard accepts only the exact asterisk successor head query',a
   const {f,io}=await using(t,[]);await assert.rejects(io.send('/query',{query:bad},true),heldError);assert.equal(f.requests.length,0);await f.restore();
  }
  const {f,io}=await using(t,[{statusCode:200,body:{data:[]}}]);await io.send('/query',{query:good},true);assert.equal(f.requests.length,1);
+});
+
+for(const [label,options,mutate,expected]of [
+ ['runtime',{version:'v24.18.0'},a=>a,'node_version'],
+ ['managed context',{},a=>{a.credential.strictScope=true;return a;},'managed_context'],
+ ['target',{},a=>{a.config.projectId='111111111';return a;},'target_scope']
+])test('issued physical diagnostic distinguishes '+label+' rejection before any constructor',async t=>{
+ const f=installSocketFixture();t.after(()=>f.restore());const tracker=diagnostic.createStorageDiagnostic();
+ assert.throws(()=>load(options)({app:mutate(app()),capability,operationKey:key,storageDiagnostic:tracker,assertActive:()=>{}}),heldError);
+ assert.deepEqual(physicalDiagnostic(tracker),{schemaVersion:1,firstFailure:expected,constructorAttempts:0,insertConstructorAttempts:0,drain:'not_created'});
+ assert.equal(f.requests.length,0);
+});
+
+test('constructor throw counts attempted insert and cannot certify physical settlement',async t=>{
+ const f=installSocketFixture();t.after(()=>f.restore());const tracker=diagnostic.createStorageDiagnostic();let attempts=0;
+ const request=function(){attempts++;throw Error('SYNTHETIC_PRIVATE_CONSTRUCTOR_DETAIL');};
+ const io=load({httpsObject:{request}})({app:app(),capability,operationKey:key,storageDiagnostic:tracker,assertActive:()=>{}});
+ await assert.rejects(io.send('/table/123456789/row',[{EVENT_KEY:eventKey}],false),heldError);
+ const drained=await io.stopAndDrain();
+ assert.equal(attempts,1);assert.equal(f.requests.length,0);assert.equal(drained.quiescent,false);
+ assert.deepEqual(physicalDiagnostic(tracker),{schemaVersion:1,firstFailure:'constructor_threw',constructorAttempts:1,insertConstructorAttempts:1,drain:'unknown'});
+ await assert.rejects(io.send('/query',query,true),heldError);assert.equal(attempts,1);
+ assert.equal(JSON.stringify(physicalDiagnostic(tracker)).includes('SYNTHETIC_PRIVATE'),false);
+});
+
+test('lost insert response records request failure without claiming commit or authorizing a read retry',async t=>{
+ const ready=Promise.withResolvers();const {f,io,tracker}=await using(t,[{manual:true}],{onRequest:()=>ready.resolve()});
+ const result=io.send('/table/123456789/row',[{EVENT_KEY:eventKey}],false);result.catch(()=>{});
+ await ready.promise;assert.equal(f.requests[0].body[0].EVENT_KEY,eventKey);f.reset(0);
+ await assert.rejects(result,heldError);await io.stopAndDrain();
+ assert.deepEqual(physicalDiagnostic(tracker),{schemaVersion:1,firstFailure:'request_io',constructorAttempts:1,insertConstructorAttempts:1,drain:'owned_quiescent'});
+ await assert.rejects(io.send('/query',query,true),heldError);assert.equal(f.requests.length,1);
+});
+
+test('initiating malformed response stays first when cancellation destroys the concurrent peer',async t=>{
+ const ready=Promise.withResolvers();let arrived=0;
+ const {f,io,tracker}=await using(t,[{manual:true},{manual:true,holdClose:true}],{onRequest:()=>{if(++arrived===2)ready.resolve();}});
+ const left=io.send('/query',query,true),right=io.send('/query',query,true);left.catch(()=>{});right.catch(()=>{});
+ await ready.promise;f.respond(0,{statusCode:200,body:'{'});await assert.rejects(left,heldError);
+ assert.equal(physicalDiagnostic(tracker).firstFailure,'response_body');assert.equal(io.snapshot().activePhysical,1);
+ f.releaseClose(1);await Promise.allSettled([left,right]);await io.stopAndDrain();
+ assert.deepEqual(physicalDiagnostic(tracker),{schemaVersion:1,firstFailure:'response_body',constructorAttempts:2,insertConstructorAttempts:0,drain:'owned_quiescent'});
+ assert.equal(f.requests.length,2);assert.equal(io.snapshot().maxConcurrent,2);
+});
+
+test('authentication beyond bounded drain stays pending in the issued snapshot and cannot dispatch late',async t=>{
+ const {f,io,tracker}=await using(t,[],{timeoutMs:20});
+ const original=Promise.resolve;let release;const delayed=new Promise(resolve=>{release=resolve;});
+ Promise.resolve=function(value){return value&&typeof value==='object'&&Object.hasOwn(value,'access_token')?delayed:original.call(Promise,value);};
+ let result;try{result=io.send('/query',query,true);}finally{Promise.resolve=original;}
+ try{
+  await assert.rejects(result,heldError);const drained=await io.stopAndDrain();assert.equal(drained.authPending,1);assert.equal(drained.quiescent,false);
+  const issued=diagnostic.storageFailureDiagnostic(diagnostic.storageDiagnosticError(tracker));
+  assert.equal(issued.firstFailure,'deadline');assert.equal(issued.drain,'auth_pending');assert.equal(issued.constructorAttempts,0);assert.equal(issued.insertConstructorAttempts,0);
+  release({access_token:'placeholder'});await wait(10);assert.equal(io.snapshot().authPending,0);assert.equal(f.requests.length,0);
+  await assert.rejects(io.send('/query',query,true),heldError);assert.equal(f.requests.length,0);
+  assert.equal(issued.drain,'auth_pending');assert.equal(issued.constructorAttempts,0);assert.equal(Object.isFrozen(issued),true);
+ }finally{release({access_token:'placeholder'});}
+});
+
+test('unknown response closure reports a held handle until a later close without rewriting issued evidence',async t=>{
+ const {f,io,tracker}=await using(t,[{manual:true,holdClose:true}],{timeoutMs:20});
+ const result=io.send('/query',query,true);result.catch(()=>{});await wait(45);
+ const drained=await io.stopAndDrain();assert.equal(drained.quiescent,false);
+ const issued=diagnostic.storageFailureDiagnostic(diagnostic.storageDiagnosticError(tracker));
+ assert.equal(issued.firstFailure,'deadline');assert.equal(issued.drain,'handles_pending');assert.equal(issued.constructorAttempts,1);
+ f.releaseClose(0);await assert.rejects(result,heldError);assert.equal(io.snapshot().quiescent,true);
+ assert.equal(issued.drain,'handles_pending');assert.equal(f.requests.length,1);
+});
+test('concurrent authentication and unknown close retain both pending in final evidence after late release',async t=>{
+ const ready=Promise.withResolvers();const {f,io,tracker}=await using(t,[{manual:true,holdClose:true}],{timeoutMs:40,onRequest:()=>ready.resolve()});
+ const first=io.send('/query',query,true);first.catch(()=>{});await ready.promise;
+ const original=Promise.resolve;let release;const delayed=new Promise(resolve=>{release=resolve;});
+ Promise.resolve=function(value){return value&&typeof value==='object'&&Object.hasOwn(value,'access_token')?delayed:original.call(Promise,value);};
+ let second;try{second=io.send('/query',query,true);}finally{Promise.resolve=original;}
+ try{
+  await assert.rejects(second,heldError);const drained=await io.stopAndDrain();
+  assert.equal(drained.authPending,1);assert.equal(drained.activePhysical,1);assert.equal(drained.quiescent,false);
+  const issued=diagnostic.storageFailureDiagnostic(diagnostic.storageDiagnosticError(tracker));
+  assert.equal(issued.firstFailure,'deadline');assert.equal(issued.drain,'both_pending');assert.equal(issued.constructorAttempts,1);
+  release({access_token:'placeholder'});f.releaseClose(0);await assert.rejects(first,heldError);await wait(10);
+  assert.equal(io.snapshot().quiescent,true);assert.equal(f.requests.length,1);assert.equal(issued.drain,'both_pending');
+  assert.equal(Object.isFrozen(issued),true);
+ }finally{release({access_token:'placeholder'});f.releaseClose(0);}
+});
+
+for(const [mode,expected]of [['load','module_load'],['precondition','transport_precondition']])test('transport '+mode+' rejection is distinguished before physical creation',()=>{
+ const tracker=diagnostic.createStorageDiagnostic(),module={exports:{}};let physicalLoads=0;
+ const requireConfined=id=>{
+  if(id==='./report-storage-diagnostic')return diagnostic;
+  if(id==='./report-storage-capability')return {assertIssuedCapability:()=>{}};
+  if(id==='./report-successor-physical'){physicalLoads++;throw Error('SYNTHETIC_PRIVATE_IMPORT_FAILURE');}
+  return fromSdk(id);
+ };
+ vm.runInNewContext(fs.readFileSync(path.join(root,'lib/report-run-transport.js'),'utf8'),
+  {require:requireConfined,module,exports:module.exports,process:{env:{}},Buffer,Promise,AbortController,setTimeout,clearTimeout},{filename:'report-run-transport.js'});
+ assert.throws(()=>module.exports.createReportRunTransport({app:mode==='precondition'?{}:{authenticateRequest(){}},
+  storageDiagnostic:tracker,storagePhysicalContainment:true,storageCapability:capability,storageOperationKey:key,
+  storageAssertActive:()=>{},storageSourceRevision:'a'.repeat(40),storageBindingSha256:'b'.repeat(64)}));
+ assert.deepEqual(physicalDiagnostic(tracker),{schemaVersion:1,firstFailure:expected,constructorAttempts:0,insertConstructorAttempts:0,drain:'not_created'});
+ assert.equal(physicalLoads,mode==='load'?1:0);
+});
+
+for(const recorder of ['initializePhysicalDiagnostic','recordPhysicalConstructor','recordPhysicalFailure','recordPhysicalDrain'])
+test('thrown '+recorder+' never reports exact zero or settled physical evidence',async t=>{
+ const f=installSocketFixture();t.after(()=>f.restore());const tracker=diagnostic.createStorageDiagnostic();
+ let recorderCalls=0,io,failure;
+ const diagnosticModule={...diagnostic,[recorder](){recorderCalls++;throw Error('SYNTHETIC_PRIVATE_RECORDER_SENTINEL');}};
+ try{
+  const create=load({diagnosticModule,version:recorder==='recordPhysicalFailure'?'v24.18.0':process.version});
+  io=create({app:app(),capability,operationKey:key,storageDiagnostic:tracker,assertActive:()=>{}});
+  await io.send('/query',query,true);
+ }catch(error){failure=error;}
+ finally{if(io){const settled=await io.stopAndDrain();assert.equal(settled.quiescent,false);}}
+ assert.ok(recorderCalls>0);assert.ok(heldError(failure));assert.equal(f.requests.length,0);
+ const evidence=physicalDiagnostic(tracker);assert.equal(evidence.schemaVersion,1);
+ assert.equal(evidence.constructorAttempts,null);assert.equal(evidence.insertConstructorAttempts,null);assert.equal(evidence.drain,'unknown');
+ assert.equal(JSON.stringify(evidence).includes('SYNTHETIC_PRIVATE'),false);
 });

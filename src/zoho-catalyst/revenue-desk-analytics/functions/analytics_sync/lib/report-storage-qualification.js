@@ -6,7 +6,8 @@ const {createReportSuccessorStore}=require('./report-successor-store');
 const {createReportRunTransport}=require('./report-run-transport');
 const {validateStorageCapability,validateStoredProjection,matchesStoredReportField}=require('./report-storage-capability');
 const {diagnosticWindowMs}=require('./report-storage-window');
-const {createStorageDiagnostic,recordStorageDiagnostic,storageDiagnosticError,recordStorageValidationFailure}=require('./report-storage-diagnostic');
+const {createStorageDiagnostic,recordStorageDiagnostic,storageDiagnosticError,recordStorageValidationFailure,
+ recordPhysicalFailure,finishPhysicalDiagnostic,guardPhysicalDiagnostic}=require('./report-storage-diagnostic');
 const PROFILE='report_storage_qualification_v1',HASH=/^[a-f0-9]{64}$/,ID=/^[1-9][0-9]{2,29}$/;
 const sha=x=>crypto.createHash('sha256').update(typeof x==='string'?x:canonicalJson(x)).digest('hex');
 const exact=(x,keys)=>x&&typeof x==='object'&&!Array.isArray(x)&&Object.keys(x).sort().join(',')===keys.sort().join(',');
@@ -53,19 +54,21 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
   const active=()=>{const at=now();validateStorageCapability(capability,{...capabilityOptions,now:at});if(!Number.isSafeInteger(at)||at<b.verifiedAt||at>=b.expiresAt)held();return at;};active();
   return Object.freeze({async handle(command,{actor,signal}={}){
    const diagnostic=createStorageDiagnostic();
-   function held(){throw storageDiagnosticError(diagnostic);}
+   function held(){throw Object.assign(new Error('REPORT_STORAGE_QUALIFICATION_HELD'),{code:'REPORT_STORAGE_QUALIFICATION_HELD'});}
+   function rejectBeforeTransport(){throw storageDiagnosticError(diagnostic);}
    const observe=stage=>recordStorageDiagnostic(diagnostic,stage);
    if(!exact(command,['profile','action'])||command.profile!==PROFILE
     ||!['qualify_storage','read_storage_evidence'].includes(command.action)
     ||actor?.kind!=='internal_controller'||actor.identity!==config.operatorIdHash
-    ||(signal!==undefined&&!(signal instanceof AbortSignal)))held();
+    ||(signal!==undefined&&!(signal instanceof AbortSignal)))rejectBeforeTransport();
    const write=command.action==='qualify_storage';
-   if(write&&consumed.has(key))held();
+   if(write&&consumed.has(key))rejectBeforeTransport();
    if(write)consumed.add(key); // Before any await; unknown/failed admission is consumed.
    observe('active');const start=active(),wall=performance.now()+b.timeoutMs,abort=new AbortController();
    let io;let reject;const deadline=new Promise((_,r)=>{reject=r;});deadline.catch(()=>{});
-   const cancel=()=>{abort.abort();try{if(typeof io?.stop==='function')io.stop();}catch{}reject(new Error('REPORT_STORAGE_QUALIFICATION_HELD'));};
-   signal?.addEventListener('abort',cancel,{once:true});if(signal?.aborted)cancel();const timer=setTimeout(cancel,b.timeoutMs);
+   const cancel=()=>{guardPhysicalDiagnostic(diagnostic,recordPhysicalFailure,'cancelled');abort.abort();try{if(typeof io?.stop==='function')io.stop();}catch{}reject(new Error('REPORT_STORAGE_QUALIFICATION_HELD'));};
+   const expire=()=>{guardPhysicalDiagnostic(diagnostic,recordPhysicalFailure,'deadline');cancel();};
+   signal?.addEventListener('abort',cancel,{once:true});if(signal?.aborted)cancel();const timer=setTimeout(expire,b.timeoutMs);
    const counts={reads:0,inserts:0,admissionReads:0,admissionInserts:0};
    let provenanceFailed=false;
    function admission(){const at=active();if(provenanceFailed||abort.signal.aborted||at<start||at-start>=b.timeoutMs||performance.now()>=wall)held();return at;}
@@ -216,11 +219,19 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
      creatorProvenance:'observed_consistent_v1',namedIdentityVerified:false,
      durableAdmissionObserved:true,singleAdmittedInvocationRequired:true,qualificationAuthority:false,deliveryAuthority:false});
    }
-   try{const result=await Promise.race([run(),deadline]);admission();return result;}
-   catch{held();}finally{clearTimeout(timer);abort.abort();signal?.removeEventListener('abort',cancel);
+   let result,pendingFailure=false,cleanupFailed=false;
+   try{result=await Promise.race([run(),deadline]);admission();}
+   catch{pendingFailure=true;guardPhysicalDiagnostic(diagnostic,recordPhysicalFailure,'unclassified');}
+   finally{clearTimeout(timer);abort.abort();signal?.removeEventListener('abort',cancel);
      // Deadline cancellation never establishes physical settlement. No successor
      // result is accepted unless the owned transport confirms its close barrier.
-     if(!sequential&&io){try{if(typeof io.stopAndDrain!=='function')held();const settled=await io.stopAndDrain();if(settled?.quiescent!==true)held();}catch{held();}}}
+     if(!sequential&&io){try{if(typeof io.stopAndDrain!=='function')held();const settled=await io.stopAndDrain();if(settled?.quiescent!==true)held();}catch{cleanupFailed=true;}}
+   }
+   if(!guardPhysicalDiagnostic(diagnostic,finishPhysicalDiagnostic,cleanupFailed))pendingFailure=true;
+   // Freeze the private failure projection only after owned cleanup has settled.
+   // A pending success is never returned when its close barrier was not confirmed.
+   if(pendingFailure||cleanupFailed)throw storageDiagnosticError(diagnostic);
+   return result;
   }});
  };
 }
