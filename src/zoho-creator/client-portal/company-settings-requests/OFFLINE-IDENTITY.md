@@ -2,6 +2,8 @@
 
 Status: offline executable proposal; test evidence is synthetic only. No live identity mapping is established by this source. The existing Development field-protection observations do not prove actor authentication, company authorization, canonical CRM links, audit durability or replay protection. No production routing, endpoint, live provider, Creator schema change, user, record or grant is included.
 
+The concrete Creator-native caller probe, proposed protected schema and projection into the existing authorization reader are in [`native/CREATOR-AUTHORIZATION.md`](native/CREATOR-AUTHORIZATION.md). Caller-context and immutable account-lifecycle qualification remain pending; native email/username/permission labels alone never authorize a principal.
+
 `offline-identity-contract.js` composes the existing four-field planner. It checks explicit canonical joins, returns a separate attributed envelope and computes a deterministic replay binding. It does not infer or discover links. Object validation and `complete: true` are producer assertions, not authentication, verification evidence or proof of pagination completeness. Pass these facts only from a separately authenticated, reviewed server producer; never from client JSON.
 
 ## Minimum producer contract
