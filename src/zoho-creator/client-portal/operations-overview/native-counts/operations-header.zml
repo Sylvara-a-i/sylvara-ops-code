@@ -1,0 +1,8 @@
+<panel elementName='OperationsInventoryHeading'>
+  <pr width='fill' height='auto'>
+    <pc width='100%' padding='20px' bgColor='#FFFFFF'>
+      <pr width='fill' height='auto'><pc width='100%'><text type='Text' value='Operations Overview' size='30px' color='#0B3D46' /></pc></pr>
+      <pr width='fill' height='auto'><pc width='100%'><text type='Text' value='Record inventory and review queues.' size='14px' color='#536570' /></pc></pr>
+    </pc>
+  </pr>
+</panel>

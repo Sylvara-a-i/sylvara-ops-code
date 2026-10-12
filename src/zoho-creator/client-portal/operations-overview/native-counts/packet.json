@@ -1,0 +1,29 @@
+{
+  "status": "prepared-only-not-installed-or-native-qualified",
+  "target": { "application": "client-portal", "environment": "Development", "space": "Sylvara.ai", "page": "Operations_Dashboard" },
+  "owningWorkflow": "Existing staff record inventory and review queues; read-only presentation",
+  "replacement": "Six HTML count cards only; do not change count criteria, native report/chart, queue queries, staff roles or client visibility",
+  "sourceReference": "../../development-baseline/Operations_Dashboard.html",
+  "header": "operations-header.zml",
+  "pageOrder": ["Native existing heading/intro", "Six native Count panels in two rows", "Existing remaining HTML sync/queue sections", "Existing native settings-request report", "Existing native provisioning-status chart"],
+  "panels": [
+    { "file": "company-records.zml", "form": "Accounts", "aggregate": "ID.count", "criteria": "ID != 0", "legacyVariable": "company_count" },
+    { "file": "subscription-records.zml", "form": "Subscriptions", "aggregate": "ID.count", "criteria": "ID != 0", "legacyVariable": "subscription_count" },
+    { "file": "pending-provisioning.zml", "form": "Account_Services", "aggregate": "ID.count", "criteria": "Provisioning_Status == \"Pending\"", "legacyVariable": "pending_provision_count" },
+    { "file": "failed-provisioning.zml", "form": "Account_Services", "aggregate": "ID.count", "criteria": "Provisioning_Status == \"Failed\"", "legacyVariable": "failed_provision_count" },
+    { "file": "failed-billing-events.zml", "form": "Billing_Webhook_Events", "aggregate": "ID.count", "criteria": "Environment == \"Development\" && Processing_Status == \"Failed\"", "legacyVariable": "failed_billing_count" },
+    { "file": "pending-company-changes.zml", "form": "Company_Settings_Requests", "aggregate": "ID.count", "criteria": "Status == \"Pending review\"", "legacyVariable": "pending_request_count" }
+  ],
+  "display": { "data": "Native Form Data Count; actual integers only; no simulated values, units, percentages, links or write actions", "font": "Inherit existing application theme; no global change", "desktop": "Two rows of three separate native panels; original order", "phoneTablet": "Existing Stacked native layout", "web390": "Unqualified. Verify wrapping, clipping and desktop quality before keeping; no unsupported breakpoint or DOM overrides" },
+  "prerequisites": [
+    "Fresh source/metadata prestate confirms existing forms, field APIs/picklists, all six criteria and native aggregate semantics",
+    "Existing internal roles have intended page and aggregate access; native aggregation honors those roles. If unavailable or unknown, stop without granting access",
+    "All client permission sets deny this internal page and its staff-wide aggregates; page navigation separation alone is insufficient",
+    "Native aggregate unavailable/permission errors must not render a fabricated 0. Empty valid dataset and denied source must be distinguished",
+    "No existing panel/preset already supplies these exact six metrics; reuse matching components before adding duplicates"
+  ],
+  "preservedComponents": ["All_Company_Settings_Requests native report", "Account_Services native provisioning-status bar chart", "existing HTML latest-sync and bounded queue sections"],
+  "scopeLimits": ["No portal users or personas selected", "No grants, roles, auth endpoints, forms, fields, records, external connections or business writes", "No Stage/Production changes", "Billing event environment filter remains Development; this packet is not portable promotion configuration"],
+  "rollback": "Remove/unbind only new native panels and restore captured original HTML count block; preserve all data and native report/chart. No irreversible deletion or permission changes",
+  "verification": "README.md; XML/source parity checks do not prove Creator syntax, rendering, aggregate permission enforcement or runtime acceptance"
+}
