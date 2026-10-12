@@ -180,9 +180,9 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient,sto
   },
   async query(sql,options){
    const exact=/^SELECT \* FROM ReportRuns WHERE IdempotencyKey = '(revenue-desk-report-v[12]:[a-f0-9]{64}(?::[0-9]{10})?)' LIMIT 2$/.exec(sql);
-   const head=/^SELECT \* FROM ReportRuns WHERE IdempotencyKey LIKE 'revenue-desk-report-v2:[a-f0-9]{64}:%' ORDER BY RD_REPORT_VERSION DESC LIMIT 2$/.test(sql);
+   const head=/^SELECT \* FROM ReportRuns WHERE IdempotencyKey LIKE 'revenue-desk-report-v2:[a-f0-9]{64}:\*' ORDER BY RD_REPORT_VERSION DESC LIMIT 2$/.test(sql);
    if(!head&&!valid(exact?.[1]))held();
-   if(storageCapability&&head&&!sql.includes(`LIKE 'revenue-desk-report-v2:${storageOperationKey}:%'`))held();
+   if(storageCapability&&head&&!sql.includes(`LIKE 'revenue-desk-report-v2:${storageOperationKey}:*'`))held();
    return send('/query',{query:sql},true,options);
   }
  });

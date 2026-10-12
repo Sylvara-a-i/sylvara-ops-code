@@ -73,6 +73,10 @@ test('actual managed SDK proof makes exactly four inserts/seven reads, retains t
   assert.equal(result.creatorProvenance,'observed_consistent_v1');assert.equal(f.sdk.rows.size,2);
   assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/123456788/row')).length,4);
   assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/query')).length,8);
+ assert.equal(f.sdk.requests.length,13);assert.equal(result.admissionInserts,1);assert.equal(result.admissionReads,1);
+ assert.equal(f.sdk.receipts.size,1);
+ assert.equal(f.sdk.requests.at(-1).payload.query,`SELECT * FROM ReportRuns WHERE IdempotencyKey LIKE 'revenue-desk-report-v2:${result.operationDigest}:*' ORDER BY RD_REPORT_VERSION DESC LIMIT 2`);
+ assert.deepEqual([...f.sdk.rows.values()].map(row=>Number(row.RD_REPORT_VERSION)).sort((a,b)=>a-b),[1,2]);
   assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/project-user/current')).length,0);
   assert.ok(f.sdk.requests.every(x=>/\/(?:query|table\/(?:123456788|123456787)\/row)$/.test(x.path)));
   assert.ok(!JSON.stringify(result).includes('987654321'));assert.ok(!JSON.stringify(result).includes('private-unused'));
@@ -219,17 +223,23 @@ test('extra stored column is held and cannot authorize another successor',async(
  }finally{f.sdk.restore();}
 });
 test('numeric-ID transport refuses other operation namespaces, arbitrary queries and extra INSERT columns',async()=>{
- const f=fixture();let io;try{
+ const f=fixture();let io,activeChecks=0;try{
   const {createReportRunTransport}=require('../lib/report-run-transport');
   const make=createProtectedStorageQualification({environment:f.environment(),now:()=>1800000000000,
-   transportFactory:options=>{io=createReportRunTransport(options);return io;}});
-  await make(f.sdk.app,f.config).handle(f.command,{actor:f.actor});const before=f.sdk.requests.length;
+   transportFactory:options=>{io=createReportRunTransport({...options,storageAssertActive(){activeChecks++;return options.storageAssertActive();}});return io;}});
+  const result=await make(f.sdk.app,f.config).handle(f.command,{actor:f.actor});
+  const before=f.sdk.requests.length,checksBefore=activeChecks;
+  const head=`SELECT * FROM ReportRuns WHERE IdempotencyKey LIKE 'revenue-desk-report-v2:${result.operationDigest}:*' ORDER BY RD_REPORT_VERSION DESC LIMIT 2`;
+  const otherKey=(result.operationDigest[0]==='a'?'b':'a')+result.operationDigest.slice(1);
+  for(const invalid of [head.replace(result.operationDigest,otherKey),head.replace(':*',':%'),
+   head.replace('DESC','ASC'),head.replace('LIMIT 2','LIMIT 5')])await assert.rejects(io.query(invalid));
   await assert.rejects(io.query("SELECT * FROM ReportRuns WHERE IdempotencyKey = 'revenue-desk-report-v1:"+'f'.repeat(64)+"' LIMIT 2"));
   await assert.rejects(io.query('DELETE FROM ReportRuns'));await assert.rejects(io.query('SELECT * FROM ReportRuns LIMIT 100'));
   await assert.rejects(io.readAdmission('report-storage:'+'f'.repeat(64)));
   const row=structuredClone([...f.sdk.rows.values()][0]);delete row.ROWID;delete row.CREATORID;
   await assert.rejects(io.insert({...row,ExtraColumn:true}));await assert.rejects(io.insert({...row,GenerationStatus:'DraftGenerated'}));
   assert.equal(f.sdk.requests.length,before);
+  assert.equal(activeChecks,checksBefore); // SQL/namespace rejection precedes transport admission, even after the prior handle closed.
  }finally{f.sdk.restore();}
 });
 
