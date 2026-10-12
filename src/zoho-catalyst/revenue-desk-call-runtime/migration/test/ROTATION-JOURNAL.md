@@ -40,7 +40,17 @@ ambiguous; the original controller retains its known failed hold. Neither case
 allows ordinary acknowledgement. A fully accepted retirement remains terminal.
 
 The fixture supports lost writes, lost responses and unavailable, stale or
-corrupt readbacks. Malformed checkpoints, incomplete prefixes, mismatched plans,
+corrupt readbacks. `stale` pairs old bytes with the current revision to model a
+torn envelope; `stale_snapshot` returns the complete previous revision and
+checkpoint. An existing controller rejects a coherent revision regression. A
+fresh controller has no independent freshness anchor and can reconstruct that
+older valid state, but the shared compare-and-swap fence rejects any attempted
+write against its older revision. A current read restores the actual pending,
+failed or accepted state without retrying the write. These checks assume the
+fixture's shared revision authority; they do not prove a provider's read
+consistency or protect against replacement of that authority itself.
+
+Malformed checkpoints, incomplete prefixes, mismatched plans,
 epochs or configuration generations fail closed. Metadata inspection is bounded
 and does not execute caller proxies, accessors or serialization hooks. Statuses
 contain fixed enums, a numeric revision and `liveAuthority: false`, never source

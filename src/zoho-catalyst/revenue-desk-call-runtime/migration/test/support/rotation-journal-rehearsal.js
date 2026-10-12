@@ -78,6 +78,9 @@ function read(cell) {
   const fault = cell.readFault;
   cell.readFault = null;
   if (fault === 'unavailable') throw new Error('Synthetic read unavailable.');
+  // A coherent older snapshot must exercise revision fencing, independently of
+  // the existing torn-envelope fault (old bytes paired with the current revision).
+  if (fault === 'stale_snapshot') return { revision: cell.previousRevision, checkpoint: cell.previous };
   return { revision: cell.revision, checkpoint: fault === 'corrupt' ? '{' :
     fault === 'stale' ? cell.previous : cell.checkpoint };
 }
@@ -88,6 +91,7 @@ function compareAndSwap(cell, expected, checkpoint) {
   cell.writeFault = null;
   if (fault === 'before_write') throw new Error('Synthetic write unavailable.');
   if (fault === 'drop_write') return true; // success-shaped response without storage
+  cell.previousRevision = cell.revision;
   cell.previous = cell.checkpoint;
   cell.checkpoint = checkpoint;
   cell.revision += 1;
@@ -114,7 +118,7 @@ function createSyntheticJournal(plan, seed) {
     if (!Number.isSafeInteger(snapshot.revision) || snapshot.revision < 0 ||
       typeof snapshot.checkpoint !== 'string') throw new Error('Invalid fixture.');
   }
-  const cell = { ...snapshot, previous: null, writeFault: null, readFault: null };
+  const cell = { ...snapshot, previous: null, previousRevision: null, writeFault: null, readFault: null };
   const journal = Object.freeze({
     snapshot: () => Object.freeze({ revision: cell.revision, checkpoint: cell.checkpoint }),
     faultNextWrite(fault) {
@@ -122,7 +126,7 @@ function createSyntheticJournal(plan, seed) {
       cell.writeFault = fault;
     },
     faultNextRead(fault) {
-      if (!['unavailable', 'corrupt', 'stale'].includes(fault)) throw new Error('Invalid fixture fault.');
+      if (!['unavailable', 'corrupt', 'stale', 'stale_snapshot'].includes(fault)) throw new Error('Invalid fixture fault.');
       cell.readFault = fault;
     },
   });

@@ -153,7 +153,7 @@ for (const operation of ['begin', 'acknowledge', 'observe', 'reconcile']) {
   test(`${operation}: independent exact readback governs lost, dropped and committed journal writes`, () => {
     for (const phase of PHASES) {
       for (const writeFault of ['before_write', 'after_write', 'drop_write', null]) {
-        for (const readFault of [null, 'unavailable', 'stale', 'corrupt']) {
+        for (const readFault of [null, 'unavailable', 'stale', 'stale_snapshot', 'corrupt']) {
           const { controller, journal } = before(phase);
           if (operation !== 'begin') controller.begin(intent(phase));
           if (operation === 'reconcile') controller.observe(observation(phase));
@@ -245,6 +245,57 @@ test('unavailable, stale and corrupt recovery reads block all mutations until fr
     assert.deepEqual(journal.snapshot(), snapshot);
     status(controller.recover(), 'recovered', 'receiver_acknowledged', 'clear', 4);
     status(controller.begin(intent('sender_acknowledged')), 'intent_recorded', 'receiver_acknowledged', 'clear', 5);
+  }
+});
+
+test('coherent lower revisions cannot regress a known pending, failed or accepted checkpoint', () => {
+  for (const phase of PHASES) {
+    for (const persisted of ['pending', 'failed', 'accepted']) {
+      const { controller, journal } = before(phase);
+      controller.begin(intent(phase));
+      if (persisted === 'failed') controller.observe(observation(phase, 'failed'));
+      if (persisted === 'accepted') controller.acknowledge(evidence(phase));
+      const snapshot = journal.snapshot();
+      const heldPhase = persisted === 'accepted' ? phase : previousPhase(phase);
+      const heldRecovery = persisted === 'failed' ? 'failed' : 'ambiguous';
+      journal.faultNextRead('stale_snapshot');
+      status(controller.recover(), 'journal_unavailable', heldPhase, heldRecovery, snapshot.revision);
+      for (const method of ['begin', 'acknowledge', 'observe', 'reconcile']) {
+        status(controller[method](evidence(phase)), 'readback_required', heldPhase, heldRecovery, snapshot.revision);
+      }
+      assert.deepEqual(journal.snapshot(), snapshot);
+      const recovery = persisted === 'accepted' ? 'clear' : heldRecovery;
+      status(controller.recover(), 'recovered', heldPhase, recovery, snapshot.revision);
+      assert.deepEqual(journal.snapshot(), snapshot);
+    }
+  }
+});
+
+test('fresh controllers may read a coherent old snapshot but cannot overwrite the current shared journal', () => {
+  for (const phase of PHASES) {
+    for (const operation of ['begin', 'observe', 'reconcile']) {
+      const { controller, journal } = before(phase);
+      controller.begin(intent(phase));
+      if (operation === 'observe') controller.observe(observation(phase, 'failed'));
+      if (operation === 'reconcile') controller.acknowledge(evidence(phase));
+      const snapshot = journal.snapshot();
+      journal.faultNextRead('stale_snapshot');
+      const stale = createJournalController(plan(), journal);
+      const oldRecovery = operation === 'begin' ? 'clear' : 'ambiguous';
+      status(stale.status(), 'status', previousPhase(phase), oldRecovery, snapshot.revision - 1);
+      // Reading an old intent never supplies this new controller with its own
+      // acknowledged intent write, so ordinary acknowledgement remains held.
+      status(stale.acknowledge(evidence(phase)), operation === 'begin' ? 'intent_required' : 'reconciliation_required',
+        previousPhase(phase), oldRecovery, snapshot.revision - 1);
+      const input = operation === 'begin' ? intent(phase) : operation === 'observe' ? observation(phase) : evidence(phase);
+      status(stale[operation](input), 'stale_revision', previousPhase(phase), 'ambiguous', snapshot.revision - 1);
+      status(stale[operation](input), 'readback_required', previousPhase(phase), 'ambiguous', snapshot.revision - 1);
+      assert.deepEqual(journal.snapshot(), snapshot);
+      const currentPhase = operation === 'reconcile' ? phase : previousPhase(phase);
+      const currentRecovery = operation === 'begin' ? 'ambiguous' : operation === 'observe' ? 'failed' : 'clear';
+      status(stale.recover(), 'recovered', currentPhase, currentRecovery, snapshot.revision);
+      assert.deepEqual(journal.snapshot(), snapshot);
+    }
   }
 });
 
