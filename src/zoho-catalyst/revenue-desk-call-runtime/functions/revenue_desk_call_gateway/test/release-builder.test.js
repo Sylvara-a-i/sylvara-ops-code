@@ -180,7 +180,7 @@ test('release builder exports only a clean exact Git revision and stamps only it
     assert.ok(manifest.files.some(({ path: relative }) => relative
       === `functions/revenue_desk_call_worker/reporting/revenue-desk-analytics/tools/${name}.js`));
   }
-  for (const name of ['report-https-bootstrap', 'report-successor-physical']) {
+  for (const name of ['report-https-bootstrap', 'report-successor-physical', 'report-storage-activation']) {
     const relative = `functions/revenue_desk_route_control/reporting/revenue-desk-analytics/functions/analytics_sync/lib/${name}.js`;
     const entries = manifest.files.filter(entry => entry.path === relative);
     assert.equal(entries.length, 1, `Controller must package exactly one ${name} module`);
@@ -234,7 +234,14 @@ test('release builder exports only a clean exact Git revision and stamps only it
     assert.strictEqual(bootstrap.assertHttpsBootstrap(),denyNetwork);
     assert.throws(()=>bootstrap.initializeHttpsBootstrap(),{code:'REPORT_RUN_RECONCILIATION_REQUIRED'});
     require(path.join(lib,'report-run-transport'));
-    require(path.join(lib,'report-storage-qualification'));
+    const qualification=require(path.join(lib,'report-storage-qualification'));
+    assert.equal(typeof qualification.createProtectedStorageQualification,'function');
+    const qualificationRequire=Module.createRequire(path.join(lib,'report-storage-qualification.js'));
+    const activationPath=qualificationRequire.resolve('./report-storage-activation');
+    assert.equal(activationPath,path.join(lib,'report-storage-activation.js'));
+    const activation=qualificationRequire('./report-storage-activation');
+    assert.equal(typeof activation.validateDormantBinding,'function');
+    assert.equal(typeof activation.activateDormantBinding,'function');
     assert.equal(Object.keys(require.cache).filter(file=>path.basename(file)==='report-https-bootstrap.js').length,1);
     for(const file of Object.keys(require.cache))assert.ok(file.startsWith(root+path.sep),
       'Controller dependencies must resolve inside the isolated artifact');
