@@ -152,6 +152,7 @@ function subscription(config, selectedPlan = "Growth", overrides = {}) {
     reference_id: reference,
     plan: {
       plan_code: selectedPlanObject.plan_code,
+      quantity: 1,
       recurring_price: selectedPlanObject.recurring_price,
       setup_fee: selectedPlanObject.setup_fee,
       interval: config.paidCommercialTerms.interval,
@@ -552,6 +553,78 @@ test("renewal term advancement preserves separately verified original subscripti
   });
   assert.equal(result.start_date, "2026-09-01");
   assert.equal(result.current_term_starts_at, "2027-01-01");
+});
+
+test("paid reconciliation rejects unproven or coerced plan and meter quantities without writing", async () => {
+  const config = testConfig();
+  for (const component of ["plan", "addons"]) {
+    for (const quantity of [undefined, null, 0, 2, -1, 1.5, true, [1], {}, "", "01", "1.0", " 1 "]) {
+      const paid = subscription(config);
+      if (component === "plan") paid.plan.quantity = quantity;
+      else paid.addons[0].quantity = quantity;
+      const calls = [];
+      const client = clientFor(config, [
+        ...catalogResponses(config),
+        jsonResponse(200, subscriptionPage([paid])),
+        jsonResponse(200, { subscription: paid }),
+      ], calls);
+      await assert.rejects(client.findVerifiedPaidSubscription({
+        customerId,
+        deterministicReference: reference,
+        selectedPlanCode: config.paidPlanCodeMap["Growth::Monthly"],
+        commercialTerms: approvedTerms("Growth", "Monthly"),
+        subscriptionStartDate: "2026-09-01",
+      }), (error) => error?.ambiguous === true && error?.publicCode === "reconciliation_required",
+      `${component} quantity ${JSON.stringify(quantity)} must remain unresolved`);
+      assert.equal(calls.every(({ options }) => options.method === "GET"), true);
+    }
+  }
+});
+
+test("all approved plans accept only explicit numeric or canonical string one-unit readback", async () => {
+  const config = testConfig();
+  for (const selectedPlan of ["Launch", "Growth", "Scale"]) {
+    for (const quantity of [1, "1"]) {
+      const paid = subscription(config, selectedPlan);
+      paid.plan.quantity = quantity;
+      paid.addons[0].quantity = quantity;
+      const calls = [];
+      const client = clientFor(config, [
+        ...catalogResponses(config, selectedPlan),
+        jsonResponse(200, subscriptionPage([paid])),
+        jsonResponse(200, { subscription: paid }),
+      ], calls);
+      assert.equal((await client.findVerifiedPaidSubscription({
+        customerId,
+        deterministicReference: reference,
+        selectedPlanCode: config.paidPlanCodeMap[`${selectedPlan}::Monthly`],
+        commercialTerms: approvedTerms(selectedPlan, "Monthly"),
+        subscriptionStartDate: "2026-09-01",
+      })).subscription_id, subscriptionId);
+      assert.equal(calls.every(({ options }) => options.method === "GET"), true);
+    }
+  }
+});
+
+test("post-create quantity drift remains reconciliation-required with a single write", async () => {
+  const config = testConfig();
+  for (const component of ["plan", "addons"]) {
+    const paid = subscription(config);
+    if (component === "plan") paid.plan.quantity = 2;
+    else paid.addons[0].quantity = 2;
+    const calls = [];
+    const client = clientFor(config, paidCreateResponses(config, "Growth", {
+      subscription: paid,
+    }), calls);
+    await assert.rejects(client.ensurePaidSubscription({
+      customerId,
+      deterministicReference: reference,
+      selectedPlanCode: config.paidPlanCodeMap["Growth::Monthly"],
+      commercialTerms: approvedTerms("Growth", "Monthly"),
+      subscriptionStartDate: "2026-09-01",
+    }), (error) => error?.ambiguous === true && error?.publicCode === "reconciliation_required");
+    assert.equal(calls.filter(({ options }) => options.method === "POST").length, 1);
+  }
 });
 
 test("verified paid lookup performs catalog and full subscription readback without mutation", async () => {
