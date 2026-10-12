@@ -4,7 +4,7 @@ const {canonicalJson}=require('./facts');
 const {reportRunProjection}=require('./report-run-store');
 const {LEGACY_WINDOW_MS,diagnosticWindowMs}=require('./report-storage-window');
 const {recordStorageValidationFailure}=require('./report-storage-diagnostic');
-const issued=new WeakSet();
+const issued=new WeakSet(),issuedScopes=new WeakMap();
 const HASH=/^[a-f0-9]{64}$/,ID=/^[1-9][0-9]{2,29}$/;
 const exact=(v,k)=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join(',')===[...k].sort().join(',');
 const digest=v=>crypto.createHash('sha256').update(canonicalJson({projection:v})).digest('hex');
@@ -58,7 +58,12 @@ function validateStorageCapability(c,{app,config,environment,now,verifiedAt,expi
   ||String(app?.config?.projectId)!==String(config.projectId)
   ||String(app?.config?.environment).toLowerCase()!=='development'
   ||app?.credential?.getCurrentUser?.()!==c.authMode||app?.credential?.getCurrentUserType?.()!==c.authType)held();
- const copy=structuredClone(c);const freeze=v=>{if(v&&typeof v==='object'){Object.values(v).forEach(freeze);Object.freeze(v);}return v;};freeze(copy);issued.add(copy);return copy;
+ const copy=structuredClone(c);const freeze=v=>{if(v&&typeof v==='object'){Object.values(v).forEach(freeze);Object.freeze(v);}return v;};freeze(copy);issued.add(copy);
+  // Scope comes only from the same protected validation that issued this capability.
+  // Keep the app association private; a different managed app cannot reuse its authority.
+  issuedScopes.set(copy,{app,scope:Object.freeze({projectId:String(config.projectId),
+    controllerFunctionId:c.controllerFunctionId,organizationId:environment.X_ZOHO_CATALYST_ORG_ID})});
+  return copy;
 }
 function validateReportInsert(row){
  if(!exact(row,REPORT_FIELDS)||typeof row.ReportPayloadJson!=='string'||Buffer.byteLength(row.ReportPayloadJson)>9500)held();
@@ -76,6 +81,10 @@ function validateReportInsert(row){
  if(!Object.entries(expectedProjection).every(([k,v])=>row[k]===v))held();
 }
 function assertIssuedCapability(c){if(!issued.has(c))held();}
+function getIssuedCapabilityScope(c,app){
+  assertIssuedCapability(c);const value=issuedScopes.get(c);if(!value||value.app!==app)held();
+  return value.scope;
+}
 function validateStoredProjection(row,role,diagnostic,location){
  if(!Object.hasOwn(NULL_COLUMNS,role))held();
  const fields=role==='reportRuns'?REPORT_FIELDS:RECEIPT_FIELDS;
@@ -93,4 +102,4 @@ function matchesStoredReportField(field,expected,actual){
  if(!Number.isSafeInteger(expected)||expected<1||expected>2147483647)return false;
  return actual===expected||typeof actual==='string'&&actual===String(expected);
 }
-module.exports={assertIssuedCapability,validateStoredProjection,validateStorageCapability,validateReportInsert,REPORT_FIELDS,RECEIPT_FIELDS,projectionDigest:digest,matchesStoredReportField};
+module.exports={assertIssuedCapability,getIssuedCapabilityScope,validateStoredProjection,validateStorageCapability,validateReportInsert,REPORT_FIELDS,RECEIPT_FIELDS,projectionDigest:digest,matchesStoredReportField};

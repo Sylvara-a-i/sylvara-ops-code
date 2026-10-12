@@ -1,6 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto');
 const {fixture:network}=require('./helpers/report-run-sdk-fixture');
+const {logicalStorageTransport}=require('./helpers/report-storage-logical-transport');
 const {canonicalJson}=require('../lib/facts');
 const {encodeStorageBinding}=require('../lib/report-storage-binding');
 const {createProtectedStorageQualification}=require('../lib/report-storage-qualification');
@@ -20,11 +21,38 @@ function fixture(options={}){
   expectedProjectIdSha256:sha(binding.projectId),operatorIdHash:'operator_'+sha('synthetic')};
  const environment=()=>{const raw=JSON.stringify(binding);return {REPORT_CONTROLLER_FUNCTION_ID:'123456786',REPORT_DEPLOYMENT_ID:'synthetic_controller',DEPLOYMENT_ENVIRONMENT:'development',SOURCE_REVISION:binding.sourceRevision,
   ...(options.multipart?{...encodeStorageBinding(raw,{partSize:options.multipart,format:options.compact?'tuple-v1':'json'}).parts,REPORT_STORAGE_QUALIFICATION_JSON:encodeStorageBinding(raw,{partSize:options.multipart,format:options.compact?'tuple-v1':'json'}).marker}:{REPORT_STORAGE_QUALIFICATION_JSON:raw}),REPORT_STORAGE_QUALIFICATION_SHA256:sha(raw)};};
- const factory=()=>createProtectedStorageQualification({environment:environment(),now:()=>at});
+ const factory=()=>createProtectedStorageQualification({environment:environment(),now:()=>at,transportFactory:options=>logicalStorageTransport(options,sdk)});
  const command={profile:'report_storage_qualification_v1',action:'qualify_storage'},actor={kind:'internal_controller',identity:config.operatorIdHash};
  return {sdk,binding,config,environment,factory,make:()=>factory()(sdk.app,config),command,actor,advance:n=>at+=n};
 }
 const held={code:'REPORT_STORAGE_QUALIFICATION_HELD'};
+for(const [name,override]of [
+ ['missing stop',{stop:undefined}],['nonfunction stop',{stop:1}],
+ ['missing drain',{stopAndDrain:undefined}],['nonfunction drain',{stopAndDrain:1}],
+ ['throwing drain',{stopAndDrain(){throw Error('SYNTHETIC_PRIVATE_DRAIN');}}],
+ ['rejected drain',{async stopAndDrain(){throw Error('SYNTHETIC_PRIVATE_DRAIN');}}],
+ ['unconfirmed drain',{async stopAndDrain(){return {quiescent:false};}}]
+])test('physical lifecycle '+name+' produces standard held and remains consumed',async()=>{
+ const f=fixture();try{
+  const make=createProtectedStorageQualification({environment:f.environment(),now:()=>1800000000000,
+   transportFactory:options=>({...logicalStorageTransport(options,f.sdk),...override})});
+  const handler=make(f.sdk.app,f.config);
+  await assert.rejects(handler.handle(f.command,{actor:f.actor}),held);
+  const calls=f.sdk.clientCalls;await assert.rejects(handler.handle(f.command,{actor:f.actor}),held);assert.equal(f.sdk.clientCalls,calls);
+ }finally{f.sdk.restore();}
+});
+test('deadline stop exception cannot escape its timer or authorize late dispatch',async()=>{
+ const f=fixture();try{
+  f.binding.timeoutMs=15;let stops=0,drains=0;
+  const make=createProtectedStorageQualification({environment:f.environment(),now:()=>1800000000000,
+   transportFactory:()=>({query:async()=>[],insert:async()=>[],readAdmission:async()=>[],
+    insertAdmission:()=>new Promise(()=>{}),stop(){stops++;throw Error('SYNTHETIC_PRIVATE_STOP');},
+    async stopAndDrain(){drains++;return {quiescent:true};}})});
+  const handler=make(f.sdk.app,f.config);await assert.rejects(handler.handle(f.command,{actor:f.actor}),held);
+  assert.equal(stops,1);assert.equal(drains,1);assert.equal(f.sdk.clientCalls,0);
+  await assert.rejects(handler.handle(f.command,{actor:f.actor}),held);assert.equal(stops,1);
+ }finally{f.sdk.restore();}
+});
 test('actual SDK admission covers every mandatory schema column and accepts null-only full table responses',async()=>{
  const schema=require('./helpers/report-storage-schema-fixture'),f=fixture({storageSchema:true});
  try{const result=await f.make().handle(f.command,{actor:f.actor});
@@ -73,6 +101,10 @@ test('actual managed SDK proof makes exactly four inserts/seven reads, retains t
   assert.equal(result.creatorProvenance,'observed_consistent_v1');assert.equal(f.sdk.rows.size,2);
   assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/table/123456788/row')).length,4);
   assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/query')).length,8);
+ assert.equal(f.sdk.requests.length,13);assert.equal(result.admissionInserts,1);assert.equal(result.admissionReads,1);
+ assert.equal(f.sdk.receipts.size,1);
+ assert.equal(f.sdk.requests.at(-1).payload.query,`SELECT * FROM ReportRuns WHERE IdempotencyKey LIKE 'revenue-desk-report-v2:${result.operationDigest}:*' ORDER BY RD_REPORT_VERSION DESC LIMIT 2`);
+ assert.deepEqual([...f.sdk.rows.values()].map(row=>Number(row.RD_REPORT_VERSION)).sort((a,b)=>a-b),[1,2]);
   assert.equal(f.sdk.requests.filter(x=>x.path.endsWith('/project-user/current')).length,0);
   assert.ok(f.sdk.requests.every(x=>/\/(?:query|table\/(?:123456788|123456787)\/row)$/.test(x.path)));
   assert.ok(!JSON.stringify(result).includes('987654321'));assert.ok(!JSON.stringify(result).includes('private-unused'));
@@ -219,17 +251,22 @@ test('extra stored column is held and cannot authorize another successor',async(
  }finally{f.sdk.restore();}
 });
 test('numeric-ID transport refuses other operation namespaces, arbitrary queries and extra INSERT columns',async()=>{
- const f=fixture();let io;try{
-  const {createReportRunTransport}=require('../lib/report-run-transport');
+ const f=fixture();let io,activeChecks=0;try{
   const make=createProtectedStorageQualification({environment:f.environment(),now:()=>1800000000000,
-   transportFactory:options=>{io=createReportRunTransport(options);return io;}});
-  await make(f.sdk.app,f.config).handle(f.command,{actor:f.actor});const before=f.sdk.requests.length;
+   transportFactory:options=>{io=logicalStorageTransport({...options,storageAssertActive(){activeChecks++;return options.storageAssertActive();}},f.sdk);return io;}});
+  const result=await make(f.sdk.app,f.config).handle(f.command,{actor:f.actor});
+  const before=f.sdk.requests.length,checksBefore=activeChecks;
+  const head=`SELECT * FROM ReportRuns WHERE IdempotencyKey LIKE 'revenue-desk-report-v2:${result.operationDigest}:*' ORDER BY RD_REPORT_VERSION DESC LIMIT 2`;
+  const otherKey=(result.operationDigest[0]==='a'?'b':'a')+result.operationDigest.slice(1);
+  for(const invalid of [head.replace(result.operationDigest,otherKey),head.replace(':*',':%'),
+   head.replace('DESC','ASC'),head.replace('LIMIT 2','LIMIT 5')])await assert.rejects(io.query(invalid));
   await assert.rejects(io.query("SELECT * FROM ReportRuns WHERE IdempotencyKey = 'revenue-desk-report-v1:"+'f'.repeat(64)+"' LIMIT 2"));
   await assert.rejects(io.query('DELETE FROM ReportRuns'));await assert.rejects(io.query('SELECT * FROM ReportRuns LIMIT 100'));
   await assert.rejects(io.readAdmission('report-storage:'+'f'.repeat(64)));
   const row=structuredClone([...f.sdk.rows.values()][0]);delete row.ROWID;delete row.CREATORID;
   await assert.rejects(io.insert({...row,ExtraColumn:true}));await assert.rejects(io.insert({...row,GenerationStatus:'DraftGenerated'}));
   assert.equal(f.sdk.requests.length,before);
+  assert.equal(activeChecks,checksBefore); // SQL/namespace rejection precedes transport admission, even after the prior handle closed.
  }finally{f.sdk.restore();}
 });
 

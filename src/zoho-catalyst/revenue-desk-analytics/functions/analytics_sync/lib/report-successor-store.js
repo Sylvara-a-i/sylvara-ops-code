@@ -85,7 +85,8 @@ function createReportSuccessorStore({ app, environment, table = 'ReportRuns', ti
     if (!KEY.test(key)) fail();
     const root = await physical(key, 1, options);
     if (!root) return null;
-    const rows = await query(`SELECT * FROM ReportRuns WHERE IdempotencyKey LIKE '${prefix(key)}%' ORDER BY RD_REPORT_VERSION DESC LIMIT 2`, options);
+    // ZCQL uses * for a zero-or-more-character suffix, unlike SQL's %.
+    const rows = await query(`SELECT * FROM ReportRuns WHERE IdempotencyKey LIKE '${prefix(key)}*' ORDER BY RD_REPORT_VERSION DESC LIMIT 2`, options);
     if (root.storageRevision !== REVISION) {
       if (rows.length) fail(); return expose(root, root.digest);
     }

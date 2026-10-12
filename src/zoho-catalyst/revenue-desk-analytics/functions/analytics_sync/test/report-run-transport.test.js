@@ -21,7 +21,8 @@ function fixture(){
  function query(sql){
   const key=/IdempotencyKey = '([^']+)'/.exec(sql)?.[1];
   if(key)return rows.has(key)?[{ReportRuns:structuredClone(rows.get(key))}]:[];
-  const prefix=/IdempotencyKey LIKE '([^']+)%'/.exec(sql)?.[1];
+  const prefix=/^SELECT \* FROM ReportRuns WHERE IdempotencyKey LIKE '(revenue-desk-report-v2:[a-f0-9]{64}:)\*' ORDER BY RD_REPORT_VERSION DESC LIMIT 2$/.exec(sql)?.[1];
+  assert.ok(prefix,'Expected a bounded Catalyst * successor query');
   return [...rows.values()].filter(r=>r.IdempotencyKey.startsWith(prefix)).sort((a,b)=>b.RD_REPORT_VERSION-a.RD_REPORT_VERSION).slice(0,2).map(r=>({ReportRuns:structuredClone(r)}));
  }
  const originalHttps=https.request,originalHttp=http.request;
@@ -57,7 +58,20 @@ test('actual SDK unique insert and exact readback preserve managed principal',as
  const next=await store.compareAndSwap(root,{...state,phase:'waiting'});assert.equal(next.version,2);
  assert.equal((await store.get(key)).version,2);assert.equal(f.rows.size,2);
  assert.equal(f.requests.length,6);assert.ok(f.principals.every(v=>v==='user'));
+ assert.equal(f.requests.at(-1).payload.query,`SELECT * FROM ReportRuns WHERE IdempotencyKey LIKE 'revenue-desk-report-v2:${key}:*' ORDER BY RD_REPORT_VERSION DESC LIMIT 2`);
  }finally{f.restore();}
+});
+test('head query guard rejects SQL percent and altered wildcard, ordering or limit before client creation',async()=>{
+ let clients=0,authentications=0;
+ const transport=createReportRunTransport({app:{async authenticateRequest(){authentications++;}},
+  createClient(){clients++;throw Error('Unexpected SDK client construction');}});
+ const head=`SELECT * FROM ReportRuns WHERE IdempotencyKey LIKE 'revenue-desk-report-v2:${key}:*' ORDER BY RD_REPORT_VERSION DESC LIMIT 2`;
+ for(const invalid of [head.replace(':*',':%'),head.replace(':*',':?'),head.replace(':*','*'),
+  head.replace('DESC','ASC'),head.replace('RD_REPORT_VERSION','IdempotencyKey'),
+  head.replace('LIMIT 2','LIMIT 5'),head.replace(' LIMIT 2',''),head+' OR 1 = 1']){
+  await assert.rejects(transport.query(invalid),held);
+ }
+ assert.equal(clients,0);assert.equal(authentications,0);
 });
 test('actual SDK network failure dispatches once without automatic retry',async()=>{
  const f=fixture();try{f.mode='network_error';await assert.rejects(createReportRunTransport({app:f.app}).query(sql),held);

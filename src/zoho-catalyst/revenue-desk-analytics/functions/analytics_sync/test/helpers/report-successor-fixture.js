@@ -16,7 +16,8 @@ function fixture(){
  },async query(sql){queries.push(sql);assert.ok(sql.startsWith('SELECT '));
   const exact=/IdempotencyKey = '([^']+)'/.exec(sql);
   if(exact)return rows.has(exact[1])?[structuredClone(rows.get(exact[1]))]:[];
-  const prefix=/IdempotencyKey LIKE '([^']+)%'/.exec(sql)[1];
+  const prefix=/^SELECT \* FROM ReportRuns WHERE IdempotencyKey LIKE '(revenue-desk-report-v2:[a-f0-9]{64}:)\*' ORDER BY RD_REPORT_VERSION DESC LIMIT 2$/.exec(sql)?.[1];
+  assert.ok(prefix,'Expected a bounded Catalyst * successor query');
   return [...rows.values()].filter(r=>r.IdempotencyKey.startsWith(prefix))
    .sort((a,b)=>b.RD_REPORT_VERSION-a.RD_REPORT_VERSION).slice(0,2).map(row=>structuredClone(row));
  }};

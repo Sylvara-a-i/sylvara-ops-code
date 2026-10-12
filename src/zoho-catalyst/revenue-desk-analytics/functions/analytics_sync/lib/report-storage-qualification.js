@@ -63,8 +63,8 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
    if(write&&consumed.has(key))held();
    if(write)consumed.add(key); // Before any await; unknown/failed admission is consumed.
    observe('active');const start=active(),wall=performance.now()+b.timeoutMs,abort=new AbortController();
-   let reject;const deadline=new Promise((_,r)=>{reject=r;});deadline.catch(()=>{});
-   const cancel=()=>{abort.abort();reject(new Error('REPORT_STORAGE_QUALIFICATION_HELD'));};
+   let io;let reject;const deadline=new Promise((_,r)=>{reject=r;});deadline.catch(()=>{});
+   const cancel=()=>{abort.abort();try{if(typeof io?.stop==='function')io.stop();}catch{}reject(new Error('REPORT_STORAGE_QUALIFICATION_HELD'));};
    signal?.addEventListener('abort',cancel,{once:true});if(signal?.aborted)cancel();const timer=setTimeout(cancel,b.timeoutMs);
    const counts={reads:0,inserts:0,admissionReads:0,admissionInserts:0};
    let provenanceFailed=false;
@@ -75,8 +75,8 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
     else if(kind==='report_run_write'){if(!write||++counts.inserts>(sequential?2:4))held();}else held();}};
    const options={signal:abort.signal,budget};
    async function run(){
-    admission();observe('transport_construct');const io=transportFactory({storageDiagnostic:diagnostic,storageProviderDiagnostics:sequential,app,timeoutMs:Math.min(b.timeoutMs,3000),storageCapability:capability,storageOperationKey:key,storageAssertActive:admission,storageSourceRevision:b.sourceRevision,storageBindingSha256:pin});
-    if(!['query','insert','insertAdmission','readAdmission'].every(k=>typeof io?.[k]==='function'))held();
+    admission();observe('transport_construct');io=transportFactory({storageDiagnostic:diagnostic,storageProviderDiagnostics:sequential,storagePhysicalContainment:!sequential,app,timeoutMs:Math.min(b.timeoutMs,3000),storageCapability:capability,storageOperationKey:key,storageAssertActive:admission,storageSourceRevision:b.sourceRevision,storageBindingSha256:pin});
+    if(!['query','insert','insertAdmission','readAdmission',...(!sequential?['stop','stopAndDrain']:[])].every(k=>typeof io?.[k]==='function'))held();
     let admissionEvidenceDigest,observedCreator;
     const acknowledgments=new Map();
     // Observed provenance only; never account identity or a renewed attestation.
@@ -217,7 +217,10 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
      durableAdmissionObserved:true,singleAdmittedInvocationRequired:true,qualificationAuthority:false,deliveryAuthority:false});
    }
    try{const result=await Promise.race([run(),deadline]);admission();return result;}
-   catch{held();}finally{clearTimeout(timer);abort.abort();signal?.removeEventListener('abort',cancel);}
+   catch{held();}finally{clearTimeout(timer);abort.abort();signal?.removeEventListener('abort',cancel);
+     // Deadline cancellation never establishes physical settlement. No successor
+     // result is accepted unless the owned transport confirms its close barrier.
+     if(!sequential&&io){try{if(typeof io.stopAndDrain!=='function')held();const settled=await io.stopAndDrain();if(settled?.quiescent!==true)held();}catch{held();}}}
   }});
  };
 }

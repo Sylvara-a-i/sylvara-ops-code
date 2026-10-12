@@ -2,6 +2,7 @@
 
 const test=require('node:test'),assert=require('node:assert/strict'),crypto=require('node:crypto');
 const {fixture:network}=require('./helpers/report-run-sdk-fixture');
+const {logicalStorageTransport}=require('./helpers/report-storage-logical-transport');
 const {canonicalJson}=require('../lib/facts');
 const {encodeStorageBinding}=require('../lib/report-storage-binding');
 const {createProtectedStorageQualification}=require('../lib/report-storage-qualification');
@@ -21,7 +22,7 @@ function fixture(options={}){
   expectedProjectIdSha256:sha(binding.projectId),operatorIdHash:'operator_'+sha('synthetic')};
  const environment=()=>{const raw=JSON.stringify(binding);return {REPORT_CONTROLLER_FUNCTION_ID:'123456786',REPORT_DEPLOYMENT_ID:'synthetic_controller',DEPLOYMENT_ENVIRONMENT:'development',SOURCE_REVISION:binding.sourceRevision,
   ...(options.multipart?{...encodeStorageBinding(raw,{partSize:options.multipart,format:options.compact?'tuple-v1':'json'}).parts,REPORT_STORAGE_QUALIFICATION_JSON:encodeStorageBinding(raw,{partSize:options.multipart,format:options.compact?'tuple-v1':'json'}).marker}:{REPORT_STORAGE_QUALIFICATION_JSON:raw}),REPORT_STORAGE_QUALIFICATION_SHA256:sha(raw)};};
- const factory=()=>createProtectedStorageQualification({environment:environment(),now:()=>at});
+ const factory=()=>createProtectedStorageQualification({environment:environment(),now:()=>at,transportFactory:options=>logicalStorageTransport(options,sdk)});
  const command={profile:'report_storage_qualification_v1',action:'qualify_storage'},actor={kind:'internal_controller',identity:config.operatorIdHash};
  return {sdk,binding,config,environment,factory,make:()=>factory()(sdk.app,config),command,actor,advance:n=>at+=n};
 }

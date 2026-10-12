@@ -16,7 +16,8 @@ function fixture(){
  },async query(sql){queries.push(sql);assert.ok(sql.startsWith('SELECT '));
   const exact=/IdempotencyKey = '([^']+)'/.exec(sql);
   if(exact)return rows.has(exact[1])?[structuredClone(rows.get(exact[1]))]:[];
-  const prefix=/IdempotencyKey LIKE '([^']+)%'/.exec(sql)[1];
+  const prefix=/^SELECT \* FROM ReportRuns WHERE IdempotencyKey LIKE '(revenue-desk-report-v2:[a-f0-9]{64}:)\*' ORDER BY RD_REPORT_VERSION DESC LIMIT 2$/.exec(sql)?.[1];
+  assert.ok(prefix,'Expected a bounded Catalyst * successor query');
   return [...rows.values()].filter(r=>r.IdempotencyKey.startsWith(prefix))
    .sort((a,b)=>b.RD_REPORT_VERSION-a.RD_REPORT_VERSION).slice(0,2).map(row=>structuredClone(row));
  }};
@@ -32,6 +33,54 @@ test('initial claim uses existing unique root; successors are insert-only and ex
  assert.equal(f.writes[1].ApprovalStatus,'OwnerReviewRequired');
  assert.equal((await f.make().get(key)).state.phase,'waiting');
  assert.ok(f.queries.every(q=>!q.includes('UPDATE')));
+});
+test('Catalyst star head query reads the successor without matching another operation',async()=>{
+ const f=fixture(),root=await f.store.insert(key,state);
+ const successor=await f.store.compareAndSwap(root,{...state,phase:'waiting'});
+ const otherRoot=await f.store.insert(other,{...state,identity:{...state.identity,clientId:'client_B'}});
+ await f.store.compareAndSwap(otherRoot,{...state,identity:{...state.identity,clientId:'client_B'},phase:'verified'});
+ const before=f.queries.length,head=await f.make().get(key);
+ assert.equal(head.version,2);assert.equal(head.rowId,successor.rowId);
+ assert.equal(head.state.identity.clientId,'client_A');assert.equal(head.state.phase,'waiting');
+ assert.deepEqual(f.queries.slice(before),[
+  `SELECT * FROM ReportRuns WHERE IdempotencyKey = 'revenue-desk-report-v1:${key}' LIMIT 2`,
+  `SELECT * FROM ReportRuns WHERE IdempotencyKey LIKE 'revenue-desk-report-v2:${key}:*' ORDER BY RD_REPORT_VERSION DESC LIMIT 2`
+ ]);
+ assert.equal(f.rows.size,4);
+});
+test('same stored rows return a misleading root with legacy percent and the successor with Catalyst star',async()=>{
+ const f=fixture(),root=await f.store.insert(key,state);
+ const successor=await f.store.compareAndSwap(root,{...state,phase:'waiting'});
+ const rows=new Map([...f.rows].map(([id,row])=>[id,Object.freeze(structuredClone(row))]));
+ const before=structuredClone([...rows]),queries=[];
+ const rootQuery=`SELECT * FROM ReportRuns WHERE IdempotencyKey = 'revenue-desk-report-v1:${key}' LIMIT 2`;
+ const headPrefix=`revenue-desk-report-v2:${key}:`;
+ const starQuery=`SELECT * FROM ReportRuns WHERE IdempotencyKey LIKE '${headPrefix}*' ORDER BY RD_REPORT_VERSION DESC LIMIT 2`;
+ const percentQuery=starQuery.replace(`${headPrefix}*`,`${headPrefix}%`);
+ function providerQuery(sql){
+  queries.push(sql);
+  if(sql===rootQuery)return [structuredClone(rows.get(`revenue-desk-report-v1:${key}`))];
+  assert.ok(sql===starQuery||sql===percentQuery,'Expected the same bounded head query with only its suffix changed');
+  // Model Catalyst's documented * wildcard; % is literal in this counterfactual provider.
+  return [...rows.values()].filter(row=>sql===starQuery
+   ?row.IdempotencyKey.startsWith(headPrefix):row.IdempotencyKey===`${headPrefix}%`)
+   .sort((a,b)=>Number(b.RD_REPORT_VERSION)-Number(a.RD_REPORT_VERSION)).slice(0,2)
+   .map(row=>structuredClone(row));
+ }
+ const make=legacy=>createReportSuccessorStore({app:{},environment:'development',transport:{
+  async insert(){assert.fail('Head reads must not mutate stored rows');},
+  async query(sql){
+   // Exercise the actual store's decode/fallback path, changing only the old query suffix.
+   return providerQuery(legacy&&sql===starQuery?percentQuery:sql);
+  }
+ }});
+ const legacyHead=await make(true).get(key),correctedHead=await make(false).get(key);
+ assert.equal(legacyHead.version,1);assert.equal(legacyHead.rowId,root.rowId);
+ assert.equal(legacyHead.state.phase,'working');
+ assert.equal(correctedHead.version,2);assert.equal(correctedHead.rowId,successor.rowId);
+ assert.equal(correctedHead.state.phase,'waiting');
+ assert.deepEqual(queries,[rootQuery,percentQuery,rootQuery,starQuery]);
+ assert.deepEqual([...rows],before);assert.deepEqual([...f.rows],before);
 });
 test('concurrent different and identical states have exactly one successor owner',async()=>{
  for(const same of [false,true]){
@@ -61,8 +110,10 @@ test('stale issued row cannot overwrite successor or duplicate accepted effects'
 test('bounded head query selects current state from long history without a mutable pointer',async()=>{
  const f=fixture();let current=await f.store.insert(key,state);
  for(let i=0;i<20;i++)current=await f.store.compareAndSwap(current,{...state,nextAttemptAt:state.nextAttemptAt+i});
+ for(const row of f.rows.values())row.RD_REPORT_VERSION=String(row.RD_REPORT_VERSION);
  const count=f.queries.length;assert.equal((await f.make().get(key)).version,21);
  assert.equal(f.queries.length-count,2);assert.equal(f.rows.size,21);
+ assert.equal(f.queries.at(-1),`SELECT * FROM ReportRuns WHERE IdempotencyKey LIKE 'revenue-desk-report-v2:${key}:*' ORDER BY RD_REPORT_VERSION DESC LIMIT 2`);
 });
 test('root/digest/ancestry corruption and skipped successors hold',async()=>{
  for(const field of ['rootDigest','digest','rowId','version']){
