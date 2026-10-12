@@ -2,7 +2,8 @@
 const {Readable}=require('node:stream');
 const path=require('node:path');
 const {performance}=require('node:perf_hooks');
-const {recordStorageDiagnostic,recordStorageProviderResult,recordStorageDecodeEvent,recordStorageResponseMetadata,recordStorageResponseShape}=require('./report-storage-diagnostic');
+const {recordStorageDiagnostic,recordStorageProviderResult,recordStorageDecodeEvent,recordStorageResponseMetadata,recordStorageResponseShape,
+ initializePhysicalDiagnostic,recordPhysicalFailure,guardPhysicalDiagnostic}=require('./report-storage-diagnostic');
 // Structural observations contain only closed types/presence flags, never provider values.
 const structureType=value=>value===undefined?'absent':value===null?'null':Array.isArray(value)?'array':typeof value;
 const has=(value,key)=>value!==null&&typeof value==='object'&&Object.hasOwn(value,key);
@@ -42,15 +43,27 @@ function sdkClient(app){
  * Every request owns an actual deadline/cancellation, with bounded response.
  */
 function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient,storageCapability=null,storageOperationKey=null,storageAssertActive=null,storageSourceRevision=null,storageBindingSha256=null,storageDiagnostic=null,storageProviderDiagnostics=false,storagePhysicalContainment=false}={}){
+ if(storagePhysicalContainment&&!guardPhysicalDiagnostic(storageDiagnostic,initializePhysicalDiagnostic))held();
+ const physicalFailure=code=>{if(storagePhysicalContainment)guardPhysicalDiagnostic(storageDiagnostic,recordPhysicalFailure,code);};
  recordStorageDiagnostic(storageDiagnostic,'transport_construct');
- if(String(process.env.ZC_SECURE||'').toLowerCase()==='override')recordStorageDiagnostic(storageDiagnostic,'secure_override');
+ if(String(process.env.ZC_SECURE||'').toLowerCase()==='override'){recordStorageDiagnostic(storageDiagnostic,'secure_override');physicalFailure('runtime_environment');}
+ try{
  if(typeof app?.authenticateRequest!=='function'||!Number.isSafeInteger(timeoutMs)
   ||timeoutMs<1||timeoutMs>30000||String(process.env.ZC_SECURE||'').toLowerCase()==='override')held();
- if(storageCapability){require('./report-storage-capability').assertIssuedCapability(storageCapability);if(!/^[a-f0-9]{64}$/.test(storageOperationKey||'')||typeof storageAssertActive!=='function'||!/^[a-f0-9]{40}$/.test(storageSourceRevision||'')||!/^[a-f0-9]{64}$/.test(storageBindingSha256||''))held();}
+ }catch(error){physicalFailure('transport_precondition');throw error;}
+ if(storageCapability){
+  try{require('./report-storage-capability').assertIssuedCapability(storageCapability);}catch(error){physicalFailure('capability_scope');throw error;}
+  if(!/^[a-f0-9]{64}$/.test(storageOperationKey||'')||typeof storageAssertActive!=='function'||!/^[a-f0-9]{40}$/.test(storageSourceRevision||'')||!/^[a-f0-9]{64}$/.test(storageBindingSha256||'')){physicalFailure('transport_precondition');held();}
+ }
  const target=role=>storageCapability?storageCapability.tables[role].id:role==='reportRuns'?'ReportRuns':'RevenueDeskEventReceipts';
- const physical=storagePhysicalContainment?require('./report-successor-physical').createSuccessorPhysicalTransport({app,capability:storageCapability,operationKey:storageOperationKey,assertActive:storageAssertActive,timeoutMs}):null;
+ let physical=null;
+ if(storagePhysicalContainment){
+  let factory;try{factory=require('./report-successor-physical').createSuccessorPhysicalTransport;}catch{physicalFailure('module_load');held();}
+  try{physical=factory({app,capability:storageCapability,operationKey:storageOperationKey,assertActive:storageAssertActive,timeoutMs,storageDiagnostic});}
+  catch(error){physicalFailure('unclassified');throw error;}
+ }
  async function send(endpoint,data,query,options={},method='POST'){
-  if(physical){if(method!=='POST')held();return physical.send(endpoint,data,query,options);}
+  if(physical){if(method!=='POST'){physicalFailure('request_contract');held();}return physical.send(endpoint,data,query,options);}
  const operation=endpoint==='/project-user/current'?'none':endpoint.endsWith('/row')
   ?endpoint.includes('/'+target('eventReceipts')+'/')?'admission_insert':'report_insert'
   :query&&data?.query?.startsWith('SELECT * FROM RevenueDeskEventReceipts ')?'admission_read':'report_read';

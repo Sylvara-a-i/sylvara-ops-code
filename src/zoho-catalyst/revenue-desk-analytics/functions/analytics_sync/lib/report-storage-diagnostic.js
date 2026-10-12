@@ -2,6 +2,50 @@
 // Private issued trackers/errors only. No external object, Error property, header,
 // provider body or identifier is read when producing the closed log projection.
 const trackers=new WeakMap(),failures=new WeakMap();
+const physical=new WeakMap();
+const PHYSICAL_FAILURES=new Set(['module_load','transport_precondition','capability_scope','node_version',
+ 'sdk_version','runtime_environment','https_continuity','sdk_contract','managed_context','target_scope',
+ 'request_contract','admission','authentication','request_limit','constructor_threw','request_io',
+ 'response_status','response_body','deadline','cancelled','drain','unclassified']);
+const PHYSICAL_DRAINS=new Set(['not_created','owned_quiescent','auth_pending','handles_pending','both_pending','unknown']);
+function initializePhysicalDiagnostic(tracker){
+ if(trackers.has(tracker)&&!physical.has(tracker))physical.set(tracker,
+  {firstFailure:null,constructorAttempts:0,insertConstructorAttempts:0,drain:'not_created',uncertain:false});
+}
+function invalidatePhysicalDiagnostic(tracker){
+ initializePhysicalDiagnostic(tracker);
+ const state=physical.get(tracker);if(!state)return;
+ state.uncertain=true;state.constructorAttempts=null;state.insertConstructorAttempts=null;state.drain='unknown';
+}
+// Call only trusted recorder functions. An exception is not evidence of zero
+// effects: invalidate through this module's private closure, never error fields.
+function guardPhysicalDiagnostic(tracker,recorder,...args){
+ try{recorder(tracker,...args);return true;}
+ catch{invalidatePhysicalDiagnostic(tracker);return false;}
+}
+function recordPhysicalFailure(tracker,code){
+ const state=physical.get(tracker);if(!state)return;
+ if(typeof code!=='string'||!PHYSICAL_FAILURES.has(code)){invalidatePhysicalDiagnostic(tracker);return;}
+ if(state.firstFailure===null)state.firstFailure=code;
+}
+function recordPhysicalConstructor(tracker,isInsert){
+ const state=physical.get(tracker);if(!state)return;
+ if(typeof isInsert!=='boolean'||state.uncertain||state.constructorAttempts>=13
+  ||isInsert&&state.insertConstructorAttempts>=5){invalidatePhysicalDiagnostic(tracker);return;}
+ state.constructorAttempts++;if(isInsert)state.insertConstructorAttempts++;
+}
+function recordPhysicalDrain(tracker,drain){
+ const state=physical.get(tracker);if(!state)return;
+ if(typeof drain!=='string'||!PHYSICAL_DRAINS.has(drain)){invalidatePhysicalDiagnostic(tracker);return;}
+ if(state.uncertain||state.drain==='unknown')return;
+ state.drain=drain;
+}
+function finishPhysicalDiagnostic(tracker,cleanupFailed){
+ const state=physical.get(tracker);if(!state)return;
+ if(typeof cleanupFailed!=='boolean'){invalidatePhysicalDiagnostic(tracker);return;}
+ if(cleanupFailed){recordPhysicalFailure(tracker,'drain');
+  if(state.drain==='not_created'||state.drain==='owned_quiescent')state.drain='unknown';}
+}
 const STAGES=new Set(['command','active','transport_construct','secure_override',
  'request_prepare','authenticate_guard','authenticate_enter','authenticate_rejected',
  'authenticate_complete','authenticate_postguard','dispatch_admitted','response_received',
@@ -18,7 +62,10 @@ function recordStorageDiagnostic(tracker,stage,operation='none',counter){
 }
 function storageDiagnosticError(tracker){
  const error=Object.assign(new Error('REPORT_STORAGE_QUALIFICATION_HELD'),{code:'REPORT_STORAGE_QUALIFICATION_HELD'});
- const state=trackers.get(tracker);if(state)failures.set(error,Object.freeze({...state}));return error;
+ const state=trackers.get(tracker),owned=physical.get(tracker);
+ if(state)failures.set(error,Object.freeze({...state,...(owned?{schemaVersion:1,
+  firstFailure:owned.firstFailure||'unclassified',constructorAttempts:owned.constructorAttempts,
+  insertConstructorAttempts:owned.insertConstructorAttempts,drain:owned.drain}:{})}));return error;
 }
 function storageFailureDiagnostic(error){return failures.get(error);}
 // Only exact SDK own data properties are inspected; never messages or getters.
@@ -81,4 +128,5 @@ function recordStorageValidationFailure(tracker,location,reason){
  if(state&&!state.firstValidationFailure&&VALIDATION_LOCATIONS.has(location)&&VALIDATION_REASONS.has(reason))
   state.firstValidationFailure=Object.freeze({location,reason});
 }
-module.exports={createStorageDiagnostic,recordStorageDiagnostic,storageDiagnosticError,storageFailureDiagnostic,recordStorageProviderResult,recordStorageDecodeEvent,recordStorageResponseMetadata,recordStorageResponseShape,recordStorageValidationFailure};
+module.exports={createStorageDiagnostic,recordStorageDiagnostic,storageDiagnosticError,storageFailureDiagnostic,recordStorageProviderResult,recordStorageDecodeEvent,recordStorageResponseMetadata,recordStorageResponseShape,recordStorageValidationFailure,
+ initializePhysicalDiagnostic,recordPhysicalFailure,recordPhysicalConstructor,recordPhysicalDrain,invalidatePhysicalDiagnostic,finishPhysicalDiagnostic,guardPhysicalDiagnostic};

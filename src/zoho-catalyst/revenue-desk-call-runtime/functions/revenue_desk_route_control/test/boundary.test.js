@@ -978,3 +978,29 @@ test('forged diagnostic getter is never inspected and cannot enter the storage e
  const f=storageFailureFixture({handler:async()=>{throw error;}}),output=response();await f.listener(f.request,output);
  assert.deepEqual(f.logs,[{stage:'storage_handler',code:'REPORT_STORAGE_QUALIFICATION_HELD'}]);assert.equal(output.statusCode,500);
 });
+
+test('finite physical evidence stays in protected logs when the logger succeeds, throws or rejects',async()=>{
+ const bridge=require('../lib/report-storage-qualification');
+ const helper=require('../../../../revenue-desk-analytics/functions/analytics_sync/lib/report-storage-diagnostic');
+ const previous=bridge.storageFailureDiagnostic;bridge.storageFailureDiagnostic=helper.storageFailureDiagnostic;
+ try{for(const mode of ['normal','throw','reject']){
+  const tracker=helper.createStorageDiagnostic();helper.initializePhysicalDiagnostic(tracker);
+  helper.recordPhysicalConstructor(tracker,true);helper.recordPhysicalFailure(tracker,'constructor_threw');
+  helper.recordPhysicalDrain(tracker,'unknown');const error=helper.storageDiagnosticError(tracker);
+  Object.defineProperty(error,'credential',{get(){assert.fail('credential getter');}});
+  error.message='SYNTHETIC_PRIVATE_ERROR_SENTINEL';let calls=0,logs=0;
+  const f=storageFailureFixture({handler:async()=>{calls++;throw error;},failureLogger(record){
+   logs++;const d=record.diagnostic;assert.equal(record.code,'REPORT_STORAGE_QUALIFICATION_HELD');
+   assert.deepEqual(Object.keys(record).sort(),['code','diagnostic','stage']);
+   assert.equal(d.schemaVersion,1);assert.equal(d.firstFailure,'constructor_threw');
+   assert.equal(d.constructorAttempts,1);assert.equal(d.insertConstructorAttempts,1);assert.equal(d.drain,'unknown');
+   assert.ok(Object.isFrozen(record));assert.ok(Object.isFrozen(d));
+   assert.equal(JSON.stringify(record).includes('SYNTHETIC_PRIVATE'),false);
+   if(mode==='throw')throw Error('SYNTHETIC_PRIVATE_LOGGER_SENTINEL');
+   if(mode==='reject')return Promise.reject(Error('SYNTHETIC_PRIVATE_LOGGER_SENTINEL'));
+  }}),output=response();
+  await f.listener(f.request,output);await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(calls,1);assert.equal(logs,1);assert.equal(output.statusCode,500);
+  assert.deepEqual(output.body,{ok:false,code:'control_failed'});
+ }}finally{bridge.storageFailureDiagnostic=previous;}
+});

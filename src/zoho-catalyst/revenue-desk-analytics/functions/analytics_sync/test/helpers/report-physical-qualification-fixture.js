@@ -1,8 +1,8 @@
 'use strict';
 module.exports=function({schema,sha,crypto,cap,environment,REVISION,installSocketFixture,invoke}){
-async function fixture(t,{readBooleanString=false,failRoot=false,holdClose=false,timeoutMs=1000,schemaVersion=3,wrongCapability=false}={}){
+async function fixture(t,{readBooleanString=false,failRoot=false,holdClose=false,finalCloseHeld=false,timeoutMs=1000,schemaVersion=3,wrongCapability=false,invokeOptions={}}={}){
  const rows=new Map(),receipts=new Map(),pending=[];let next=1000000000;
- const network=installSocketFixture({plans:Array.from({length:13},()=>({manual:true,...(holdClose?{holdClose:true}:{})})),onRequest(r,control){
+ const network=installSocketFixture({plans:Array.from({length:13},(_,i)=>({manual:true,...(holdClose||finalCloseHeld&&i===12?{holdClose:true}:{})})),onRequest(r,control){
   const relative=r.path.replace('/baas/v1/project/123456789','');
   let data,statusCode=200;
   if(relative==='/table/123456787/row'){
@@ -33,6 +33,6 @@ async function fixture(t,{readBooleanString=false,failRoot=false,holdClose=false
  if(wrongCapability)binding.capability.origin='https://other.invalid';
  const raw=JSON.stringify(binding);
  Object.assign(process.env,environment(),{X_ZOHO_CATALYST_ORG_ID:'987654321',REPORT_CONTROLLER_FUNCTION_ID:'123456786',REPORT_DEPLOYMENT_ID:'synthetic_controller',REPORT_STORAGE_QUALIFICATION_JSON:raw,REPORT_STORAGE_QUALIFICATION_SHA256:sha(raw)});
- return {network,rows,receipts,binding,run:()=>invoke({profile:'report_storage_qualification_v1',action:'qualify_storage'})};
+ return {network,rows,receipts,binding,run:()=>invoke({profile:'report_storage_qualification_v1',action:'qualify_storage'},invokeOptions)};
 }
 return fixture;};
