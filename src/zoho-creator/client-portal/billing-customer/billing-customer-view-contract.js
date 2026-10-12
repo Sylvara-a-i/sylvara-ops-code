@@ -2,6 +2,10 @@
 
 const { assertCompanyIdentity } = require("../company-settings-requests/service-area-request-contract");
 const PROVIDERS = Object.freeze(["google_sheets", "csv", "jobber"]);
+const BILLING_HISTORY_STATUSES = Object.freeze({
+  invoice: Object.freeze(["draft", "sent", "paid", "partially_paid", "overdue", "void", "unpaid", "unknown"]),
+  payment: Object.freeze(["success", "failure", "unknown"]),
+});
 
 function deny() { throw new TypeError("Invalid billing customer view evidence"); }
 
@@ -173,7 +177,7 @@ function projectBillingCustomerView(input, trusted, evidence, policy, includeHis
     record(item, ["invoiceId", "customerId", "number", "status", "issuedOn", "dueOn", "money"]);
     id(item.invoiceId); label(item.number);
     if (item.customerId !== customerId ||
-        !["draft", "sent", "paid", "partially_paid", "overdue", "void", "unpaid", "unknown"].includes(item.status)) deny();
+        !BILLING_HISTORY_STATUSES.invoice.includes(item.status)) deny();
     date(item.issuedOn); date(item.dueOn);
     return Object.freeze({ number: item.number, status: item.status, issuedOn: item.issuedOn,
       dueOn: item.dueOn, money: money(item.money, exponents) });
@@ -182,7 +186,7 @@ function projectBillingCustomerView(input, trusted, evidence, policy, includeHis
     record(item, ["paymentId", "customerId", "number", "status", "recordedOn", "mode", "money"]);
     id(item.paymentId);
     if (item.number !== null) label(item.number);
-    if (item.customerId !== customerId || !["success", "failure", "unknown"].includes(item.status) ||
+    if (item.customerId !== customerId || !BILLING_HISTORY_STATUSES.payment.includes(item.status) ||
         !["check", "cash", "creditcard", "banktransfer", "bankremittance", "autotransaction", "others", "unknown"].includes(item.mode)) deny();
     date(item.recordedOn);
     return Object.freeze({ number: item.number, status: item.status, recordedOn: item.recordedOn,
@@ -236,4 +240,4 @@ function projectBillingCustomerView(input, trusted, evidence, policy, includeHis
   });
 }
 
-module.exports = { prepareBillingCustomerView, prepareBillingCustomerHistoryView };
+module.exports = { prepareBillingCustomerView, prepareBillingCustomerHistoryView, BILLING_HISTORY_STATUSES };
