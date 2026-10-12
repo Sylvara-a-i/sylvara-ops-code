@@ -41,14 +41,16 @@ function sdkClient(app){
  * Same managed runtime principal; no credential extraction or SDK mutation.
  * Every request owns an actual deadline/cancellation, with bounded response.
  */
-function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient,storageCapability=null,storageOperationKey=null,storageAssertActive=null,storageSourceRevision=null,storageBindingSha256=null,storageDiagnostic=null,storageProviderDiagnostics=false}={}){
+function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient,storageCapability=null,storageOperationKey=null,storageAssertActive=null,storageSourceRevision=null,storageBindingSha256=null,storageDiagnostic=null,storageProviderDiagnostics=false,storagePhysicalContainment=false}={}){
  recordStorageDiagnostic(storageDiagnostic,'transport_construct');
  if(String(process.env.ZC_SECURE||'').toLowerCase()==='override')recordStorageDiagnostic(storageDiagnostic,'secure_override');
  if(typeof app?.authenticateRequest!=='function'||!Number.isSafeInteger(timeoutMs)
   ||timeoutMs<1||timeoutMs>30000||String(process.env.ZC_SECURE||'').toLowerCase()==='override')held();
  if(storageCapability){require('./report-storage-capability').assertIssuedCapability(storageCapability);if(!/^[a-f0-9]{64}$/.test(storageOperationKey||'')||typeof storageAssertActive!=='function'||!/^[a-f0-9]{40}$/.test(storageSourceRevision||'')||!/^[a-f0-9]{64}$/.test(storageBindingSha256||''))held();}
  const target=role=>storageCapability?storageCapability.tables[role].id:role==='reportRuns'?'ReportRuns':'RevenueDeskEventReceipts';
+ const physical=storagePhysicalContainment?require('./report-successor-physical').createSuccessorPhysicalTransport({app,capability:storageCapability,operationKey:storageOperationKey,assertActive:storageAssertActive,timeoutMs}):null;
  async function send(endpoint,data,query,options={},method='POST'){
+  if(physical){if(method!=='POST')held();return physical.send(endpoint,data,query,options);}
  const operation=endpoint==='/project-user/current'?'none':endpoint.endsWith('/row')
   ?endpoint.includes('/'+target('eventReceipts')+'/')?'admission_insert':'report_insert'
   :query&&data?.query?.startsWith('SELECT * FROM RevenueDeskEventReceipts ')?'admission_read':'report_read';
@@ -144,6 +146,7 @@ function createReportRunTransport({app,timeoutMs=3000,createClient=sdkClient,sto
  const namespace=key=>!storageCapability||key===`revenue-desk-report-v1:${storageOperationKey}`||new RegExp(`^revenue-desk-report-v2:${storageOperationKey}:[0-9]{10}$`).test(key);
  const valid=key=>namespace(key)&&/^revenue-desk-report-v[12]:[a-f0-9]{64}(?::[0-9]{10})?$/.test(key||'');
  return Object.freeze({
+  ...(physical?{stop:physical.stop,stopAndDrain:physical.stopAndDrain,physicalSnapshot:physical.snapshot}:{}),
   async insertAdmission(row,options){
    if(storageCapability&&row?.EVENT_KEY!==`report-storage:${storageOperationKey}`)held();
    const fields=['EVENT_KEY','RECEIPT_KIND','STATUS','EVENT_TYPE','EVENT_DATA_JSON','PAYLOAD_FINGERPRINT',

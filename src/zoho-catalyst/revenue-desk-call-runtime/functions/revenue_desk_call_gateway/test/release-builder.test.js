@@ -180,6 +180,15 @@ test('release builder exports only a clean exact Git revision and stamps only it
     assert.ok(manifest.files.some(({ path: relative }) => relative
       === `functions/revenue_desk_call_worker/reporting/revenue-desk-analytics/tools/${name}.js`));
   }
+  for (const name of ['report-https-bootstrap', 'report-successor-physical']) {
+    const relative = `functions/revenue_desk_route_control/reporting/revenue-desk-analytics/functions/analytics_sync/lib/${name}.js`;
+    const entries = manifest.files.filter(entry => entry.path === relative);
+    assert.equal(entries.length, 1, `Controller must package exactly one ${name} module`);
+    assert.equal(entries[0].source_path,
+      `src/zoho-catalyst/revenue-desk-analytics/functions/analytics_sync/lib/${name}.js`);
+    assert.deepEqual(fs.readFileSync(path.join(output, relative)),
+      fs.readFileSync(path.join(analyticsRoot, 'functions', 'analytics_sync', 'lib', `${name}.js`)));
+  }
   const analyticsStamp = require(path.join(output, 'functions', 'revenue_desk_call_worker',
     'reporting', 'revenue-desk-analytics', 'functions', 'analytics_sync', 'lib', 'source-revision'));
   assert.equal(analyticsStamp.ARTIFACT_SOURCE_REVISION, fixture.revision);
@@ -190,11 +199,45 @@ test('release builder exports only a clean exact Git revision and stamps only it
   // Load the actual isolated Controller closure, with no source/helper fallback.
   const isolatedControl = path.join(parent, 'isolated-controller');
   fs.cpSync(path.join(output, 'functions', 'revenue_desk_route_control'), isolatedControl, { recursive: true });
+  // Materialize only the built Controller's local core package. The SDK stays
+  // absent: importing the entrypoint must not initialize or acquire credentials.
+  fs.cpSync(path.join(output, 'functions', 'revenue_desk_call_gateway'),
+    path.join(isolatedControl, 'node_modules', 'revenue_desk_call_gateway'), { recursive: true });
   const isolated = run(process.execPath, ['-e', `
-    const assert=require('node:assert/strict'),path=require('node:path');
+    const assert=require('node:assert/strict'),path=require('node:path'),Module=require('node:module');
     const root=process.cwd(),lib=path.join(root,'reporting/revenue-desk-analytics/functions/analytics_sync/lib');
+    let blocked=0,sdkLoads=0;
+    const denyNetwork=()=>{blocked+=1;throw Error('Controller startup must remain offline');};
+    for(const name of ['node:http','node:https']){
+      const api=require(name);api.request=denyNetwork;api.get=denyNetwork;
+    }
+    for(const name of ['node:net','node:tls']){
+      const api=require(name);api.connect=denyNetwork;
+      if(name==='node:net'){api.createConnection=denyNetwork;api.Socket.prototype.connect=denyNetwork;}
+    }
+    globalThis.fetch=denyNetwork;
+    const originalLoad=Module._load;
+    Module._load=function(request,parent,isMain){
+      if(request==='zcatalyst-sdk-node'||request.startsWith('zcatalyst-sdk-node/')){
+        sdkLoads+=1;throw Error('Controller startup must not load the SDK');
+      }
+      return originalLoad.call(this,request,parent,isMain);
+    };
+    const entryRequire=Module.createRequire(path.join(root,'index.js'));
+    const physicalRequire=Module.createRequire(path.join(lib,'report-successor-physical.js'));
+    const entryBootstrap=entryRequire.resolve('./reporting/revenue-desk-analytics/functions/analytics_sync/lib/report-https-bootstrap');
+    assert.equal(entryBootstrap,physicalRequire.resolve('./report-https-bootstrap'));
+    assert.ok(entryBootstrap.startsWith(root+path.sep));
+    assert.equal(typeof entryRequire('./index.js'),'function');
+    const bootstrap=entryRequire(entryBootstrap);
+    assert.strictEqual(bootstrap,physicalRequire('./report-https-bootstrap'));
+    assert.strictEqual(bootstrap.assertHttpsBootstrap(),denyNetwork);
+    assert.throws(()=>bootstrap.initializeHttpsBootstrap(),{code:'REPORT_RUN_RECONCILIATION_REQUIRED'});
     require(path.join(lib,'report-run-transport'));
     require(path.join(lib,'report-storage-qualification'));
+    assert.equal(Object.keys(require.cache).filter(file=>path.basename(file)==='report-https-bootstrap.js').length,1);
+    for(const file of Object.keys(require.cache))assert.ok(file.startsWith(root+path.sep),
+      'Controller dependencies must resolve inside the isolated artifact');
     const helper=require(path.join(lib,'report-storage-diagnostic'));
     const bridge=require(path.join(root,'lib/report-storage-qualification'));
     const tracker=helper.createStorageDiagnostic();
@@ -204,6 +247,8 @@ test('release builder exports only a clean exact Git revision and stamps only it
     assert.equal(bridge.storageFailureDiagnostic(Error('unissued')),undefined);
     assert.throws(()=>bridge.createProtectedStorageQualification({environment:{}})({},{}),
       {code:'REPORT_STORAGE_QUALIFICATION_HELD'});
+    assert.equal(blocked,0);
+    assert.equal(sdkLoads,0);
   `], isolatedControl);
   assert.equal(isolated.status, 0, isolated.stderr || isolated.stdout);
   assert.deepEqual(require(path.join(output, 'catalyst.json')).functions.targets,
@@ -243,6 +288,117 @@ test('release builder exports only a clean exact Git revision and stamps only it
     fixture.component);
   assert.notEqual(dirty.status, 0);
   assert.match(dirty.stderr, /must be clean/);
+});
+
+test('isolated built Controller cold-loads the locked SDK with one bootstrap and no credential or network access', (t) => {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'revenue-desk-controller-sdk-'));
+  t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
+  const fixture = createCleanFixture(parent);
+  const output = path.join(parent, 'artifact');
+  runOk(process.execPath, [fixture.builder, '--revision', fixture.revision, '--output', output], fixture.component);
+  const isolatedControl = path.join(parent, 'isolated-controller');
+  const installedControl = path.join(runtimeRoot, 'functions', 'revenue_desk_route_control');
+  const lock = JSON.parse(fs.readFileSync(path.join(installedControl, 'package-lock.json'), 'utf8'));
+  assert.equal(lock.packages['node_modules/zcatalyst-sdk-node'].version, '3.4.0');
+  fs.cpSync(path.join(output, 'functions', 'revenue_desk_route_control'), isolatedControl, { recursive: true });
+  fs.cpSync(path.join(output, 'functions', 'revenue_desk_call_gateway'),
+    path.join(isolatedControl, 'node_modules', 'revenue_desk_call_gateway'), { recursive: true });
+  // Copy only the installed SDK dependency closure, checking each installed
+  // version and dependency list against the Controller lock; no installer runs.
+  const copied = new Set();
+  function copySdkDependency(name) {
+    if (copied.has(name)) return;
+    const locked = lock.packages[`node_modules/${name}`];
+    assert.ok(locked && !locked.link, `Missing locked SDK dependency: ${name}`);
+    const source = path.join(installedControl, 'node_modules', name);
+    const pkg = JSON.parse(fs.readFileSync(path.join(source, 'package.json'), 'utf8'));
+    assert.equal(pkg.name, name);
+    assert.equal(pkg.version, locked.version);
+    assert.deepEqual(pkg.dependencies || {}, locked.dependencies || {});
+    copied.add(name);
+    fs.cpSync(source, path.join(isolatedControl, 'node_modules', name), { recursive: true, dereference: true });
+    for (const dependency of Object.keys(locked.dependencies || {})) copySdkDependency(dependency);
+  }
+  copySdkDependency('zcatalyst-sdk-node');
+  const environment = Object.fromEntries(['PATH', 'Path', 'SystemRoot', 'SYSTEMROOT', 'TEMP', 'TMP', 'WINDIR']
+    .filter(name => process.env[name] !== undefined).map(name => [name, process.env[name]]));
+  const result = spawnSync(process.execPath, ['-e', `
+    const assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs'),Module=require('node:module');
+    const root=process.cwd(),lib=path.join(root,'reporting/revenue-desk-analytics/functions/analytics_sync/lib');
+    let network=0,credentialFiles=0,credentialEnvironment=0;
+    const denyNetwork=()=>{network+=1;throw Error('Packaged SDK test must remain offline');};
+    for(const name of ['node:http','node:https']){
+      const api=require(name);api.request=denyNetwork;api.get=denyNetwork;
+    }
+    for(const name of ['node:net','node:tls']){
+      const api=require(name);api.connect=denyNetwork;
+      if(name==='node:net'){api.createConnection=denyNetwork;api.Socket.prototype.connect=denyNetwork;}
+    }
+    globalThis.fetch=denyNetwork;
+    process.env=new Proxy(process.env,{get(target,name){
+      if(name==='CATALYST_AUTH'||name==='CATALYST_CONFIG'){
+        credentialEnvironment+=1;throw Error('Ambient SDK credentials must not be read');
+      }
+      return Reflect.get(target,name);
+    }});
+    const allowedFiles=new Set();
+    function collect(directory){
+      for(const item of fs.readdirSync(directory,{withFileTypes:true})){
+        const file=path.join(directory,item.name);
+        if(item.isDirectory())collect(file);
+        else if(item.isFile()&&['.js','.json'].includes(path.extname(file)))allowedFiles.add(file);
+      }
+    }
+    collect(root);
+    const denyFile=()=>{credentialFiles+=1;throw Error('Only packaged module files may be read');};
+    const readFileSync=fs.readFileSync,openSync=fs.openSync;
+    fs.readFileSync=function(file,...args){
+      if(typeof file!=='string'||!allowedFiles.has(path.resolve(file)))return denyFile();
+      return readFileSync.call(this,file,...args);
+    };
+    fs.openSync=function(file,flags,...args){
+      if(typeof file!=='string'||!allowedFiles.has(path.resolve(file))||flags!=='r')return denyFile();
+      return openSync.call(this,file,flags,...args);
+    };
+    fs.readFile=denyFile;fs.open=denyFile;fs.createReadStream=denyFile;
+    fs.promises.readFile=denyFile;fs.promises.open=denyFile;
+    const entryRequire=Module.createRequire(path.join(root,'index.js'));
+    const physicalRequire=Module.createRequire(path.join(lib,'report-successor-physical.js'));
+    assert.equal(typeof entryRequire('./index.js'),'function');
+    const bootstrapPath=entryRequire.resolve('./reporting/revenue-desk-analytics/functions/analytics_sync/lib/report-https-bootstrap');
+    const bootstrap=entryRequire(bootstrapPath);
+    assert.equal(bootstrapPath,physicalRequire.resolve('./report-https-bootstrap'));
+    assert.strictEqual(bootstrap,physicalRequire('./report-https-bootstrap'));
+    const sdk=entryRequire('zcatalyst-sdk-node');
+    assert.equal(entryRequire('zcatalyst-sdk-node/package.json').version,'3.4.0');
+    const sdkRoot=path.dirname(entryRequire.resolve('zcatalyst-sdk-node/package.json'));
+    const {CatalystApp}=entryRequire(path.join(sdkRoot,'lib/catalyst-app'));
+    const {CatalystCredential}=entryRequire(path.join(sdkRoot,'lib/utils/credential'));
+    const {PROJECT_HEADER,CREDENTIAL_HEADER}=entryRequire(path.join(sdkRoot,'lib/utils/constants')).default;
+    const app=sdk.initialize({headers:{
+      [PROJECT_HEADER.id]:'123456789',[PROJECT_HEADER.key]:'synthetic-project-key',
+      [PROJECT_HEADER.environment]:'Development',
+      [CREDENTIAL_HEADER.admin_cred_type]:'token',[CREDENTIAL_HEADER.admin_token]:'synthetic-admin-token',
+      [CREDENTIAL_HEADER.user_cred_type]:'token',[CREDENTIAL_HEADER.user_token]:'synthetic-user-token',
+      [CREDENTIAL_HEADER.user]:'admin',
+    }});
+    assert.ok(app instanceof CatalystApp);
+    assert.ok(app.credential instanceof CatalystCredential);
+    assert.equal(app.config.projectId,'123456789');
+    assert.equal(app.config.environment,'Development');
+    const physical=physicalRequire('./report-successor-physical');
+    assert.equal(typeof physical.createSuccessorPhysicalTransport,'function');
+    assert.ok(require.cache[physicalRequire.resolve('./report-successor-physical')].children
+      .some(child=>child===require.cache[bootstrapPath]));
+    assert.strictEqual(bootstrap.assertHttpsBootstrap(),denyNetwork);
+    assert.throws(()=>bootstrap.initializeHttpsBootstrap(),{code:'REPORT_RUN_RECONCILIATION_REQUIRED'});
+    assert.equal(Object.keys(require.cache).filter(file=>path.basename(file)==='report-https-bootstrap.js').length,1);
+    for(const file of Object.keys(require.cache))assert.ok(file.startsWith(root+path.sep),
+      'All Controller and SDK modules must load from the isolated artifact');
+    assert.deepEqual({network,credentialFiles,credentialEnvironment},
+      {network:0,credentialFiles:0,credentialEnvironment:0});
+  `], { cwd: isolatedControl, encoding: 'utf8', env: environment });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
 });
 
 test('release builder rejects target runtime and package-engine drift', () => {

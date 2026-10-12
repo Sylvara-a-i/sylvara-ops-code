@@ -8,6 +8,8 @@ No UPDATE, mutable head pointer, takeover lease or automatic mutation retry exis
 
 Head selection reads the root and latest two successor rows, validates the current edge, predecessor row digest and root commitment. This is bounded current-edge validation under trusted append-only writers, not a complete administrative-tampering audit of every historical ancestor. A separate audit/reconciliation is required for altered history.
 
+The successor head query uses Catalyst ZCQL's literal `*` suffix wildcard. The store, query allowlists and provider fixtures share the exact operation namespace, numeric descending version order and two-row limit. SQL `%` is rejected before dispatch; interpreting it as a prefix match in an offline fixture would hide a missing-successor result.
+
 ## Measured offline request accounting
 
 The actual successor adapter with the existing two-PDF composition produced 14 physical rows, 26 reads and 14 insert attempts for a cold report revision. An accepted replay added two immutable attempt checkpoints and used 22 reads, without another render/upload/import/CRM effect. A corrected reviewed source produced another 14 rows (28 retained across two revisions), preserving both prior PDFs.
@@ -17,6 +19,12 @@ Existing per-pair-attempt ceilings remain 40 physical reads and 26 insert attemp
 Focused tests cover distinct/identical contenders, root ownership, unknown accepted insertion, lost insertion, current-edge corruption, legacy preservation, isolation, physical budgets, concurrent PDF pairs, ambiguous rendering, stored-byte mismatch and corrected immutable revisions. Actual SDK 3.4.0 tests use fake HTTP only: managed-principal selection, single dispatch, lost-response reconciliation, native cancellation, late authentication, delayed timer admission and response limits. This is offline evidence, not runtime principal or provider acceptance.
 
 ## Runtime qualification boundary
+
+Schemas 3 and 4 use a single physical transport per qualification. It admits at most two active requests, tracks pending managed authentication and native request closure, and joins cancellation/drain before completing or reporting a hold. A logical timeout does not free a physical slot. Schema 5 retains its sequential diagnostic path and strict acknowledgement/readback behavior. Neither path retries an ambiguous mutation.
+
+The Controller initializes one HTTPS bootstrap before importing application code. The release builder includes that bootstrap and the physical transport in the Controller's own reporting dependency tree. Physical admission retains the reviewed exact Node v24.19.0 policy; no wider Node 24 range is inferred from a separate BasicIO result. Target identity comes from an issued, app-bound capability and validated managed runtime scope, never public tenant literals or caller-provided transport options.
+
+A separately retained synthetic BasicIO run observed two overlapping rounds in one invocation: five insert attempts and eight reads, with one admission row and two report rows confirmed afterward. Its original inactive package was restored. This is bounded storage evidence for that harness, not acceptance of the canonical AdvancedIO entrypoint, managed HTTP context, runtime build, ingress or installed configuration. The source integration does not create a qualified private binding or enable delivery. AdvancedIO acceptance, CRM compare-and-swap, PDF/WorkDrive and delivery remain separate release gates.
 
 Protected reporting/delivery bindings require claimQualification.mechanism=unique_insert_successor_v1 plus qualified status, a private evidence digest and finite expiry. Configuration alone cannot manufacture that qualification. All delivery, auto-delivery and CRM projection switches remain disabled until their separate gates pass.
 
