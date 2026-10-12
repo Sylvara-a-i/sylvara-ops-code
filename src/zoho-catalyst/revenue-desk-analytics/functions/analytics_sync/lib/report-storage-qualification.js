@@ -6,6 +6,7 @@ const {createReportSuccessorStore}=require('./report-successor-store');
 const {createReportRunTransport}=require('./report-run-transport');
 const {validateStorageCapability,validateStoredProjection,matchesStoredReportField}=require('./report-storage-capability');
 const {diagnosticWindowMs}=require('./report-storage-window');
+const {validateDormantBinding,activateDormantBinding,dormantOperationDigest}=require('./report-storage-activation');
 const {createStorageDiagnostic,recordStorageDiagnostic,storageDiagnosticError,recordStorageValidationFailure,
  recordPhysicalFailure,finishPhysicalDiagnostic,guardPhysicalDiagnostic}=require('./report-storage-diagnostic');
 const PROFILE='report_storage_qualification_v1',HASH=/^[a-f0-9]{64}$/,ID=/^[1-9][0-9]{2,29}$/;
@@ -32,53 +33,69 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
   let b;try{b=JSON.parse(raw);}catch{held();}
   if(!exact(b,['schemaVersion','enabled','environment','sourceRevision','projectId','controlHost','tableId','nonce',
    'capability','verifiedAt','expiresAt','timeoutMs','singleAdmittedInvocation'])
-   ||![3,4,5].includes(b.schemaVersion)||b.enabled!==true||b.environment!=='development'||b.singleAdmittedInvocation!==true
+   ||![3,4,5,6].includes(b.schemaVersion)||b.enabled!==(b.schemaVersion!==6)||b.environment!=='development'||b.singleAdmittedInvocation!==true
    ||config?.environment!==b.environment||environment.DEPLOYMENT_ENVIRONMENT!==b.environment
    ||b.sourceRevision!==config.sourceRevision||environment.SOURCE_REVISION!==b.sourceRevision||!/^[a-f0-9]{40}$/.test(b.sourceRevision||'')
    ||!ID.test(b.projectId||'')||sha(b.projectId)!==config.expectedProjectIdSha256
    ||String(app?.config?.projectId)!==b.projectId||String(app.config.environment).toLowerCase()!=='development'
    ||b.controlHost!==config.controlHost||!ID.test(b.tableId||'')||!/^[a-f0-9]{32}$/.test(b.nonce||'')
       ||!Number.isSafeInteger(b.verifiedAt)||b.verifiedAt<0||!Number.isSafeInteger(b.expiresAt)
-   ||b.expiresAt<=b.verifiedAt
+   ||b.schemaVersion!==6&&b.expiresAt<=b.verifiedAt
    ||!Number.isSafeInteger(b.timeoutMs)||b.timeoutMs<1||b.timeoutMs>60000||typeof now!=='function'||typeof transportFactory!=='function')held();
-  const diagnosticContract={schemaVersion:b.schemaVersion,profile:PROFILE,environment:b.environment};
-  if(b.expiresAt-b.verifiedAt>diagnosticWindowMs(diagnosticContract))held();
-  const capabilityOptions={app,config:{projectId:b.projectId,environment:b.environment},environment,verifiedAt:b.verifiedAt,expiresAt:b.expiresAt,diagnosticContract};
-  const capability=validateStorageCapability(b.capability,{...capabilityOptions,now:now()});
-  if(b.tableId!==capability.tables.reportRuns.id)held();
-  const capabilitySha256=sha(capability);
-  const sequential=b.schemaVersion===5;
-  const mechanism=sequential?'sequential_unique_diagnostic_v1':'unique_insert_successor_v1';
-  const key=sha({mechanism,projectId:b.projectId,tables:capability.tables,nonce:b.nonce,sourceRevision:b.sourceRevision,capabilitySha256});
-  const rootKey='revenue-desk-report-v1:'+key;
-  const active=()=>{const at=now();validateStorageCapability(capability,{...capabilityOptions,now:at});if(!Number.isSafeInteger(at)||at<b.verifiedAt||at>=b.expiresAt)held();return at;};active();
+  const dormant=b.schemaVersion===6;
+  if(dormant)validateDormantBinding(b);
+  function context(binding){
+   const diagnosticContract={schemaVersion:binding.schemaVersion,profile:PROFILE,environment:binding.environment};
+   if(binding.expiresAt-binding.verifiedAt>diagnosticWindowMs(diagnosticContract))held();
+   const capabilityOptions={app,config:{projectId:binding.projectId,environment:binding.environment},environment,
+    verifiedAt:binding.verifiedAt,expiresAt:binding.expiresAt,diagnosticContract};
+   const capability=validateStorageCapability(binding.capability,{...capabilityOptions,now:now()});
+   if(binding.tableId!==capability.tables.reportRuns.id)held();
+   const capabilitySha256=sha(capability),sequential=binding.schemaVersion===5;
+   const mechanism=sequential?'sequential_unique_diagnostic_v1':'unique_insert_successor_v1';
+   const key=dormant?dormantOperationDigest(pin):sha({mechanism,projectId:binding.projectId,tables:capability.tables,
+    nonce:binding.nonce,sourceRevision:binding.sourceRevision,capabilitySha256});
+   const rootKey='revenue-desk-report-v1:'+key;
+   const active=()=>{const at=now();validateStorageCapability(capability,{...capabilityOptions,now:at});
+    if(!Number.isSafeInteger(at)||at<binding.verifiedAt||at>=binding.expiresAt)held();return at;};active();
+   return {binding,capability,capabilitySha256,sequential,mechanism,key,rootKey,active};
+  }
+  // Legacy construction remains fail-closed at its original expiry boundary.
+  // A dormant handler grants no transport access; its lease is invocation-local.
+  const legacyContext=dormant?null:context(b);
   return Object.freeze({async handle(command,{actor,signal}={}){
    const diagnostic=createStorageDiagnostic();
    function held(){throw Object.assign(new Error('REPORT_STORAGE_QUALIFICATION_HELD'),{code:'REPORT_STORAGE_QUALIFICATION_HELD'});}
    function rejectBeforeTransport(){throw storageDiagnosticError(diagnostic);}
    const observe=stage=>recordStorageDiagnostic(diagnostic,stage);
-   if(!exact(command,['profile','action'])||command.profile!==PROFILE
+   if(!exact(command,['profile','action',...(dormant?['activation']:[])])||command.profile!==PROFILE
     ||!['qualify_storage','read_storage_evidence'].includes(command.action)
     ||actor?.kind!=='internal_controller'||actor.identity!==config.operatorIdHash
     ||(signal!==undefined&&!(signal instanceof AbortSignal)))rejectBeforeTransport();
+   let activation,invocation;
+   try{
+    activation=dormant?activateDormantBinding(b,pin,command.activation,now()):null;
+    invocation=dormant?context(activation.binding):legacyContext;
+   }catch{rejectBeforeTransport();}
+   const {binding:currentBinding,capability,capabilitySha256,sequential,mechanism,key,rootKey,active}=invocation;
    const write=command.action==='qualify_storage';
    if(write&&consumed.has(key))rejectBeforeTransport();
    if(write)consumed.add(key); // Before any await; unknown/failed admission is consumed.
-   observe('active');const start=active(),wall=performance.now()+b.timeoutMs,abort=new AbortController();
+   observe('active');const start=active(),wall=performance.now()+currentBinding.timeoutMs,abort=new AbortController();
    let io;let reject;const deadline=new Promise((_,r)=>{reject=r;});deadline.catch(()=>{});
    const cancel=()=>{guardPhysicalDiagnostic(diagnostic,recordPhysicalFailure,'cancelled');abort.abort();try{if(typeof io?.stop==='function')io.stop();}catch{}reject(new Error('REPORT_STORAGE_QUALIFICATION_HELD'));};
    const expire=()=>{guardPhysicalDiagnostic(diagnostic,recordPhysicalFailure,'deadline');cancel();};
-   signal?.addEventListener('abort',cancel,{once:true});if(signal?.aborted)cancel();const timer=setTimeout(expire,b.timeoutMs);
+   signal?.addEventListener('abort',cancel,{once:true});if(signal?.aborted)cancel();const timer=setTimeout(expire,currentBinding.timeoutMs);
    const counts={reads:0,inserts:0,admissionReads:0,admissionInserts:0};
    let provenanceFailed=false;
-   function admission(){const at=active();if(provenanceFailed||abort.signal.aborted||at<start||at-start>=b.timeoutMs||performance.now()>=wall)held();return at;}
+   function admission(){const at=active();if(provenanceFailed||abort.signal.aborted||at<start||at-start>=currentBinding.timeoutMs||performance.now()>=wall)held();return at;}
    const budget={assertActive:admission,consume(kind){admission();if(kind==='report_run_read'){if(++counts.reads>(sequential?3:7))held();}
     else if(kind==='admission_read'){if(!write||++counts.admissionReads>1)held();}
     else if(kind==='admission_write'){if(!write||++counts.admissionInserts>1)held();}
     else if(kind==='report_run_write'){if(!write||++counts.inserts>(sequential?2:4))held();}else held();}};
    const options={signal:abort.signal,budget};
    async function run(){
-    admission();observe('transport_construct');io=transportFactory({storageDiagnostic:diagnostic,storageProviderDiagnostics:sequential,storagePhysicalContainment:!sequential,app,timeoutMs:Math.min(b.timeoutMs,3000),storageCapability:capability,storageOperationKey:key,storageAssertActive:admission,storageSourceRevision:b.sourceRevision,storageBindingSha256:pin});
+    admission();observe('transport_construct');io=transportFactory({storageDiagnostic:diagnostic,storageProviderDiagnostics:sequential,storagePhysicalContainment:!sequential,app,timeoutMs:Math.min(currentBinding.timeoutMs,3000),storageCapability:capability,storageOperationKey:key,storageAssertActive:admission,storageSourceRevision:currentBinding.sourceRevision,storageBindingSha256:pin});
     if(!['query','insert','insertAdmission','readAdmission',...(!sequential?['stop','stopAndDrain']:[])].every(k=>typeof io?.[k]==='function'))held();
     let admissionEvidenceDigest,observedCreator;
     const acknowledgments=new Map();
@@ -211,6 +228,7 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
     const successorWinner=round(['successor_left','successor_right'],successors),head=await owner.get(key,options);admission();
     observe('final_verify');if(head?.version!==2||head.rowId!==successors[successorWinner].value.rowId||rows.size!==2||counts.reads!==7||counts.inserts!==4)held();
     const observedAt=admission(),evidence={bindingSha256:pin,operationDigest:key,capabilitySha256,
+     ...(activation?{activationDigest:activation.activationDigest}:{}),
      rows:[...rows.values()].sort((a,c)=>String(a.ROWID).localeCompare(String(c.ROWID))),rootWinner,successorWinner,
      requests:[...traces.entries()],counts,admissionEvidenceDigest,observedAt};
     return Object.freeze({status:'storage_unique_successor_observed',mechanism:'unique_insert_successor_v1',operationDigest:key,

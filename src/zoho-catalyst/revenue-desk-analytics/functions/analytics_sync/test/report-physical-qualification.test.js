@@ -50,6 +50,40 @@ for(const schemaVersion of [3,4])test('real SDK and issued capability schema '+s
  assert.equal(bootstrap.assertHttpsBootstrap(),nativeRequest);
  const replay=await f.run();assert.equal(replay.statusCode,500);assert.equal(f.network.requests.length,13);
 });
+test('schema 6 activation issues a real managed capability for 13 native requests and quiescent cleanup',async t=>{
+ assert.equal(process.version,'v24.19.0');
+ const {dormantOperationDigest}=require('../lib/report-storage-activation');
+ const f=await fixture(t,{schemaVersion:6,timeoutMs:25000});
+ Object.assign(f.binding,{enabled:false,verifiedAt:0,expiresAt:0});
+ for(const evidence of Object.values(f.binding.capability.evidence))Object.assign(evidence,{verifiedAt:0,expiresAt:0});
+ const raw=JSON.stringify(f.binding),pin=sha(raw),operationDigest=dormantOperationDigest(pin);
+ process.env.REPORT_STORAGE_QUALIFICATION_JSON=raw;process.env.REPORT_STORAGE_QUALIFICATION_SHA256=pin;
+ const freshCommand=()=>{
+  const at=Date.now();return {profile:'report_storage_qualification_v1',action:'qualify_storage',activation:{
+   schemaVersion:1,bindingSha256:pin,operationDigest,verifiedAt:at,expiresAt:at+60000,
+   evidence:Object.fromEntries(Object.entries(f.binding.capability.evidence).map(([role,e])=>[role,{
+    stateSha256:e.digest,digest:sha('synthetic-current-'+role+'-'+at),verifiedAt:at,expiresAt:at+60000,
+   }]))}};
+ };
+ let io,constructors=0;
+ // Capture the real transport for assertions; no method, runtime or SDK replacement.
+ const transportFactory=options=>{constructors++;assert.equal(options.storagePhysicalContainment,true);
+  io=createReportRunTransport(options);return io;};
+ const out=await invoke(freshCommand(),{transportFactory});assert.equal(out.statusCode,200);
+ const result=out.body.result,snapshot=io.physicalSnapshot();
+ assert.equal(result.operationDigest,operationDigest);assert.equal(result.status,'storage_unique_successor_observed');
+ assert.equal(Object.keys(result).length,18);assert.equal(result.overlappingRounds,2);
+ assert.equal(result.reads+result.admissionReads,8);assert.equal(result.inserts+result.admissionInserts,5);
+ assert.equal(snapshot.physicalStarts,13);assert.equal(snapshot.insertStarts,5);assert.equal(snapshot.maxConcurrent,2);
+ assert.equal(snapshot.activePhysical,0);assert.equal(snapshot.authPending,0);assert.equal(snapshot.closed,true);assert.equal(snapshot.quiescent,true);
+ assert.equal(f.network.requests.length,13);assert.equal(f.network.snapshot().maxActive,2);assert.equal(f.network.snapshot().active,0);
+ assert.equal(f.network.snapshot().fallbackAttempts,0);assert.equal(f.rows.size,2);assert.equal(f.receipts.size,1);
+ assert.equal(result.qualificationAuthority,false);assert.equal(result.deliveryAuthority,false);
+ assert.equal(bootstrap.assertHttpsBootstrap(),nativeRequest);assert.deepEqual(networkGuard.snapshot(),{blockedCalls:0});
+ const renewed=freshCommand();renewed.activation.evidence.access.digest=sha('synthetic-renewed-access-receipt');
+ assert.equal((await invoke(renewed,{transportFactory})).statusCode,500);
+ assert.equal(constructors,1);assert.equal(f.network.requests.length,13);
+});
 for(const [label,options]of [['noncanonical capability',{wrongCapability:true}],['strict Boolean readback',{readBooleanString:true}],
  ['root socket failure',{failRoot:true}],['unconfirmed close',{holdClose:true,timeoutMs:30}]])
 test('real qualification holds '+label+' without later rounds',async t=>{

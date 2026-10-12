@@ -32,7 +32,7 @@ test('exact raw bound and closed canonical source shape reject duplicate keys, o
  const b=binding(),raw=JSON.stringify(b);b.controlHost='x'.repeat(TOTAL_LIMIT-raw.length+b.controlHost.length);
  assert.equal(decode(env(encode(JSON.stringify(b),{format:'tuple-v1'}))).length,TOTAL_LIMIT);
  for(const invalid of [JSON.stringify(b)+'x','{"schemaVersion":3,'+raw.slice(1),' '+raw,raw+' ',raw.replace('"schemaVersion":3','"schemaVersion":3.0')])assert.throws(()=>encode(invalid,{format:'tuple-v1'}),held);
- for(const mutate of [b=>b.extra=true,b=>delete b.nonce,b=>b.capability.extra=true,b=>b.schemaVersion=6,b=>b.verifiedAt=-1,b=>b.singleAdmittedInvocation='true',b=>b.capability.region=null]){const b=binding();mutate(b);assert.throws(()=>encode(JSON.stringify(b),{format:'tuple-v1'}),held);}
+ for(const mutate of [b=>b.extra=true,b=>delete b.nonce,b=>b.capability.extra=true,b=>b.schemaVersion=7,b=>b.verifiedAt=-1,b=>b.singleAdmittedInvocation='true',b=>b.capability.region=null]){const b=binding();mutate(b);assert.throws(()=>encode(JSON.stringify(b),{format:'tuple-v1'}),held);}
  const reordered={enabled:true,...binding()};assert.throws(()=>encode(JSON.stringify(reordered),{format:'tuple-v1'}),held);
  assert.throws(()=>encode(raw,{format:'tuple-v2'}),held);
 });
@@ -59,7 +59,7 @@ test('bounded inflate rejects bombs, truncation, trailing streams and malformed 
 });
 test('tuple count, scalar types, schema version and canonical tuple JSON are closed',()=>{
  const values=leafValues(binding());
- for(const tuple of [values.slice(1),[...values,true],{values},values.map((x,i)=>i===0?'3':x),values.map((x,i)=>i===0?6:x),values.map((x,i)=>i===1?1:x),values.map((x,i)=>i===2?{}:x),values.map((x,i)=>i===38?1.5:x)])assert.throws(()=>decode(env(frame(Buffer.from(JSON.stringify(tuple))))),held);
+ for(const tuple of [values.slice(1),[...values,true],{values},values.map((x,i)=>i===0?'3':x),values.map((x,i)=>i===0?7:x),values.map((x,i)=>i===1?1:x),values.map((x,i)=>i===2?{}:x),values.map((x,i)=>i===38?1.5:x)])assert.throws(()=>decode(env(frame(Buffer.from(JSON.stringify(tuple))))),held);
  assert.throws(()=>decode(env(frame(Buffer.from(' '+JSON.stringify(values))))),held);
  const repeated=values.map((x,i)=>i===37?-0:x);assert.throws(()=>decode(env(frame(Buffer.from(JSON.stringify(repeated).replace(',0,',',-0,'))))),held);
 });
@@ -84,12 +84,36 @@ test('sizing holds above engineering margin, malformed accounting, duplicate con
 });
 
 
-test('schema4 retains all41 tuple-v1 fields and exact raw hash; unknown schema6 is rejected',()=>{
- const b=binding();b.schemaVersion=4;b.expiresAt=b.verifiedAt+3600000;
+for(const schemaVersion of [3,4,5])test('legacy schema'+schemaVersion+' retains all41 tuple-v1 fields and exact raw hash',()=>{
+ const b=binding();b.schemaVersion=schemaVersion;b.expiresAt=b.verifiedAt+(schemaVersion===4?3600000:900000);
  for(const evidence of Object.values(b.capability.evidence))evidence.expiresAt=b.expiresAt;
  const raw=JSON.stringify(b),packed=encode(raw,{partSize:400,format:'tuple-v1'});
  assert.equal(leafValues(b).length,41);assert.equal(TUPLE_COUNT,41);
  assert.match(packed.marker,/^tuple-v1:/);assert.equal(decode(env(packed)),raw);assert.equal(sha(decode(env(packed))),sha(raw));
- b.schemaVersion=6;assert.throws(()=>encode(JSON.stringify(b),{format:'tuple-v1'}),held);
+ b.schemaVersion=7;assert.throws(()=>encode(JSON.stringify(b),{format:'tuple-v1'}),held);
  const invalid=leafValues(b);assert.throws(()=>decode(env(frame(Buffer.from(JSON.stringify(invalid)),{rawLength:JSON.stringify(b).length}))),held);
+});
+
+function dormantBinding(){
+ const b=binding();Object.assign(b,{schemaVersion:6,enabled:false,verifiedAt:0,expiresAt:0,timeoutMs:25000});
+ for(const evidence of Object.values(b.capability.evidence))Object.assign(evidence,{verifiedAt:0,expiresAt:0});
+ return b;
+}
+for(const format of ['json','tuple-v1'])for(const partSize of [100,200,400])test('schema6 dormant '+format+' round trip preserves zero sentinels and exact bytes '+partSize,()=>{
+ const b=dormantBinding(),raw=JSON.stringify(b),values=leafValues(b),packed=encode(raw,{format,partSize});
+ assert.equal(values.length,41);assert.equal(TUPLE_COUNT,41);
+ assert.equal(decode(env(packed)),raw);assert.equal(sha(decode(env(packed))),sha(raw));
+ const decoded=JSON.parse(decode(env(packed)));assert.deepEqual(decoded,b);
+ assert.equal(decoded.enabled,false);assert.equal(decoded.verifiedAt,0);assert.equal(decoded.expiresAt,0);
+ for(const evidence of Object.values(decoded.capability.evidence))assert.deepEqual([evidence.verifiedAt,evidence.expiresAt],[0,0]);
+ assert.equal(decode({[JSON_KEY]:raw}),raw);
+});
+test('schema6 tuple keeps closed scalar shape; malformed timestamps and activation fields are rejected',()=>{
+ for(const mutate of [b=>b.schemaVersion='6',b=>b.schemaVersion=6.5,b=>b.enabled=0,b=>b.verifiedAt=null,b=>b.expiresAt=-1,
+  b=>b.capability.evidence.access.verifiedAt=0.5,b=>delete b.capability.evidence.ownership.expiresAt,b=>b.activation={enabled:true}]){
+  const b=dormantBinding();mutate(b);assert.throws(()=>encode(JSON.stringify(b),{format:'tuple-v1'}),held);
+ }
+ const b=dormantBinding(),raw=JSON.stringify(b),values=leafValues(b);
+ for(const tuple of [values.slice(0,-1),[...values,0],values.map((x,i)=>i===37?null:x),values.map((x,i)=>i===0?7:x)])
+  assert.throws(()=>decode(env(frame(Buffer.from(JSON.stringify(tuple)),{rawLength:raw.length}))),held);
 });

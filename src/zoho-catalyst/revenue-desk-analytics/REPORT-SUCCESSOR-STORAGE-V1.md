@@ -20,7 +20,9 @@ Focused tests cover distinct/identical contenders, root ownership, unknown accep
 
 ## Runtime qualification boundary
 
-Schemas 3 and 4 use a single physical transport per qualification. It admits at most two active requests, tracks pending managed authentication and native request closure, and joins cancellation/drain before completing or reporting a hold. A logical timeout does not free a physical slot. Schema 5 retains its sequential diagnostic path and strict acknowledgement/readback behavior. Neither path retries an ambiguous mutation.
+Schemas 3, 4 and 6 use a single physical transport per qualification. It admits at most two active requests, tracks pending managed authentication and native request closure, and joins cancellation/drain before completing or reporting a hold. A logical timeout does not free a physical slot. Schema 5 retains its sequential diagnostic path and strict acknowledgement/readback behavior. Neither path retries an ambiguous mutation.
+
+Schema 6 adds [untimed dormant staging and fresh authenticated activation](REPORT-DORMANT-STORAGE-ACTIVATION.md). Staging alone cannot construct transport. The activation lease and evidence freshness remain bounded; renewed observations cannot change the staged operation's permanent admission key.
 
 The Controller initializes one HTTPS bootstrap before importing application code. The release builder includes that bootstrap and the physical transport in the Controller's own reporting dependency tree. Physical admission retains the reviewed exact Node v24.19.0 policy; no wider Node 24 range is inferred from a separate BasicIO result. Target identity comes from an issued, app-bound capability and validated managed runtime scope, never public tenant literals or caller-provided transport options.
 

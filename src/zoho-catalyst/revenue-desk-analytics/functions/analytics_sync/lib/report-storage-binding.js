@@ -6,7 +6,7 @@ const PART_LIMIT=400,TOTAL_LIMIT=4096,MAX_PARTS=Math.ceil(TOTAL_LIMIT/100);
 // Engineering margin below an observed successful configuration, NOT a Zoho limit.
 const PLANNING_BUDGET=3578;
 function held(){throw Object.assign(new Error('REPORT_STORAGE_QUALIFICATION_HELD'),{code:'REPORT_STORAGE_QUALIFICATION_HELD'});}
-// Version one preserves every scalar in the existing schema-3 binding. No
+// Tuple version one preserves the same 41 scalars across supported binding schemas. No
 // private constants, defaults, omitted fields or environment-derived values.
 const SHAPE=Object.freeze({schemaVersion:0,enabled:false,environment:'',sourceRevision:'',projectId:'',controlHost:'',tableId:'',nonce:'',
  capability:{region:'',origin:'',controllerFunctionId:'',deploymentId:'',sdkVersion:'',authMode:'',authType:'',creatorPolicy:'',
@@ -33,7 +33,7 @@ function fromTuple(values){
     ||typeof actual==='number'&&(!Number.isSafeInteger(actual)||actual<0)
     ||typeof actual==='string'&&Buffer.byteLength(actual)>TOTAL_LIMIT)held();result[key]=actual;}
  }return result;}
- const result=object(SHAPE);if(index!==TUPLE_COUNT||![3,4,5].includes(result.schemaVersion))held();return result;
+ const result=object(SHAPE);if(index!==TUPLE_COUNT||![3,4,5,6].includes(result.schemaVersion))held();return result;
 }
 function rawBound(raw){if(typeof raw!=='string'||!raw.length||raw.length>TOTAL_LIMIT||!/^[\x20-\x7e]+$/.test(raw))held();}
 function encodeStorageBinding(raw,{partSize=200,format='json'}={}){
@@ -41,7 +41,7 @@ function encodeStorageBinding(raw,{partSize=200,format='json'}={}){
  let wire=raw,tupleLength;
  if(format==='tuple-v1'){
   let value;try{value=JSON.parse(raw);}catch{held();}
-  const values=shapeValues(value);if(values.length!==TUPLE_COUNT||![3,4,5].includes(value.schemaVersion)||JSON.stringify(value)!==raw)held();
+  const values=shapeValues(value);if(values.length!==TUPLE_COUNT||![3,4,5,6].includes(value.schemaVersion)||JSON.stringify(value)!==raw)held();
   const reconstructed=JSON.stringify(fromTuple(values));if(reconstructed!==raw)held();
   const tuple=JSON.stringify(values);tupleLength=Buffer.byteLength(tuple);if(tupleLength>TOTAL_LIMIT)held();
   wire=zlib.deflateRawSync(Buffer.from(tuple),{level:9}).toString('base64');if(wire.length>TOTAL_LIMIT)held();
