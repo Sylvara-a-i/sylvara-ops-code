@@ -214,3 +214,5 @@ test("module import and preparation have zero transport or writer capabilities",
 
 // Keep requested-text native parity in the existing canonical/CI entrypoint.
 require("./native-service-area-validation.test");
+require("../../calls-reports/test/company-call-report-projection.test");
+require("../../calls-reports/test/saved-report-preferences.test");

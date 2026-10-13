@@ -352,6 +352,48 @@ renderer escaping gates. No deployment, live reads, grants, payment/integration
 collection, identity changes, rotation changes or storage work is included.
 Rollback is removing the source increment; nothing has been deployed.
 
+### Opt-in offline payment collection
+
+`produceBillingCustomerHistoryWithPayments(input, trusted, policy, get, limits)`
+uses the same producer internals and synthetic transport, adding `payments` reads
+after subscriptions and invoices. The original `produceBillingCustomerHistory`
+keeps its existing request set and output, including payments as
+`unknown/not-requested`. Neither export connects to a live provider or Creator.
+
+Payment pages follow the same exact envelope, terminal-cursor, freshness and
+per-collection page limits. Each payment row requires `{ organizationId,
+paymentId, customerId }`; optional fields are `number`, `status`, `recordedOn`,
+`mode` and `money`. Missing/null number or date becomes null, and missing/null
+status or mode becomes `unknown`. Explicit values must satisfy the existing
+payment-history view contract. Failure and unknown statuses remain visible as
+observed; no collected-revenue or settlement conclusion is calculated.
+
+Payment money is missing/null or exactly `{ unit, currency, amount? }`. It reuses
+the existing lossless decimal-string/minor-integer conversion and independent
+currency allowlist, but accepts only `payment-response` or
+`verified-payment-metadata` provenance. Invoice currency provenance and invoice
+amount fields are rejected. Unknown currency suppresses amount and unit; unknown
+amount remains null. Payment IDs and customer IDs are stripped by the existing
+history view; no action URLs or raw provider metadata are returned.
+
+Authority is validated before transport. Missing customer authority performs no
+payment reads and leaves payment history unknown. Only a successful terminal
+page can establish empty or complete payment history. Duplicate IDs, wrong
+owners, stale/malformed evidence, repeated cursors, page-budget exhaustion and
+later-page failures discard the entire payment collection, preserving valid
+invoice/subscription results. Invoice/subscription failures do not prevent an
+independently valid payment collection. Integrations remain unrequested.
+
+The existing producer test command above covers both exports using synthetic
+fixtures, including legacy compatibility, complete pagination, unavailable versus
+empty states, precision/range/provenance failures and immutable snapshots. This
+is private source preparation only; it is not a functional portal payment screen.
+Before live use, independently qualify customer-filtered payment reads, provider
+status/mode normalization, pagination, currency provenance and Books ownership,
+alongside the identity, visibility and current authorization gates already listed.
+No provider route, permission, record, storage worker or live UI is changed.
+Rollback is reverting this source increment; no live rollback is required.
+
 ## Next source increment: bounded review and confirmation
 
 The following is the implementation contract for a later slice. No endpoint,
