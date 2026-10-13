@@ -5,7 +5,8 @@ const {createRequire}=require('node:module');
 const {installSocketFixture}=require('./helpers/report-physical-socket-fixture.js');
 const {loadBootstrap}=require('./helpers/report-physical-bootstrap-fixture.js');
 const diagnostic=require('../lib/report-storage-diagnostic');
-// Inherited seam/mutation regressions. Actual process must be v24.19.0 for positives.
+// Actual Node/core behavior is tested on the pinned local v24.19.0 binary.
+// VM version labels exercise admission policy, not other managed runtime binaries.
 // SDK class definitions are confined in VM mocks; the separate entrypoint suite loads the real SDK.
 const root=path.resolve(__dirname,'..'),base=root;
 const fromSdk=createRequire(path.join(base,'package.json'));
@@ -18,7 +19,9 @@ const capability=Object.freeze({origin:'https://api.catalyst.zoho.com',controlle
 const query={query:`SELECT * FROM ReportRuns WHERE IdempotencyKey = 'revenue-desk-report-v1:${key}' LIMIT 2`};
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 function app(){return new CatalystApp({projectId:'123456789',projectKey:'synthetic-project-key',environment:'Development',credential:new CatalystCredential({adminType:'token',adminToken:'synthetic-admin-token','x-zc-user-cred-type':'token','x-zc-user-cred-token':'synthetic-user-token','x-zc-user-type':'admin'})});}
-function load({httpsObject=require('node:https'),onSdkImport,diagnosticModule=diagnostic,sourcePath=path.join(root,'lib/report-successor-physical.js'),version=process.version,initializeBootstrap=true,environment={X_ZOHO_CATALYST_ORG_ID:'987654321'},scope={projectId:'123456789',organizationId:'987654321',controllerFunctionId:'123456786'}}={}){
+function load(options={}){
+ const {httpsObject=require('node:https'),onSdkImport,diagnosticModule=diagnostic,sourcePath=path.join(root,'lib/report-successor-physical.js'),initializeBootstrap=true,environment={X_ZOHO_CATALYST_ORG_ID:'987654321'},scope={projectId:'123456789',organizationId:'987654321',controllerFunctionId:'123456786'}}=options;
+ const version=Object.hasOwn(options,'version')?options.version:process.version;
  const bootstrap=loadBootstrap(httpsObject);if(initializeBootstrap)bootstrap.initializeHttpsBootstrap();
  const mod={exports:{}};const r=id=>{
   if(id==='node:https')return httpsObject;
@@ -37,7 +40,7 @@ async function using(t,plans,opts={}){
  const f=installSocketFixture({plans,onRequest:opts.onRequest});t.after(()=>f.restore());
  const a=opts.app||app();let admitted=true;
  const tracker=diagnostic.createStorageDiagnostic();
- const create=load();const io=create({app:a,capability,operationKey:key,storageDiagnostic:tracker,assertActive:()=>{if(!admitted)throw Error('AUTHORITY_HELD');},timeoutMs:opts.timeoutMs||1000});
+ const create=load(Object.hasOwn(opts,'version')?{version:opts.version}:{});const io=create({app:a,capability,operationKey:key,storageDiagnostic:tracker,assertActive:()=>{if(!admitted)throw Error('AUTHORITY_HELD');},timeoutMs:opts.timeoutMs||1000});
  t.after(async()=>{io.stop();for(let i=0;i<f.sockets.length;i++)f.releaseClose(i);await io.stopAndDrain();});
  return {f,io,a,tracker,hold:()=>{admitted=false;}};
 }
@@ -54,7 +57,7 @@ test('real Node ClientRequest/parser returns rows only after request and respons
  assert.equal(JSON.stringify(facts).includes('synthetic-user-token'),false);
 });
 test('two concurrent constructors overlap and retain both permits through close',async t=>{
- const {f,io}=await using(t,[{manual:true},{manual:true}]);
+ const {f,io}=await using(t,[{manual:true},{manual:true}],{version:'v24.0.0'});
  const a=io.send('/query',query,true),b=io.send('/query',query,true);await wait(20);
  assert.equal(f.requests.length,2);assert.equal(io.snapshot().maxConcurrent,2);
  f.respond(1,{statusCode:200,body:{data:[]}});await b;f.respond(0,{statusCode:200,body:{data:[]}});await a;
@@ -68,13 +71,13 @@ test('third simultaneous admission is held before constructor and cancels both a
  await io.stopAndDrain();assert.deepEqual(physicalDiagnostic(tracker),{schemaVersion:1,firstFailure:'request_limit',constructorAttempts:2,insertConstructorAttempts:0,drain:'owned_quiescent'});
 });
 test('13 total physical starts admit no fourteenth',async t=>{
- const {f,io,tracker}=await using(t,Array.from({length:13},()=>({statusCode:200,body:{data:[]}})));
+ const {f,io,tracker}=await using(t,Array.from({length:13},()=>({statusCode:200,body:{data:[]}})),{version:'v24.0.0'});
  for(let i=0;i<13;i++)await io.send('/query',query,true);
  await assert.rejects(io.send('/query',query,true));assert.equal(f.requests.length,13);
  await io.stopAndDrain();assert.deepEqual(physicalDiagnostic(tracker),{schemaVersion:1,firstFailure:'request_limit',constructorAttempts:13,insertConstructorAttempts:0,drain:'owned_quiescent'});
 });
 test('five insert starts admit no sixth',async t=>{
- const {f,io,tracker}=await using(t,Array.from({length:5},()=>({statusCode:200,body:{data:[]}})));
+ const {f,io,tracker}=await using(t,Array.from({length:5},()=>({statusCode:200,body:{data:[]}})),{version:'v24.0.0'});
  for(let i=0;i<5;i++)await io.send('/table/123456789/row',[{EVENT_KEY:eventKey}],false);
  await assert.rejects(io.send('/table/123456789/row',[{EVENT_KEY:eventKey}],false));assert.equal(f.requests.length,5);
  await io.stopAndDrain();assert.deepEqual(physicalDiagnostic(tracker),{schemaVersion:1,firstFailure:'request_limit',constructorAttempts:5,insertConstructorAttempts:5,drain:'owned_quiescent'});
@@ -194,7 +197,7 @@ const heldError=e=>e?.code==='REPORT_RUN_RECONCILIATION_REQUIRED'
  &&e.message==='REPORT_RUN_RECONCILIATION_REQUIRED'&&e.ambiguous===true;
 const nativeHttps=require('node:https'),nativeRequest=nativeHttps.request;
 const sourceHash=fn=>require('node:crypto').createHash('sha256').update(Function.prototype.toString.call(fn).replace(/\r\n/g,'\n')).digest('hex');
-test('positive regression runtime is actual supported Node24.19',()=>assert.equal(process.version,'v24.19.0'));
+test('physical regression toolchain remains actual pinned Node24.19',()=>assert.equal(process.version,'v24.19.0'));
 
 test('replacement introduced during SDK import prevents physical module loading before admission or dispatch',async t=>{
  const fixture=installSocketFixture();t.after(()=>fixture.restore());
@@ -247,9 +250,30 @@ test('retained SDK fixture never reads credential files or constructs an HTTP re
 test('physical import without entrypoint bootstrap is held and never lazily captures',()=>{
  let imports=0;assert.throws(()=>load({initializeBootstrap:false,onSdkImport(){imports++;}}),heldError);assert.equal(imports,0);
 });
-for(const version of ['v24.12.0','v24.18.0','v24.19.1','v24.20.0','v25.0.0','v24.19.0\n'])test('unsupported exact runtime '+JSON.stringify(version)+' rejects before dispatch',async t=>{
+for(const version of ['v24.0.0','v24.12.0','v24.15.0','v24.18.0','v24.19.0','v24.19.1','v24.20.0'])test('stable managed version label '+version+' admits contained transport',async t=>{
+ const {f,io,tracker}=await using(t,[{statusCode:200,body:{data:[]}}],{version});
+ await io.send('/query',query,true);assert.equal(f.requests.length,1);
+ assert.equal(io.snapshot().physicalStarts,1);assert.equal(io.snapshot().quiescent,true);
+ assert.equal(physicalDiagnostic(tracker).constructorAttempts,1);
+});
+for(const version of [undefined,null,24,true,{},new String('v24.19.0'),'',
+ 'v22.19.0','v23.0.0','v25.0.0','v240.19.0','24.19.0','V24.19.0','v024.19.0',
+ 'v24','v24.19','v24.19.0.0','v24.019.0','v24.19.00','v24.-1.0','v24.1.-1','v24.+1.0',
+ 'v24.1e2.0','v24.19.0-rc.1','v24.19.0+vendor',' v24.19.0','v24.19.0 ',
+ 'v24.19.0\n','v24.19.0\r\n','v24.19.0\0',`v24.${Number.MAX_SAFE_INTEGER+1}.0`,`v24.0.${Number.MAX_SAFE_INTEGER+1}`])test('unsupported managed version '+typeof version+' '+JSON.stringify(version)+' rejects before dispatch',async t=>{
  const fixture=installSocketFixture();t.after(()=>fixture.restore());
- assert.throws(()=>load({version})({app:app(),capability,operationKey:key,assertActive:()=>{}}),heldError);assert.equal(fixture.requests.length,0);
+ const tracker=diagnostic.createStorageDiagnostic();
+ assert.throws(()=>load({version})({app:app(),capability,operationKey:key,storageDiagnostic:tracker,assertActive:()=>{}}),heldError);
+ assert.equal(fixture.requests.length,0);
+ assert.deepEqual(physicalDiagnostic(tracker),{schemaVersion:1,firstFailure:'node_version',constructorAttempts:0,insertConstructorAttempts:0,drain:'not_created'});
+ const snapshot=diagnostic.storageFailureDiagnostic(diagnostic.storageDiagnosticError(tracker));
+ assert.deepEqual([snapshot.attempted,snapshot.dispatchStarted,snapshot.responses],[0,0,0]);
+});
+test('managed version guard rejects nonstrings without coercion or inspecting properties',async t=>{
+ let touched=0;const version=new Proxy({}, {get(){touched++;throw Error('SYNTHETIC_VERSION_DETAIL');}});
+ const fixture=installSocketFixture();t.after(()=>fixture.restore());
+ assert.throws(()=>load({version})({app:app(),capability,operationKey:key,assertActive:()=>{}}),heldError);
+ assert.equal(touched,0);assert.equal(fixture.requests.length,0);
 });
 test('request identity changed during asynchronous SDK token authentication is held before constructor',async t=>{
  const fixture=installSocketFixture();t.after(()=>fixture.restore());let replacementCalls=0;
@@ -336,9 +360,9 @@ test('physical SQL guard accepts only the exact asterisk successor head query',a
 });
 
 for(const [label,options,mutate,expected]of [
- ['runtime',{version:'v24.18.0'},a=>a,'node_version'],
- ['managed context',{},a=>{a.credential.strictScope=true;return a;},'managed_context'],
- ['target',{},a=>{a.config.projectId='111111111';return a;},'target_scope']
+ ['runtime',{version:'v25.0.0'},a=>a,'node_version'],
+ ['managed context',{version:'v24.0.0'},a=>{a.credential.strictScope=true;return a;},'managed_context'],
+ ['target',{version:'v24.0.0'},a=>{a.config.projectId='111111111';return a;},'target_scope']
 ])test('issued physical diagnostic distinguishes '+label+' rejection before any constructor',async t=>{
  const f=installSocketFixture();t.after(()=>f.restore());const tracker=diagnostic.createStorageDiagnostic();
  assert.throws(()=>load(options)({app:mutate(app()),capability,operationKey:key,storageDiagnostic:tracker,assertActive:()=>{}}),heldError);
@@ -442,7 +466,7 @@ test('thrown '+recorder+' never reports exact zero or settled physical evidence'
  let recorderCalls=0,io,failure;
  const diagnosticModule={...diagnostic,[recorder](){recorderCalls++;throw Error('SYNTHETIC_PRIVATE_RECORDER_SENTINEL');}};
  try{
-  const create=load({diagnosticModule,version:recorder==='recordPhysicalFailure'?'v24.18.0':process.version});
+   const create=load({diagnosticModule,version:recorder==='recordPhysicalFailure'?'v25.0.0':process.version});
   io=create({app:app(),capability,operationKey:key,storageDiagnostic:tracker,assertActive:()=>{}});
   await io.send('/query',query,true);
  }catch(error){failure=error;}
