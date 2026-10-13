@@ -14,4 +14,8 @@ function storageFailureDiagnostic(error){
  try{return require('../reporting/revenue-desk-analytics/functions/analytics_sync/lib/report-storage-diagnostic')
   .storageFailureDiagnostic(error);}catch{return undefined;}
 }
-module.exports={createProtectedStorageQualification,storageFailureDiagnostic};
+function storageBindingFailureDiagnostic(error){
+ try{return require('../reporting/revenue-desk-analytics/functions/analytics_sync/lib/report-storage-binding-diagnostic')
+  .storageBindingFailureDiagnostic(error);}catch{return undefined;}
+}
+module.exports={createProtectedStorageQualification,storageFailureDiagnostic,storageBindingFailureDiagnostic};

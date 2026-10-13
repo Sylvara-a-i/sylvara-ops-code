@@ -6,7 +6,8 @@ const {createReportSuccessorStore}=require('./report-successor-store');
 const {createReportRunTransport}=require('./report-run-transport');
 const {validateStorageCapability,validateStoredProjection,matchesStoredReportField}=require('./report-storage-capability');
 const {diagnosticWindowMs}=require('./report-storage-window');
-const {validateDormantBinding,activateDormantBinding,dormantOperationDigest}=require('./report-storage-activation');
+const {validateDormantBindingForConstruction,activateDormantBinding,dormantOperationDigest}=require('./report-storage-activation');
+const {bindingDiagnosticError}=require('./report-storage-binding-diagnostic');
 const {createStorageDiagnostic,recordStorageDiagnostic,storageDiagnosticError,recordStorageValidationFailure,
  recordPhysicalFailure,finishPhysicalDiagnostic,guardPhysicalDiagnostic}=require('./report-storage-diagnostic');
 const PROFILE='report_storage_qualification_v1',HASH=/^[a-f0-9]{64}$/,ID=/^[1-9][0-9]{2,29}$/;
@@ -22,6 +23,7 @@ function matchesReportAckField(field,expected,actual){
  return actual===expected||actual===(expected?'true':'false');
 }
 function held(){throw Object.assign(new Error('REPORT_STORAGE_QUALIFICATION_HELD'),{code:'REPORT_STORAGE_QUALIFICATION_HELD'});}
+function bindingHeld(reason){throw bindingDiagnosticError(reason);}
 /** Diagnostic only. A permanently consumed unique receipt admits one owner
  * across cold instances. Ambiguous acceptance never grants dispatch. Admission
  * requests are counted separately; replays still incur request/read cost. */
@@ -29,21 +31,36 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
  const consumed=new Set();
  return function storageQualification(app,config){
   const raw=decodeStorageBinding(environment),pin=environment.REPORT_STORAGE_QUALIFICATION_SHA256;
-  if(typeof raw!=='string'||Buffer.byteLength(raw)>4096||!HASH.test(pin||'')||sha(raw)!==pin)held();
-  let b;try{b=JSON.parse(raw);}catch{held();}
+  if(typeof raw!=='string'||Buffer.byteLength(raw)>4096)bindingHeld('raw_type_or_size');
+  if(!HASH.test(pin||''))bindingHeld('pin_syntax');
+  if(sha(raw)!==pin)bindingHeld('pin_mismatch');
+  let b;try{b=JSON.parse(raw);}catch{bindingHeld('binding_json');}
   if(!exact(b,['schemaVersion','enabled','environment','sourceRevision','projectId','controlHost','tableId','nonce',
-   'capability','verifiedAt','expiresAt','timeoutMs','singleAdmittedInvocation'])
-   ||![3,4,5,6].includes(b.schemaVersion)||b.enabled!==(b.schemaVersion!==6)||b.environment!=='development'||b.singleAdmittedInvocation!==true
-   ||config?.environment!==b.environment||environment.DEPLOYMENT_ENVIRONMENT!==b.environment
-   ||b.sourceRevision!==config.sourceRevision||environment.SOURCE_REVISION!==b.sourceRevision||!/^[a-f0-9]{40}$/.test(b.sourceRevision||'')
-   ||!ID.test(b.projectId||'')||sha(b.projectId)!==config.expectedProjectIdSha256
-   ||String(app?.config?.projectId)!==b.projectId||String(app.config.environment).toLowerCase()!=='development'
-   ||b.controlHost!==config.controlHost||!ID.test(b.tableId||'')||!/^[a-f0-9]{32}$/.test(b.nonce||'')
-      ||!Number.isSafeInteger(b.verifiedAt)||b.verifiedAt<0||!Number.isSafeInteger(b.expiresAt)
-   ||b.schemaVersion!==6&&b.expiresAt<=b.verifiedAt
-   ||!Number.isSafeInteger(b.timeoutMs)||b.timeoutMs<1||b.timeoutMs>60000||typeof now!=='function'||typeof transportFactory!=='function')held();
+   'capability','verifiedAt','expiresAt','timeoutMs','singleAdmittedInvocation']))bindingHeld('binding_fields');
+  if(![3,4,5,6].includes(b.schemaVersion))bindingHeld('binding_schema');
+  if(b.enabled!==(b.schemaVersion!==6))bindingHeld('binding_enabled');
+  if(b.environment!=='development')bindingHeld('binding_environment');
+  if(b.singleAdmittedInvocation!==true)bindingHeld('single_admission_flag');
+  if(config?.environment!==b.environment)bindingHeld('config_environment_mismatch');
+  if(environment.DEPLOYMENT_ENVIRONMENT!==b.environment)bindingHeld('raw_environment_mismatch');
+  if(b.sourceRevision!==config.sourceRevision)bindingHeld('config_source_mismatch');
+  if(environment.SOURCE_REVISION!==b.sourceRevision)bindingHeld('raw_source_mismatch');
+  if(!/^[a-f0-9]{40}$/.test(b.sourceRevision||''))bindingHeld('source_syntax');
+  if(!ID.test(b.projectId||''))bindingHeld('project_id_syntax');
+  if(sha(b.projectId)!==config.expectedProjectIdSha256)bindingHeld('project_digest_mismatch');
+  if(String(app?.config?.projectId)!==b.projectId)bindingHeld('sdk_project_mismatch');
+  if(String(app.config.environment).toLowerCase()!=='development')bindingHeld('sdk_environment_mismatch');
+  if(b.controlHost!==config.controlHost)bindingHeld('control_host_mismatch');
+  if(!ID.test(b.tableId||''))bindingHeld('table_id_syntax');
+  if(!/^[a-f0-9]{32}$/.test(b.nonce||''))bindingHeld('nonce_syntax');
+  if(!Number.isSafeInteger(b.verifiedAt)||b.verifiedAt<0)bindingHeld('verified_at');
+  if(!Number.isSafeInteger(b.expiresAt))bindingHeld('expires_at');
+  if(b.schemaVersion!==6&&b.expiresAt<=b.verifiedAt)bindingHeld('legacy_expiry');
+  if(!Number.isSafeInteger(b.timeoutMs)||b.timeoutMs<1||b.timeoutMs>60000)bindingHeld('timeout');
+  if(typeof now!=='function')bindingHeld('clock_type');
+  if(typeof transportFactory!=='function')bindingHeld('transport_factory_type');
   const dormant=b.schemaVersion===6;
-  if(dormant)validateDormantBinding(b);
+  if(dormant)validateDormantBindingForConstruction(b);
   function context(binding){
    const diagnosticContract={schemaVersion:binding.schemaVersion,profile:PROFILE,environment:binding.environment};
    if(binding.expiresAt-binding.verifiedAt>diagnosticWindowMs(diagnosticContract))held();

@@ -621,3 +621,11 @@ by a generated private report or by this source change.
 A private review-reference correction with identical displayed content creates a
 new immutable manifest and reuses both verified PDF versions. Review drift during
 asynchronous rendering is held, even if amounts and descriptions stay unchanged.
+
+## Storage binding diagnostics
+
+The Controller's existing authenticated failure log can distinguish synchronous
+storage binding rejection with a private, finite reason enum. See the
+[diagnostic contract](functions/analytics_sync/STORAGE-BINDING-DIAGNOSTICS.md) for
+scope, privacy, validation and deployment boundaries. This observation does not
+grant acceptance or retry authority.

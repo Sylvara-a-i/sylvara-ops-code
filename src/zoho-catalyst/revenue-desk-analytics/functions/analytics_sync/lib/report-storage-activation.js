@@ -2,6 +2,7 @@
 const crypto=require('node:crypto');
 const {canonicalJson}=require('./facts');
 const {diagnosticWindowMs,PROFILE}=require('./report-storage-window');
+const {bindingDiagnosticError}=require('./report-storage-binding-diagnostic');
 const HASH=/^[a-f0-9]{64}$(?![\s\S])/,ID=/^[1-9][0-9]{2,29}$(?![\s\S])/;
 const ROLES=Object.freeze(['ownerAuthorization','ownership','access']);
 const MINIMUM_ACTIVATION_REMAINING_MS=27000;
@@ -9,6 +10,7 @@ const exact=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)
  &&Object.keys(value).sort().join(',')===[...keys].sort().join(',');
 const hash=value=>crypto.createHash('sha256').update(value).digest('hex');
 function held(){throw Object.assign(new Error('REPORT_STORAGE_QUALIFICATION_HELD'),{code:'REPORT_STORAGE_QUALIFICATION_HELD'});}
+function bindingHeld(reason){throw bindingDiagnosticError(reason);}
 function freeze(value){if(value&&typeof value==='object'){Object.values(value).forEach(freeze);Object.freeze(value);}return value;}
 function dormantOperationDigest(bindingSha256){
  if(typeof bindingSha256!=='string'||!HASH.test(bindingSha256))held();
@@ -19,23 +21,28 @@ function dormantOperationDigest(bindingSha256){
  * never infinite authority. Only a separately authenticated command can supply
  * current evidence. Static evidence digests commit reviewed facts/approval scope,
  * not a falsely refreshed timestamp on a historical provider response. */
-function validateDormantBinding(b){
+function validateDormant(b,fail){
  if(!exact(b,['schemaVersion','enabled','environment','sourceRevision','projectId','controlHost','tableId','nonce',
-  'capability','verifiedAt','expiresAt','timeoutMs','singleAdmittedInvocation'])
-  ||b.schemaVersion!==6||b.enabled!==false||b.environment!=='development'||b.singleAdmittedInvocation!==true
-  ||b.verifiedAt!==0||b.expiresAt!==0||b.timeoutMs!==25000
-  ||typeof b.sourceRevision!=='string'||!/^[a-f0-9]{40}$(?![\s\S])/.test(b.sourceRevision)
-  ||typeof b.projectId!=='string'||!ID.test(b.projectId)||typeof b.tableId!=='string'||!ID.test(b.tableId)
-  ||typeof b.controlHost!=='string'||!/^[a-z0-9][a-z0-9.-]{0,252}$(?![\s\S])/.test(b.controlHost)
-  ||typeof b.nonce!=='string'||!/^[a-f0-9]{32}$(?![\s\S])/.test(b.nonce)
-  ||!exact(b.capability,['region','origin','controllerFunctionId','deploymentId','sdkVersion','authMode','authType','creatorPolicy','tables','evidence'])
-  ||!exact(b.capability.evidence,ROLES))held();
+  'capability','verifiedAt','expiresAt','timeoutMs','singleAdmittedInvocation']))fail('dormant_fields');
+ if(b.schemaVersion!==6||b.enabled!==false||b.environment!=='development'||b.singleAdmittedInvocation!==true)fail('dormant_shape');
+ if(b.verifiedAt!==0||b.expiresAt!==0||b.timeoutMs!==25000)fail('dormant_times');
+ if(typeof b.sourceRevision!=='string'||!/^[a-f0-9]{40}$(?![\s\S])/.test(b.sourceRevision))fail('dormant_source');
+ if(typeof b.projectId!=='string'||!ID.test(b.projectId)||typeof b.tableId!=='string'||!ID.test(b.tableId))fail('dormant_project_or_table');
+ if(typeof b.controlHost!=='string'||!/^[a-z0-9][a-z0-9.-]{0,252}$(?![\s\S])/.test(b.controlHost))fail('dormant_host');
+ if(typeof b.nonce!=='string'||!/^[a-f0-9]{32}$(?![\s\S])/.test(b.nonce))fail('dormant_nonce');
+ if(!exact(b.capability,['region','origin','controllerFunctionId','deploymentId','sdkVersion','authMode','authType','creatorPolicy','tables','evidence']))fail('capability_fields');
+ if(!exact(b.capability.evidence,ROLES))fail('evidence_roles');
  for(const evidence of Object.values(b.capability.evidence)){
-  if(!exact(evidence,['digest','verifiedAt','expiresAt'])||typeof evidence.digest!=='string'||!HASH.test(evidence.digest)
-   ||evidence.verifiedAt!==0||evidence.expiresAt!==0)held();
+  if(!exact(evidence,['digest','verifiedAt','expiresAt']))fail('evidence_fields');
+  if(typeof evidence.digest!=='string'||!HASH.test(evidence.digest))fail('evidence_digest');
+  if(evidence.verifiedAt!==0||evidence.expiresAt!==0)fail('evidence_times');
  }
  return b;
 }
+// Only constructor validation issues binding observations. Activation and public
+// offline validation keep their original unclassified errors and authority.
+function validateDormantBinding(b){return validateDormant(b,held);}
+function validateDormantBindingForConstruction(b){return validateDormant(b,bindingHeld);}
 /** Pure validation, not authentication or a provider read. The HTTP boundary
  * authenticates the operator before this command is accepted. Fresh receipts
  * attest independent reads of the committed facts; hashes/times alone do not
@@ -66,4 +73,4 @@ function activateDormantBinding(binding,bindingSha256,activation,now){
  Object.assign(active,{enabled:true,verifiedAt,expiresAt});active.capability.evidence=evidence;
  return Object.freeze({binding:freeze(active),activationDigest:hash(canonicalJson({bindingSha256,verifiedAt,expiresAt,evidence}))});
 }
-module.exports={validateDormantBinding,activateDormantBinding,dormantOperationDigest,MINIMUM_ACTIVATION_REMAINING_MS};
+module.exports={validateDormantBinding,validateDormantBindingForConstruction,activateDormantBinding,dormantOperationDigest,MINIMUM_ACTIVATION_REMAINING_MS};
