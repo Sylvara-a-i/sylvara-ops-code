@@ -50,6 +50,18 @@ for(const schemaVersion of [3,4])test('real SDK and issued capability schema '+s
  assert.equal(bootstrap.assertHttpsBootstrap(),nativeRequest);
  const replay=await f.run();assert.equal(replay.statusCode,500);assert.equal(f.network.requests.length,13);
 });
+for(const organizationId of [undefined,''])test('real SDK and issued capability accept optional organization '+JSON.stringify(organizationId),async t=>{
+ const f=await fixture(t,{schemaVersion:4});
+ if(organizationId===undefined)delete process.env.X_ZOHO_CATALYST_ORG_ID;
+ else process.env.X_ZOHO_CATALYST_ORG_ID=organizationId;
+ const out=await f.run();assert.equal(out.statusCode,200);
+ assert.equal(out.body.result.status,'storage_unique_successor_observed');
+ assert.equal(f.network.requests.length,13);assert.equal(f.network.snapshot().maxActive,2);
+ assert.equal(f.network.snapshot().active,0);assert.equal(f.network.snapshot().fallbackAttempts,0);
+ assert.equal(f.rows.size,2);assert.equal(f.receipts.size,1);
+ assert.equal((await f.run()).statusCode,500);assert.equal(f.network.requests.length,13);
+});
+
 test('schema 6 activation issues a real managed capability for 13 native requests and quiescent cleanup',async t=>{
  assert.equal(process.version,'v24.19.0');
  const {dormantOperationDigest}=require('../lib/report-storage-activation');

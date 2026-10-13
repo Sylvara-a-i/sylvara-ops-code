@@ -73,7 +73,10 @@ function createSuccessorPhysicalTransport({app,capability,operationKey,assertAct
  if(!/^[a-f0-9]{64}$/.test(operationKey||'')||typeof assertActive!=='function'
   ||!Number.isSafeInteger(timeoutMs)||timeoutMs<1||timeoutMs>3000)deny('transport_precondition');
  const {projectId:PROJECT,organizationId:ORG,controllerFunctionId}=scope;
-  if(![PROJECT,ORG,controllerFunctionId].every(v=>typeof v==='string'&&/^[1-9][0-9]{2,29}$/.test(v)))deny('capability_scope');
+ // SDK 3.4 omits the organization header for undefined/empty values. Keep the raw
+ // captured value for the unchanged environment continuity checks below.
+ if(![PROJECT,controllerFunctionId].every(v=>typeof v==='string'&&/^[1-9][0-9]{2,29}$/.test(v))
+  ||ORG!==undefined&&ORG!==''&&(typeof ORG!=='string'||!/^[1-9][0-9]{2,29}(?![\s\S])/.test(ORG)))deny('capability_scope');
  const config=check('managed_context',()=>data(app,'config'));runtime(check);
  const environment=check('target_scope',()=>data(config,'environment')),projectKey=check('target_scope',()=>data(config,'projectKey')),projectSecretKey=check('target_scope',()=>data(config,'projectSecretKey'));
  check('target_scope',()=>{
@@ -172,7 +175,8 @@ function createSuccessorPhysicalTransport({app,capability,operationKey,assertAct
    const current=check('managed_context',()=>managed(app));
    reqData.headers.PROJECT_ID=data(current,'projectKey');
    reqData.headers['X-Catalyst-Environment']=data(current,'environment');reqData.headers.Environment=data(current,'environment');
-   reqData.headers['CATALYST-ORG']=ORG;reqData.headers['X-CATALYST-USER']='admin';
+   if(ORG!==undefined&&ORG!=='')reqData.headers['CATALYST-ORG']=ORG;
+   reqData.headers['X-CATALYST-USER']='admin';
    const secret=data(current,'projectSecretKey');if(isNonEmptyString(secret))reqData.headers['x-zc-project-secret-key']=secret;
    reqData.headers.Accept='application/vnd.catalyst.v2+json, '+(query?'application/vnd.catalyst.v2+zcql':'');
    reqData.headers['User-Agent']='zcatalyst-node/3.4.0';
