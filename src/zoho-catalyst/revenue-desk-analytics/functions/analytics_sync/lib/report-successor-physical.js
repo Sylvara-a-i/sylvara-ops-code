@@ -51,9 +51,16 @@ function managed(app){
  if(!tokenField||!Object.hasOwn(tokenField,'value')||typeof tokenField.value!=='string'||tokenField.value.length===0)fail();
  return data(app,'config');
 }
+// Catalyst selects a managed major stack; the reproducible local/CI toolchain
+// remains pinned separately. This is compatibility admission, not build attestation.
+function supportedManagedNodeVersion(version){
+ if(typeof version!=='string')return false;
+ const parts=/^v24\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?![\s\S])/.exec(version);
+ return parts!==null&&parts.slice(1).every(part=>Number.isSafeInteger(Number(part)));
+}
 function runtime(check){
  check('sdk_version',()=>{if(require(path.join(SDK,'package.json')).version!=='3.4.0')fail();});
- check('node_version',()=>{if(process.version!=='v24.19.0')fail();});
+ check('node_version',()=>{if(!supportedManagedNodeVersion(process.version))fail();});
  check('runtime_environment',()=>{if(constants.IS_LOCAL!=='false'||constants.CATALYST_ORIGIN!=='https://api.catalyst.zoho.com'
   ||String(process.env.ZC_SECURE||'').toLowerCase()==='override')fail();});
  check('https_continuity',()=>{if(assertHttpsBootstrap()!==request||types.isProxy(request))fail();});
