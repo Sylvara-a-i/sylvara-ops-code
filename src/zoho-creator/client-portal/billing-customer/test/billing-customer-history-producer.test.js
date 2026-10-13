@@ -2,6 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { produceBillingCustomerHistory: produce } = require("../billing-customer-history-producer");
+const { produceBillingCustomerHistoryWithPayments: produceWithPayments } = require("../billing-customer-history-producer");
 const OBSERVED = "2026-10-07T12:00:00.000Z";
 const UNKNOWN = { state: "unknown", items: null };
 
@@ -478,4 +479,326 @@ test("the producer has only its injected GET capability and no implicit network,
     "f.input, f.trusted, f.policy, async (request) => responses[request.resource], f.limits); })()", sandbox);
   assert.equal(result.view.invoices.items[0].money.totalMinor, 12345);
   assert.equal(calls, 0);
+});
+
+function payment(paymentId = "synthetic-payment") {
+  return { paymentId, organizationId: "synthetic-org", customerId: "synthetic-customer",
+    number: "PAY-001", status: "success", recordedOn: "2026-10-02", mode: "creditcard",
+    money: { amount: "123.45", unit: "major",
+      currency: { code: "EUR", minorUnitExponent: 2, source: "payment-response" } } };
+}
+function paymentScenario() {
+  const s = scenario(); s.responses.payments = page([payment()]); return s;
+}
+function runWithPayments(s = paymentScenario()) {
+  return produceWithPayments(s.f.input, s.f.trusted, s.f.policy, s.get, s.f.limits);
+}
+async function invalidPayment(mutate) {
+  const s = paymentScenario(); mutate(s.responses.payments.items[0]);
+  const result = await runWithPayments(s);
+  assertUnavailable(result, "payments");
+  assert.deepEqual(result.outcomes.payments, { state: "error", reason: "invalid-evidence" });
+  assert.equal(result.view.invoices.state, "available");
+  assert.equal(result.view.subscriptions.state, "available");
+}
+
+test("payment history is opt-in and the legacy export preserves its exact reads and output", async () => {
+  const original = scenario(), offered = paymentScenario();
+  offered.responses.payments = () => { throw Error("legacy must not request payments"); };
+  assert.deepEqual(await run(offered), await run(original));
+  assert.deepEqual(offered.calls, original.calls);
+  assert.deepEqual(offered.calls.map((request) => request.resource), ["customer", "subscriptions", "invoices"]);
+});
+
+test("opt-in payment history uses pinned GET descriptors after invoices and projects only sanitized facts", async () => {
+  const s = paymentScenario(), before = structuredClone({ f: s.f, responses: s.responses });
+  const result = await runWithPayments(s);
+  assert.deepEqual(s.calls.map((request) => request.resource), ["customer", "subscriptions", "invoices", "payments"]);
+  for (const request of s.calls) {
+    assert.deepEqual(request, { method: "GET", resource: request.resource, environment: "development",
+      organizationId: "synthetic-org", customerId: "synthetic-customer", cursor: null, pageSize: 2 });
+    frozen(request);
+  }
+  assert.deepEqual(result.view.payments, { state: "available", items: [{
+    number: "PAY-001", status: "success", recordedOn: "2026-10-02", mode: "creditcard",
+    money: { amountMinor: 12345, amountUnit: "minor", currency: payment().money.currency },
+  }] });
+  assert.deepEqual(result.outcomes.payments, { state: "complete", reason: null });
+  assert.deepEqual(result.view.integrations, UNKNOWN);
+  assert.deepEqual(result.outcomes.integrations, { state: "unknown", reason: "not-requested" });
+  assert.deepEqual({ f: s.f, responses: s.responses }, before);
+  assert.equal(JSON.stringify(result).includes("synthetic-"), false);
+  frozen(result);
+});
+
+test("opt-in payment reads require the same independent authority and verified customer", async () => {
+  for (const mutate of [
+    (f) => { f.trusted.readGrant.active = false; },
+    (f) => { f.input.Account = "synthetic-other"; },
+    (f) => { f.limits.currencies.push({ code: "EUR", minorUnitExponent: 0 }); },
+  ]) {
+    const s = paymentScenario(); mutate(s.f);
+    await assert.rejects(runWithPayments(s), TypeError);
+    assert.equal(s.calls.length, 0);
+  }
+  const unmapped = paymentScenario(); unmapped.f.trusted.billingBinding = null;
+  const noBinding = await runWithPayments(unmapped);
+  assert.equal(unmapped.calls.length, 0);
+  assertUnavailable(noBinding, "payments", "unknown");
+  for (const state of ["missing", "unknown", "error"]) {
+    const s = paymentScenario(); s.responses.customer = envelope(state);
+    const result = await runWithPayments(s);
+    assert.deepEqual(s.calls.map((request) => request.resource), ["customer"]);
+    assertUnavailable(result, "payments", "unknown");
+  }
+});
+
+test("payment statuses and modes remain observed facts and optional omissions stay unknown", async () => {
+  for (const status of ["success", "failure", "unknown"]) {
+    for (const mode of ["check", "cash", "creditcard", "banktransfer", "bankremittance", "autotransaction", "others", "unknown"]) {
+      const s = paymentScenario(); Object.assign(s.responses.payments.items[0], { status, mode });
+      const item = (await runWithPayments(s)).view.payments.items[0];
+      assert.equal(item.status, status); assert.equal(item.mode, mode);
+      assert.deepEqual(Object.keys(item), ["number", "status", "recordedOn", "mode", "money"]);
+    }
+  }
+  for (const omit of [false, true]) {
+    const s = paymentScenario(), item = s.responses.payments.items[0];
+    for (const key of ["number", "status", "recordedOn", "mode", "money"]) {
+      if (omit) delete item[key]; else item[key] = null;
+    }
+    assert.deepEqual((await runWithPayments(s)).view.payments.items[0], {
+      number: null, status: "unknown", recordedOn: null, mode: "unknown",
+      money: { amountMinor: null, amountUnit: null, currency: null },
+    });
+  }
+});
+
+test("payment availability distinguishes explicit empty from missing, unknown and provider failure", async () => {
+  const empty = paymentScenario(); empty.responses.payments = page([]);
+  const result = await runWithPayments(empty);
+  assert.deepEqual(result.view.payments, { state: "empty", items: [] });
+  assert.deepEqual(result.outcomes.payments, { state: "complete", reason: null });
+  for (const state of ["missing", "unknown", "error"]) {
+    const s = paymentScenario(); s.responses.payments = envelope(state);
+    const unavailable = await runWithPayments(s);
+    assertUnavailable(unavailable, "payments", state);
+    assert.deepEqual(unavailable.outcomes.payments, { state, reason: null });
+    assert.equal(unavailable.view.invoices.state, "available");
+  }
+});
+
+test("payment pagination preserves all source rows through an explicit terminal page", async () => {
+  const s = paymentScenario();
+  s.responses.payments = ({ cursor }) => cursor === null
+    ? page([{ ...payment("synthetic-first"), number: "PAY-FIRST" }], "synthetic-next")
+    : page([{ ...payment("synthetic-second"), number: "PAY-SECOND", status: "failure" }]);
+  const result = await runWithPayments(s);
+  assert.deepEqual(result.view.payments.items.map((item) => [item.number, item.status]),
+    [["PAY-FIRST", "success"], ["PAY-SECOND", "failure"]]);
+  assert.deepEqual(s.calls.filter((request) => request.resource === "payments").map((request) => request.cursor),
+    [null, "synthetic-next"]);
+  assert.deepEqual(result.outcomes.payments, { state: "complete", reason: null });
+});
+
+test("later payment page failures discard accumulated rows without damaging other collections", async () => {
+  for (const state of ["missing", "unknown", "error", "transport-error"]) {
+    const s = paymentScenario();
+    s.responses.payments = ({ cursor }) => {
+      if (cursor === null) return page([payment()], "synthetic-next");
+      if (state === "transport-error") throw Error("synthetic-private-payment-error");
+      return envelope(state);
+    };
+    const result = await runWithPayments(s);
+    assertUnavailable(result, "payments", state === "transport-error" ? "error" : state);
+    assert.equal(s.calls.filter((request) => request.resource === "payments").length, 2);
+    assert.equal(result.view.invoices.state, "available");
+    assert.equal(result.view.subscriptions.state, "available");
+    assert.equal(JSON.stringify(result).includes("synthetic-private-payment-error"), false);
+  }
+});
+
+test("payment collection is independent of an unavailable invoice collection", async () => {
+  const s = paymentScenario(); s.responses.invoices = () => { throw Error("synthetic-private-invoice-error"); };
+  const result = await runWithPayments(s);
+  assertUnavailable(result, "invoices");
+  assert.equal(result.view.payments.state, "available");
+  assert.equal(result.outcomes.payments.state, "complete");
+  assert.equal(result.view.subscriptions.state, "available");
+  assert.equal(JSON.stringify(result).includes("synthetic-private-invoice-error"), false);
+});
+
+test("duplicate payment identities on one or later pages reject the whole payment history", async () => {
+  for (const crossPage of [false, true]) {
+    const s = paymentScenario();
+    s.responses.payments = crossPage
+      ? ({ cursor }) => page([payment()], cursor === null ? "synthetic-next" : null)
+      : page([payment(), payment()]);
+    const result = await runWithPayments(s);
+    assertUnavailable(result, "payments");
+    assert.equal(result.outcomes.payments.reason, "invalid-evidence");
+    assert.ok(s.calls.filter((request) => request.resource === "payments").length <= 2);
+  }
+});
+
+test("payment page limits, cursor cycles and malformed pagination never expose partial history", async () => {
+  const capped = paymentScenario(); capped.f.limits.maxPages = 2;
+  let pages = 0;
+  capped.responses.payments = () => page([payment("synthetic-payment-" + ++pages)], "synthetic-next-" + pages);
+  const cappedResult = await runWithPayments(capped);
+  assertUnavailable(cappedResult, "payments");
+  assert.equal(cappedResult.outcomes.payments.reason, "page-limit");
+  assert.equal(pages, 2);
+  const repeated = paymentScenario();
+  repeated.responses.payments = ({ cursor }) => page([payment(cursor === null ? "synthetic-first" : "synthetic-second")], "synthetic-next");
+  assertUnavailable(await runWithPayments(repeated), "payments");
+  assert.equal(repeated.calls.filter((request) => request.resource === "payments").length, 2);
+  for (const mutate of [
+    (response) => { delete response.nextCursor; },
+    (response) => { response.nextCursor = ""; },
+    (response) => { response.items = []; response.nextCursor = "synthetic-next"; },
+    (response) => { response.items = [payment("one"), payment("two"), payment("three")]; },
+    (response) => { response.items = [ , payment()]; },
+    (response) => { response.rawPayload = "synthetic-private"; },
+  ]) {
+    const s = paymentScenario(); mutate(s.responses.payments);
+    assertUnavailable(await runWithPayments(s), "payments");
+  }
+});
+
+test("every payment page enforces pinned scope and canonical freshness including later pages", async () => {
+  for (const mutate of [
+    (response) => { response.environment = "production"; },
+    (response) => { response.organizationId = "synthetic-other"; },
+    (response) => { response.customerId = "synthetic-other"; },
+    (response) => { response.observedAt = "2026-10-07T11:59:59.999Z"; },
+    (response) => { response.observedAt = "2026-10-07T12:01:00.001Z"; },
+    (response) => { response.observedAt = "2026-10-07T12:00:00Z"; },
+  ]) {
+    for (const later of [false, true]) {
+      const s = paymentScenario(), bad = page([payment("synthetic-bad")]); mutate(bad);
+      s.responses.payments = ({ cursor }) => later && cursor === null ? page([payment()], "synthetic-next") : bad;
+      const result = await runWithPayments(s);
+      assertUnavailable(result, "payments");
+      assert.equal(result.outcomes.payments.reason, "invalid-evidence");
+      assert.equal(result.view.invoices.state, "available");
+    }
+  }
+});
+
+test("payment rows reject cross-owner, malformed status, date, mode and private fields", async () => {
+  for (const mutate of [
+    (item) => { item.organizationId = "synthetic-other"; },
+    (item) => { item.customerId = "synthetic-other"; },
+    (item) => { delete item.organizationId; },
+    (item) => { delete item.paymentId; },
+    (item) => { item.paymentId = ""; },
+    (item) => { item.status = "paid"; },
+    (item) => { item.mode = "crypto"; },
+    (item) => { item.recordedOn = "2026-02-30"; },
+    (item) => { item.number = "https://synthetic.invalid"; },
+    (item) => { item.paymentUrl = "https://synthetic.invalid"; },
+    (item) => { item.money.total = "123.45"; },
+    (item) => { item.money.balance = "0"; },
+  ]) await invalidPayment(mutate);
+});
+
+test("payment amounts use lossless conversion with payment-specific qualified currency provenance", async () => {
+  const maximum = String(Number.MAX_SAFE_INTEGER);
+  for (const [unit, code, exponent, amount, expected] of [
+    ["major", "EUR", 2, "0", 0], ["major", "EUR", 2, "1.2300", 123],
+    ["major", "JPY", 0, "123.000", 123], ["major", "KWD", 3, "1.2340", 1234],
+    ["major", "EUR", 2, maximum.slice(0, -2) + "." + maximum.slice(-2), Number.MAX_SAFE_INTEGER],
+    ["minor", "EUR", 2, 0, 0], ["minor", "EUR", 2, maximum, Number.MAX_SAFE_INTEGER],
+  ]) {
+    const s = paymentScenario(); s.responses.payments.items[0].money = { unit, amount,
+      currency: { code, minorUnitExponent: exponent, source: "verified-payment-metadata" } };
+    assert.deepEqual((await runWithPayments(s)).view.payments.items[0].money, {
+      amountMinor: expected, amountUnit: "minor", currency: { code, minorUnitExponent: exponent, source: "verified-payment-metadata" },
+    });
+  }
+  for (const amount of [123.45, -0, "-0", "01.00", "1e2", "1.001", "90071992547409.92"])
+    await invalidPayment((item) => { item.money.amount = amount; });
+  for (const amount of [-1, -0, 1.1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1,
+    String(BigInt(Number.MAX_SAFE_INTEGER) + 1n), "1.0"])
+    await invalidPayment((item) => { item.money.unit = "minor"; item.money.amount = amount; });
+  for (const patch of [{ code: "USD" }, { minorUnitExponent: 0 }, { source: "invoice-response" },
+    { source: "verified-invoice-metadata" }, { source: "default" }])
+    await invalidPayment((item) => { Object.assign(item.money.currency, patch); });
+});
+
+test("payment unknown amounts remain null and non-enumerable currency provenance is preserved", async () => {
+  for (const mutate of [
+    (item) => { delete item.money; }, (item) => { item.money = null; },
+    (item) => { item.money.currency = null; },
+  ]) {
+    const s = paymentScenario(); mutate(s.responses.payments.items[0]);
+    assert.deepEqual((await runWithPayments(s)).view.payments.items[0].money,
+      { amountMinor: null, amountUnit: null, currency: null });
+  }
+  const absent = paymentScenario(); delete absent.responses.payments.items[0].money.amount;
+  assert.deepEqual((await runWithPayments(absent)).view.payments.items[0].money,
+    { amountMinor: null, amountUnit: "minor", currency: payment().money.currency });
+  const nonEnumerable = paymentScenario(), c = nonEnumerable.responses.payments.items[0].money.currency;
+  for (const key of ["code", "minorUnitExponent", "source"]) Object.defineProperty(c, key, { enumerable: false });
+  assert.deepEqual((await runWithPayments(nonEnumerable)).view.payments.items[0].money.currency, payment().money.currency);
+  for (const field of ["unit", "currency"]) await invalidPayment((item) => { delete item.money[field]; });
+  await invalidPayment((item) => { item.money.unit = null; });
+});
+
+test("payment response accessors are rejected without execution", async () => {
+  let reads = 0;
+  for (const mutate of [
+    (response) => { Object.defineProperty(response, "items", { get() { reads++; return []; } }); },
+    (response) => { Object.defineProperty(response.items, "0", { get() { reads++; return payment(); } }); },
+    (response) => { Object.defineProperty(response.items[0], "status", { get() { reads++; return "success"; } }); },
+    (response) => { Object.defineProperty(response.items[0].money, "amount", { get() { reads++; return "0"; } }); },
+    (response) => { Object.defineProperty(response.items[0].money.currency, "source", { get() { reads++; return "payment-response"; } }); },
+  ]) {
+    const s = paymentScenario(); mutate(s.responses.payments);
+    assertUnavailable(await runWithPayments(s), "payments");
+  }
+  assert.equal(reads, 0);
+});
+
+test("payment reads keep preflight authority and currency snapshots across asynchronous work", async () => {
+  const s = paymentScenario();
+  s.responses.customer = async () => {
+    s.f.input.Account = "synthetic-other";
+    s.f.trusted.readGrant.active = false;
+    s.f.trusted.billingBinding.customerId = "synthetic-other";
+    s.f.policy.expectedOrganizationId = "synthetic-other";
+    s.f.limits.currencies[0].minorUnitExponent = 0;
+    s.f.limits.pageSize = 1;
+    return customer();
+  };
+  const result = await runWithPayments(s);
+  assert.equal(result.view.payments.items[0].money.amountMinor, 12345);
+  for (const request of s.calls) {
+    assert.equal(request.organizationId, "synthetic-org");
+    assert.equal(request.customerId, "synthetic-customer");
+    assert.equal(request.pageSize, 2);
+  }
+});
+
+test("payment pages detach before the next read and results cannot change with provider objects", async () => {
+  const s = paymentScenario(), first = page([payment("synthetic-first")], "synthetic-next");
+  const second = page([{ ...payment("synthetic-second"), number: "PAY-002" }]);
+  s.responses.payments = ({ cursor }) => {
+    if (cursor === null) return first;
+    first.items[0].customerId = "synthetic-other";
+    first.items[0].number = "CHANGED";
+    first.items[0].money.amount = "999.99";
+    first.items[0].money.currency.code = "JPY";
+    return second;
+  };
+  const result = await runWithPayments(s);
+  assert.deepEqual(result.view.payments.items.map((item) => item.number), ["PAY-001", "PAY-002"]);
+  assert.equal(result.view.payments.items[0].money.amountMinor, 12345);
+  assert.equal(result.view.payments.items[0].money.currency.code, "EUR");
+  second.items[0].status = "failure";
+  second.items[0].money.currency.code = "JPY";
+  assert.equal(result.view.payments.items[1].status, "success");
+  assert.equal(result.view.payments.items[1].money.currency.code, "EUR");
+  frozen(result);
 });

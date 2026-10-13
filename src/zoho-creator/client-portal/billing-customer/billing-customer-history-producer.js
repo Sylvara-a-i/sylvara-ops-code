@@ -39,10 +39,12 @@ function instant(value) {
   return ms;
 }
 
-function currency(value, currencies) {
+function currency(value, currencies, payment) {
   if (value === null) return null;
   record(value, ["code", "minorUnitExponent", "source"]);
-  if (!["invoice-response", "verified-invoice-metadata"].includes(value.source) ||
+  const sources = payment ? ["payment-response", "verified-payment-metadata"]
+    : ["invoice-response", "verified-invoice-metadata"];
+  if (!sources.includes(value.source) ||
       !currencies.some((c) => c.code === value.code && c.minorUnitExponent === value.minorUnitExponent)) invalid();
   return snapshot(value);
 }
@@ -65,30 +67,35 @@ function amount(value, unit, exponent) {
   return Number(result);
 }
 
-function money(value, currencies) {
-  const unknown = { totalMinor: null, balanceMinor: null, amountUnit: null, currency: null };
+function money(value, currencies, payment = false) {
+  const fields = payment ? ["amount"] : ["total", "balance"];
+  const unknown = { ...Object.fromEntries(fields.map((field) => [`${field}Minor`, null])),
+    amountUnit: null, currency: null };
   if (value === null || value === undefined) return unknown;
-  record(value, ["unit", "currency"], ["total", "balance"]);
+  record(value, ["unit", "currency"], fields);
   if (![null, "minor", "major"].includes(value.unit)) invalid();
-  const c = currency(value.currency, currencies);
+  const c = currency(value.currency, currencies, payment);
   if (value.unit === null) {
-    if (value.total != null || value.balance != null) invalid();
+    if (fields.some((field) => value[field] != null)) invalid();
     return { ...unknown, currency: c };
   }
   // Without currency there is no exponent or display authority. Do not assume
   // USD, coerce a floating-point amount, or label it as a known zero.
   if (c === null) return unknown;
-  return { totalMinor: amount(value.total, value.unit, c.minorUnitExponent),
-    balanceMinor: amount(value.balance, value.unit, c.minorUnitExponent), amountUnit: "minor", currency: c };
+  return { ...Object.fromEntries(fields.map((field) =>
+    [`${field}Minor`, amount(value[field], value.unit, c.minorUnitExponent)])), amountUnit: "minor", currency: c };
 }
 
 function normalize(item, resource, binding, currencies) {
+  const payment = resource === "payments";
   const fields = resource === "subscriptions"
     ? ["organizationId", "subscriptionId", "customerId", "planCode", "planLabel"]
-    : ["organizationId", "invoiceId", "customerId", "number"];
+    : payment ? ["organizationId", "paymentId", "customerId"]
+      : ["organizationId", "invoiceId", "customerId", "number"];
   const optional = resource === "subscriptions"
     ? ["status", "termStart", "termEnd", "nextBillingOn"]
-    : ["status", "issuedOn", "dueOn", "money"];
+    : payment ? ["number", "status", "recordedOn", "mode", "money"]
+      : ["status", "issuedOn", "dueOn", "money"];
   record(item, fields, optional);
   if (item.organizationId !== binding.organizationId || item.customerId !== binding.customerId) invalid();
   // Explicit known statuses are checked by the existing view; unfamiliar values
@@ -98,6 +105,9 @@ function normalize(item, resource, binding, currencies) {
     planCode: item.planCode, planLabel: item.planLabel, status: item.status ?? "unknown",
     termStart: item.termStart ?? null, termEnd: item.termEnd ?? null, nextBillingOn: item.nextBillingOn ?? null,
   };
+  if (payment) return { paymentId: item.paymentId, customerId: item.customerId, number: item.number ?? null,
+    status: item.status ?? "unknown", recordedOn: item.recordedOn ?? null, mode: item.mode ?? "unknown",
+    money: money(item.money, currencies, true) };
   return { invoiceId: item.invoiceId, customerId: item.customerId, number: item.number,
     status: item.status ?? "unknown", issuedOn: item.issuedOn ?? null, dueOn: item.dueOn ?? null,
     money: money(item.money, currencies) };
@@ -108,7 +118,7 @@ function outcome(state, reason = null) { return Object.freeze({ state, reason })
 // Offline protocol only. `get` must be supplied by a trusted composition root;
 // there are no URLs, credentials, provider clients, retries or writer methods.
 // Neither request selectors nor provider envelopes can populate `trusted`.
-async function produceBillingCustomerHistory(input, trusted, policy, get, limits) {
+async function produceHistory(input, trusted, policy, get, limits, includePayments) {
   // Let the existing contract validate authority before touching transport.
   record(policy, ["expectedEnvironment", "expectedOrganizationId", "asOf", "maxAgeMs", "featureCode", "featurePolicyRevision"]);
   const empty = { environment: policy.expectedEnvironment, organizationId: policy.expectedOrganizationId,
@@ -130,7 +140,8 @@ async function produceBillingCustomerHistory(input, trusted, policy, get, limits
   const evidence = { ...empty };
   const outcomes = { customer: outcome("unknown", "unmapped"),
     subscriptions: outcome("unknown", "customer-unavailable"), invoices: outcome("unknown", "customer-unavailable"),
-    payments: outcome("unknown", "not-requested"), integrations: outcome("unknown", "not-requested") };
+    payments: outcome("unknown", includePayments ? "customer-unavailable" : "not-requested"),
+    integrations: outcome("unknown", "not-requested") };
   const finish = () => Object.freeze({ view: project(input, trusted, evidence, policy), outcomes: Object.freeze(outcomes) });
   const binding = trusted.billingBinding;
   if (binding === null) return finish();
@@ -193,7 +204,8 @@ async function produceBillingCustomerHistory(input, trusted, policy, get, limits
     return finish();
   }
 
-  for (const resource of ["subscriptions", "invoices"]) {
+  for (const resource of ["subscriptions", "invoices", ...(includePayments ? ["payments"] : [])]) {
+    const idField = { subscriptions: "subscriptionId", invoices: "invoiceId", payments: "paymentId" }[resource];
     const items = [], cursors = new Set(), ids = new Set();
     let cursor = null, observedAt = evidence.observedAt;
     for (let page = 0; page < limits.maxPages; page++) {
@@ -207,13 +219,13 @@ async function produceBillingCustomerHistory(input, trusted, policy, get, limits
         if (next !== null && (typeof next !== "string" || !/^[A-Za-z0-9_-]{1,256}$/.test(next) ||
             cursors.has(next) || response.items.length === 0)) invalid();
         for (const item of response.items) {
-          const key = resource === "subscriptions" ? item.subscriptionId : item.invoiceId;
+          const key = item[idField];
           if (ids.has(key)) invalid();
           ids.add(key); items.push(item);
         }
         if (response.observedAt < observedAt) observedAt = response.observedAt;
         // Reuse all existing semantic checks, including duplicate IDs, dates,
-        // currency sources and cross-invoice exponent consistency, on each page.
+        // currency sources and cross-resource exponent consistency, on each page.
         const candidate = { ...evidence, observedAt, [resource]: { complete: true, items } };
         project(input, trusted, candidate, policy);
         if (next === null) {
@@ -232,4 +244,13 @@ async function produceBillingCustomerHistory(input, trusted, policy, get, limits
   return finish();
 }
 
-module.exports = { produceBillingCustomerHistory };
+function produceBillingCustomerHistory(input, trusted, policy, get, limits) {
+  return produceHistory(input, trusted, policy, get, limits, false);
+}
+
+// Explicit opt-in keeps the original producer's request set and output intact.
+function produceBillingCustomerHistoryWithPayments(input, trusted, policy, get, limits) {
+  return produceHistory(input, trusted, policy, get, limits, true);
+}
+
+module.exports = { produceBillingCustomerHistory, produceBillingCustomerHistoryWithPayments };
