@@ -125,16 +125,51 @@ test('authenticated constructor failure logs only the issued closed binding proj
   });
 });
 
+test('part length observations cross the existing bridge without values or public details', async () => {
+  await withBoundary(async ({ createRequestListener, bindingDiagnosticError, loads }) => {
+    const { decodeStorageBinding } = require(path.join(analyticsRoot, 'report-storage-binding.js'));
+    const privateValue = 'SYNTHETIC_PRIVATE_PART_VALUE'; let parserError;
+    try {
+      decodeStorageBinding({ REPORT_STORAGE_QUALIFICATION_JSON: 'parts-v1:400:1:400',
+        REPORT_STORAGE_QUALIFICATION_PART_0: privateValue });
+    } catch (error) { parserError = error; }
+    assert.ok(parserError);
+    const cases = [
+      [parserError, { partIndex: 0, expectedCodeUnits: 400, observedCodeUnits: privateValue.length }],
+      [bindingDiagnosticError('part_length', 2, 76, 75),
+        { partIndex: 2, expectedCodeUnits: 76, observedCodeUnits: 75 }],
+      [bindingDiagnosticError('part_length', 0, 400, 4097),
+        { partIndex: 0, expectedCodeUnits: 400, observedCodeUnits: 'above_limit' }],
+    ];
+    for (const [error, details] of cases) {
+      const f = fixture(createRequestListener, { error }), output = response();
+      await f.listener(f.request, output);
+      assertGenericFailure(output);
+      assert.deepEqual(f.logs, [{ stage: 'storage_binding', code: HELD,
+        bindingFailure: { schemaVersion: 2, firstFailure: 'part_length', ...details } }]);
+      assert.ok(Object.isFrozen(f.logs[0].bindingFailure));
+      assert.deepEqual(f.calls, { sdk: 1, constructor: 1, handler: 0, forbidden: 0 });
+      const logged = JSON.stringify([f.logs, output.body]);
+      assert.equal(logged.includes(privateValue), false);
+      assert.equal(logged.includes('parts-v1:400:1:400'), false);
+      assert.equal(logged.includes('REPORT_STORAGE_QUALIFICATION_PART_0'), false);
+    }
+    assert.equal(loads.bindingReader, cases.length);
+  });
+});
+
 test('arbitrary error fields cannot forge issuance or cause new diagnostic property reads', async () => {
   await withBoundary(async ({ createRequestListener, storageBindingFailureDiagnostic }) => {
     for (const hostileGetters of [false, true]) {
       const error = new Error('SYNTHETIC_PRIVATE_CANARY'), reads = [];
       let codeReads = 0;
       Object.defineProperty(error, 'code', { get() { codeReads += 1; return HELD; } });
-      for (const key of ['bindingFailure', 'diagnostic', 'firstFailure', 'schemaVersion', 'safeDetails', 'cause']) {
+      for (const key of ['bindingFailure', 'diagnostic', 'firstFailure', 'schemaVersion', 'safeDetails', 'cause',
+        'partIndex', 'expectedCodeUnits', 'observedCodeUnits']) {
         Object.defineProperty(error, key, hostileGetters
           ? { get() { reads.push(key); throw new Error('Synthetic getter must not run'); } }
-          : { value: key === 'bindingFailure' ? { schemaVersion: 1, firstFailure: 'marker_missing' }
+          : { value: key === 'bindingFailure' ? { schemaVersion: 2, firstFailure: 'part_length',
+            partIndex: 0, expectedCodeUnits: 400, observedCodeUnits: 399 }
             : 'SYNTHETIC_PRIVATE_CANARY' });
       }
       for (const key of ['stack', 'message']) {
@@ -159,13 +194,15 @@ test('arbitrary error fields cannot forge issuance or cause new diagnostic prope
 
 test('issued binding errors outside the constructor stage do not acquire bindingFailure logs', async () => {
   await withBoundary(async ({ createRequestListener, bindingDiagnosticError, loads }) => {
-    for (const origin of ['handler', 'sdk']) {
-      const f = fixture(createRequestListener, { error: bindingDiagnosticError('marker_missing'), origin });
-      const output = response(); await f.listener(f.request, output);
-      assertGenericFailure(output);
-      assert.deepEqual(f.logs, [{ stage: origin === 'handler' ? 'storage_handler' : 'sdk_initialize', code: HELD }]);
-      assert.deepEqual(f.calls, { sdk: 1, constructor: origin === 'handler' ? 1 : 0,
-        handler: origin === 'handler' ? 1 : 0, forbidden: 0 });
+    for (const error of [bindingDiagnosticError('marker_missing'), bindingDiagnosticError('part_length', 2, 76, 75)]) {
+      for (const origin of ['handler', 'sdk']) {
+        const f = fixture(createRequestListener, { error, origin });
+        const output = response(); await f.listener(f.request, output);
+        assertGenericFailure(output);
+        assert.deepEqual(f.logs, [{ stage: origin === 'handler' ? 'storage_handler' : 'sdk_initialize', code: HELD }]);
+        assert.deepEqual(f.calls, { sdk: 1, constructor: origin === 'handler' ? 1 : 0,
+          handler: origin === 'handler' ? 1 : 0, forbidden: 0 });
+      }
     }
     assert.equal(loads.bindingReader, 0);
   });
@@ -175,11 +212,12 @@ test('synchronous and rejected logger failures retain the same public failure wi
   await withBoundary(async ({ createRequestListener, bindingDiagnosticError }) => {
     for (const logger of [() => { throw new Error('Synthetic logger failure'); },
       () => Promise.reject(new Error('Synthetic logger rejection'))]) {
-      const f = fixture(createRequestListener, { error: bindingDiagnosticError('marker_missing'), logger });
+      const f = fixture(createRequestListener, { error: bindingDiagnosticError('part_length', 2, 76, 75), logger });
       const output = response(); await f.listener(f.request, output); await Promise.resolve();
       assertGenericFailure(output);
       assert.deepEqual(f.logs, [{ stage: 'storage_binding', code: HELD,
-        bindingFailure: { schemaVersion: 1, firstFailure: 'marker_missing' } }]);
+        bindingFailure: { schemaVersion: 2, firstFailure: 'part_length',
+          partIndex: 2, expectedCodeUnits: 76, observedCodeUnits: 75 } }]);
       assert.deepEqual(f.calls, { sdk: 1, constructor: 1, handler: 0, forbidden: 0 });
     }
   });
@@ -188,7 +226,7 @@ test('synchronous and rejected logger failures retain the same public failure wi
 test('authentication still precedes body, SDK, factory and lazy diagnostic projection', async () => {
   await withBoundary(async ({ createRequestListener, bindingDiagnosticError, loads }) => {
     for (const variant of ['missing', 'wrong', 'duplicate', 'wrong_host']) {
-      const f = fixture(createRequestListener, { error: bindingDiagnosticError('marker_missing') });
+      const f = fixture(createRequestListener, { error: bindingDiagnosticError('part_length', 2, 76, 75) });
       let bodyReads = 0, factoryReads = 0;
       Object.defineProperty(f.factories, 'storageQualification', {
         get() { factoryReads += 1; throw new Error('Unauthenticated factory must not be read'); },

@@ -7,7 +7,9 @@ const PART_LIMIT=400,TOTAL_LIMIT=4096,MAX_PARTS=Math.ceil(TOTAL_LIMIT/100);
 // Engineering margin below an observed successful configuration, NOT a Zoho limit.
 const PLANNING_BUDGET=3578;
 function held(){throw Object.assign(new Error('REPORT_STORAGE_QUALIFICATION_HELD'),{code:'REPORT_STORAGE_QUALIFICATION_HELD'});}
-function bindingHeld(reason){throw bindingDiagnosticError(reason);}
+function bindingHeld(reason,partIndex,expectedCodeUnits,observedCodeUnits){
+ throw bindingDiagnosticError(reason,partIndex,expectedCodeUnits,observedCodeUnits);
+}
 // Tuple version one preserves the same 41 scalars across supported binding schemas. No
 // private constants, defaults, omitted fields or environment-derived values.
 const SHAPE=Object.freeze({schemaVersion:0,enabled:false,environment:'',sourceRevision:'',projectId:'',controlHost:'',tableId:'',nonce:'',
@@ -73,7 +75,8 @@ function decodeBinding(environment,fail){
   const key=PART_PREFIX+i,part=environment[key],expected=i<count-1?size:length-i*size;
   if(!Object.hasOwn(environment,key))fail('part_missing');
   if(typeof part!=='string')fail('part_type');
-  if(part.length!==expected)fail('part_length');
+  const observedCodeUnits=part.length;
+  if(observedCodeUnits!==expected)fail('part_length',i,expected,observedCodeUnits);
   if(!/^[\x20-\x7e]+$/.test(part))fail('part_ascii');wire+=part;
  }
  if(wire.length!==length||Buffer.byteLength(wire)!==length)fail('wire_length');if(!compact)return wire;

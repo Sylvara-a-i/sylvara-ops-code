@@ -1,6 +1,7 @@
 'use strict';
-// Only errors issued here carry binding observations. No input value or Error
-// property is retained, and this projection grants no acceptance/retry authority.
+// Only errors issued here carry binding observations. Only bounded numeric length
+// observations are retained, never string contents or arbitrary Error properties.
+// This projection grants no acceptance/retry authority.
 const failures=new WeakMap();
 const REASONS=new Set([
  'environment_shape','marker_missing','marker_type','inline_shape','marker_syntax','marker_bounds','part_count',
@@ -16,17 +17,27 @@ const REASONS=new Set([
  'dormant_nonce','capability_fields','evidence_roles','evidence_fields','evidence_digest','evidence_times',
  'unclassified',
 ]);
-function bindingDiagnosticError(reason){
+const boundedInteger=(value,min,max)=>Number.isSafeInteger(value)&&!Object.is(value,-0)&&value>=min&&value<=max;
+function bindingDiagnosticError(reason,partIndex,expectedCodeUnits,observedCodeUnits){
  const error=Object.assign(new Error('REPORT_STORAGE_QUALIFICATION_HELD'),{code:'REPORT_STORAGE_QUALIFICATION_HELD'});
- try{failures.set(error,Object.freeze({schemaVersion:1,
-  firstFailure:typeof reason==='string'&&REASONS.has(reason)?reason:'unclassified'}));}catch{}
+ try{
+  let failure={schemaVersion:1,firstFailure:typeof reason==='string'&&REASONS.has(reason)?reason:'unclassified'};
+  // Primitive arguments only: no configuration/part object is inspected or saved.
+  if(reason==='part_length'&&boundedInteger(partIndex,0,40)&&boundedInteger(expectedCodeUnits,1,400)
+   &&boundedInteger(observedCodeUnits,0,Number.MAX_SAFE_INTEGER)&&observedCodeUnits!==expectedCodeUnits){
+   failure={schemaVersion:2,firstFailure:'part_length',partIndex,expectedCodeUnits,
+    observedCodeUnits:observedCodeUnits<=4096?observedCodeUnits:'above_limit'};
+  }
+  failures.set(error,Object.freeze(failure));
+ }catch{}
  // Failed observation must still return the original generic held outcome.
  return error;
 }
 function storageBindingFailureDiagnostic(error){
  try{
   const failure=failures.get(error);
-  return failure&&failure.schemaVersion===1&&typeof failure.firstFailure==='string'
+  return failure&&(failure.schemaVersion===1||failure.schemaVersion===2&&failure.firstFailure==='part_length')
+   &&typeof failure.firstFailure==='string'
    &&REASONS.has(failure.firstFailure)?failure:undefined;
  }catch{return undefined;}
 }
