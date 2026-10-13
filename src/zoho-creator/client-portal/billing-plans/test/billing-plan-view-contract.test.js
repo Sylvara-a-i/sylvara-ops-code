@@ -127,3 +127,6 @@ test("no transport, writer, log or clock capability on import or projection", ()
 
 // Keep the customer read projection covered without changing the shared portal entrypoint.
 require("../../billing-customer/test/billing-customer-view-contract.test");
+
+// Add annual comparison coverage without editing the shared portal entrypoint.
+require("./annual-management-savings-view-contract.test");

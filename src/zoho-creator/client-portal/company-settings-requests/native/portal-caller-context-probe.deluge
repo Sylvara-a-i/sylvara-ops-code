@@ -1,0 +1,30 @@
+// Owner: Creator / caller-context qualification only, SOURCE PROPOSAL, not installed.
+// Proposed function: map Portal_Caller_Context_Probe(), zero arguments, no schedule.
+// Candidate trigger: OAuth Custom API, Portal users scope, widget invocation only.
+// No connections, records, provisioning, grants, messages, logs, or retries.
+// Idempotency: read-only; creates no durable state. No business authorization returned.
+// Containment: unbind/remove probe after separately approved qualification.
+// Setup, private comparison protocol and lifecycle gap: CREATOR-AUTHORIZATION.md.
+result = Map();
+result.put("state","unavailable");
+result.put("callerContextQualified",false);
+try
+{
+    emails = thisapp.portal.loginUserEmailid();
+    username = thisapp.portal.loginUserName();
+    permission = thisapp.portal.loginUserProfile();
+    // These values may be returned only to the same authenticated test caller.
+    // Do not log them or expose the probe with PublicKey or broader user scope.
+    result.put("emailAddresses",emails);
+    result.put("username",username);
+    result.put("permission",permission);
+    result.put("state","observed");
+}
+catch (e)
+{
+    // Never return exception text, which may contain private runtime details.
+    result = Map();
+    result.put("state","unavailable");
+    result.put("callerContextQualified",false);
+}
+return result;

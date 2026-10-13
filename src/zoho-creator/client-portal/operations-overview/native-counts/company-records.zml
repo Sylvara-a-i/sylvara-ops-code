@@ -1,0 +1,9 @@
+<panel elementName='CompanyRecordsCount'>
+  <pr width='fill' height='auto'>
+    <pc width='100%' padding='20px' bgColor='#FFFFFF'>
+      <pr width='fill' height='auto'><pc width='100%'><text type='Text' value='Company records' size='14px' color='#536570' /></pc></pr>
+      <pr width='fill' height='auto'><pc width='100%'><text type='Form Data' value='client-portal.Accounts.ID.count' criteria='ID != 0' size='32px' color='#0B3D46' /></pc></pr>
+      <pr width='fill' height='auto'><pc width='100%'><text type='Text' value='All Accounts records' size='13px' color='#536570' /></pc></pr>
+    </pc>
+  </pr>
+</panel>

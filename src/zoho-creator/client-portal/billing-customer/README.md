@@ -191,6 +191,53 @@ duplicate payments, source mutation, immutable outputs, failure statuses,
 currency provenance and suppression, unsafe amounts, exponent conflicts,
 non-enumerable data properties, hostile shapes/accessors, and zero side effects.
 
+## Offline history list filters
+
+`billing-history-list-view.js` exports
+`prepareBillingHistoryListView(input, trusted, evidence, policy, filters)`.
+It runs the existing history projection on **all evidence rows before filtering**.
+Excluded rows still undergo ownership, duplicate, freshness and financial-shape
+checks. This is a pure display projection; it does not establish identity,
+permission or plan entitlement, fetch data, or modify billing records.
+
+Omit `filters` to show all rows, or pass exactly
+`{ invoiceStatus: "paid", paymentStatus: "success" }`. Both fields are required
+when the object is supplied. Each accepts `"all"` or an exact status from the
+existing history contract's frozen `BILLING_HISTORY_STATUSES.invoice` / `.payment`
+arrays. Invoice statuses are `draft`, `sent`, `paid`, `partially_paid`, `overdue`,
+`void`, `unpaid`, `unknown`; payment statuses are `success`, `failure`, `unknown`.
+`unknown` selects rows whose observed status is unknown; it does not mean the
+history collection is unavailable. Filters preserve source order and operate
+independently. There is no inferred date order, aggregation or status conversion.
+
+The result retains the history view's other fields. Each invoice/payment
+collection becomes a frozen `{ sourceState, state, statusFilter, items }`:
+
+| Source evidence | `sourceState` | `state` | `items` |
+| --- | --- | --- | --- |
+| Unavailable | `unknown` | `unknown` | `null` |
+| Complete, no history | `empty` | `empty` | `[]` |
+| Complete history, no matching rows | `available` | `no_matches` | `[]` |
+| Complete history with matching rows | `available` | `available` | Sanitized matching rows |
+
+Consumers can distinguish “no matching history” from “no history” or “history
+unavailable.” Filtered rows retain the original money provenance and suppression
+rules, including failure statuses, and expose no internal IDs or action URLs.
+Both existing history and customer APIs keep their accepted shapes and outputs.
+
+Synthetic tests cover every allowed status, default-all compatibility, source
+versus match states, validation of excluded rows, malformed filters, independent
+collections, and immutable detached output. They are included in the canonical
+portal test entrypoint; the focused command is:
+
+```text
+node --test src/zoho-creator/client-portal/billing-customer/test/billing-history-list-view.test.js
+```
+
+This source-only increment has no rendered or live Creator wiring and does not
+resolve the existing identity/source qualification gates. Rollback is reverting
+this source increment; no Development configuration or records were changed.
+
 ## Offline history producer
 
 `billing-customer-history-producer.js` adds
