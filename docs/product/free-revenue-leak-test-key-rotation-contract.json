@@ -74,6 +74,7 @@
       "id": "form2_workflow_identity_v1",
       "variables": ["WORKFLOW_HMAC_SECRET"],
       "consumers": ["revenue_leak_test_setup_form"],
+      "paired_consumer_variable": "revenue_desk_route_control.FORM2_WORKFLOW_HMAC_SECRET",
       "domains": [
         "sylvara.form2.workflow-key.v1",
         "sylvara.form2.prefill-snapshot.v1",
@@ -90,7 +91,7 @@
         "Form2SubmissionsV3.SUBMISSION_KEY",
         "Form2SubmissionsV3.SUBMISSION_FINGERPRINT"
       ],
-      "rotation_gate": "Every prefill handle is consumed or expired, every prefill is submitted or removed under approved retention, every submission is succeeded, and no processing, failed, or reconciliation_required row remains.",
+      "rotation_gate": "Every prefill handle is consumed or expired, every prefill is submitted or removed under approved retention, every submission is succeeded, and no processing, failed, or reconciliation_required row remains. Keep Form 2 routes and route-control operations disabled; pair WORKFLOW_HMAC_SECRET with route-control FORM2_WORKFLOW_HMAC_SECRET and independently reconcile retained journey bindings and dependent route-control evidence before either consumer resumes.",
       "previous_key_policy": "A previous key is allowed only inside a disabled-route migration that reads old rows by old key, writes or verifies the new namespace, compares exact counts and keyed digests, and removes the old key before cutover."
     },
     {
@@ -271,6 +272,12 @@
       "variables": ["ISSUE_HEADER_SECRET", "PREFILL_HEADER_SECRET", "SUBMISSION_HEADER_SECRET"],
       "consumers": ["revenue_leak_test_setup_form"],
       "rule": "Rotate each disabled route independently with the matching Zoho Forms or CRM caller; browser routes never receive a shared secret."
+    },
+    {
+      "variables": ["FORM2_WORKFLOW_HMAC_SECRET"],
+      "consumers": ["revenue_desk_route_control"],
+      "paired_consumer_variable": "revenue_leak_test_setup_form.WORKFLOW_HMAC_SECRET",
+      "rule": "This is the same stable workflow material as Form 2 WORKFLOW_HMAC_SECRET, used to recompute the sylvara.form2.prefill-binding.v1 journey binding; it is not an independently rotatable authentication credential. Apply the form2_workflow_identity_v1 gate with both consumers disabled, preserve separation from route-control authentication and event-chain keys, and reconcile retained journey bindings and dependent route-control evidence under any separately approved migration."
     },
     {
       "variables": ["RETELL_WEBHOOK_API_KEY", "INTERNAL_READINESS_TOKEN"],

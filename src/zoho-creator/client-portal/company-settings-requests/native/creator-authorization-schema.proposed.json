@@ -1,0 +1,53 @@
+{
+  "status": "proposed-only-not-installed",
+  "workflow": "service-area-request protected readAuthorization",
+  "owner": "Creator operational authorization; CRM owns Account/Contact relationship facts",
+  "registryChoice": "Separate operator-only Creator forms; no portal CRUD or reports",
+  "forms": {
+    "Portal_Principal_Bindings": {
+      "fields": {
+        "Principal_ID": "required immutable text; independently assigned internal human principal",
+        "Audit_Actor_ID": "required immutable text; reviewed human audit identity",
+        "Native_Subject_ID": "required immutable exact text for this principal; qualified native account identity, not email or username",
+        "Incarnation_ID": "required immutable exact text for this principal; authoritative lifecycle evidence, not operator timestamp inferred from email",
+        "Email_Lookup": "required exact reviewed email; lookup only, no normalization or automatic reassignment",
+        "Native_Username": "required exact reviewed text; corroboration only",
+        "Active": "required Boolean; false blocks all associated operation grants",
+        "Revision": "required operator-controlled revision; never reused"
+      },
+      "unique": ["Principal_ID", "Audit_Actor_ID", "Native_Subject_ID", "Email_Lookup"],
+      "lifecycle": "Keep inactive tombstones; recreated account gets a new internal principal only after reviewed provisioning. No same-email inheritance. A changed email requires revoke, review and controlled rebind; never a user-editable field."
+    },
+    "Portal_Operation_Grants": {
+      "fields": {
+        "Principal_ID": "required exact binding reference",
+        "Creator_Account_ID": "required exact Accounts ID",
+        "Creator_Contact_ID": "required exact Account_Contacts ID",
+        "Scope": "required fixed service-area-request",
+        "Active": "required Boolean",
+        "Revision": "required nonreusable grant revision"
+      },
+      "uniqueComposite": [["Principal_ID", "Creator_Account_ID", "Scope"]],
+      "lifecycle": "Every binding rebind, incarnation transition or authorization change revokes prior grants and assigns new grant revisions before reactivation. Provisioning must serialize these changes or leave the binding inactive. Atomic durable acceptance remains a separate gate."
+    },
+    "Portal_Account_Links": {
+      "fields": { "Creator_Account_ID": "required exact Accounts ID", "CRM_Account_ID": "required exact reviewed CRM Accounts ID", "Revision": "required nonreusable link revision" },
+      "unique": ["Creator_Account_ID", "CRM_Account_ID"]
+    },
+    "Portal_Contact_Links": {
+      "fields": { "Creator_Contact_ID": "required exact Account_Contacts ID", "Creator_Account_ID": "required exact Accounts ID", "CRM_Contact_ID": "required exact reviewed CRM Contacts ID", "Revision": "required nonreusable link revision" },
+      "unique": ["Creator_Contact_ID", "CRM_Contact_ID"],
+      "join": "Creator contact belongs to selected Creator Account; current CRM Contacts.Account_Name.id must equal linked CRM Account"
+    }
+  },
+  "reader": {
+    "candidate": "OAuth Custom API, Portal users scope, widget invocation only; function derives caller context, never caller-supplied identity arguments",
+    "currentNativeTasks": ["thisapp.portal.loginUserEmailid()", "thisapp.portal.loginUserName()", "thisapp.portal.loginUserProfile()"],
+    "unavailableNativeFacts": ["qualified immutable native subject", "qualified account incarnation/recreation identity", "proven current caller context in widget-to-Custom-API execution"],
+    "scopeEvidence": "Pinned environment/organization and server-clock observation; native current permission must match protected allowlist",
+    "completeness": "Read all candidates for email, native subject and internal principal, including inactive rows; duplicates never resolved by active/latest ordering. Global reverse canonical-link uniqueness must be established, not merely selected-company filtering.",
+    "output": "Exact existing protected authorization snapshot; no email, username, native permission or lifecycle values returned to client",
+    "qualified": false
+  },
+  "constraints": "Proposed names/types only. Native uniqueness, concurrent provisioning, restricted report/API access, permissions and lifecycle hooks need separately approved metadata/configuration and qualification. Existing Portal_Test_ResolveCompany stays fixture-only. No provisioning, deployment or migration is authorized."
+}

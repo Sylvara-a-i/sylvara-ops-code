@@ -2,6 +2,8 @@
 
 Status: proposed source-only contract, synthetic validation. This is not a functional deployed portal. No endpoint, database writer, permissions, deployment, live call or tenant data is included. Creator may own the pending human request; CRM remains authoritative for the company relationship and current service area. Planning never changes CRM or Creator.
 
+The adjacent [offline identity prototype](OFFLINE-IDENTITY.md) composes this planner with explicit canonical joins, separate request attribution and deterministic replay-binding fingerprints. It establishes no live mapping, authentication or durable persistence.
+
 `preparePendingServiceAreaRequest(input, verifiedContext)` accepts exactly `Account` and `Requested_Service_Area` in a plain data object. `Account` is an untrusted Creator Account selector, never an identity or grant. Unknown, inherited, symbol and accessor keys are rejected, including client before/status/actor overrides. The result contains exactly `Account`, `Previous_Service_Area`, `Requested_Service_Area`, and `Status` (always `Pending review`). No extra schema field or duplicate audit form is introduced.
 
 The separately verified server context has exactly:

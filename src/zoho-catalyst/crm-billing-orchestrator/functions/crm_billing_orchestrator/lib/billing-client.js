@@ -619,10 +619,12 @@ function createBillingClient(config, {
       subscription.reference_id !== deterministicReference ||
       String(subscription.product_id ?? "") !== config.paidUsageAddonProductId ||
       !plainObject(subscriptionPlan) || subscriptionPlan.plan_code !== selectedPlanCode ||
+      // Unit price alone cannot prove the accepted one-unit management charge.
+      (subscriptionPlan.quantity !== 1 && subscriptionPlan.quantity !== "1") ||
       !Object.hasOwn(config.paidSubscriptionStatusMap, subscription.status) ||
       subscription.auto_collect !== false ||
       !plainObject(usageAddon) || usageAddon.addon_code !== config.paidUsageAddonCode ||
-      Number(usageAddon.quantity) !== 1 ||
+      (usageAddon.quantity !== 1 && usageAddon.quantity !== "1") ||
       usageAddon.unit !== config.paidUsageAddonUnit ||
       subscription.card_id || subscription.payment_method_id || subscription.payment_source_id ||
       subscription.bank_account_id || hasNestedCard || hasNestedBankAccount ||

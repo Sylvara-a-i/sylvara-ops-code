@@ -1,6 +1,13 @@
 "use strict";
 
-// Canonical portal test entrypoint also discovers the independent read-only view.
+// Canonical portal entrypoint covers identity, replay serialization and the read-only view.
+require("./offline-identity-contract.test");
+require("./offline-identity-vectors.test");
+require("./offline-company-isolation.test");
+require("./service-area-request-producer.test");
+require("./timed-service-area-request-producer.test");
+require("./crm-service-area-response.test");
+require("./creator-authorization-projection.test");
 require("../../billing-plans/test/billing-plan-view-contract.test");
 
 const test = require("node:test");

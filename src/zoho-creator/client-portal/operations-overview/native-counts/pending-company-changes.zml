@@ -1,0 +1,9 @@
+<panel elementName='PendingCompanyChangesCount'>
+  <pr width='fill' height='auto'>
+    <pc width='100%' padding='20px' bgColor='#FFFFFF'>
+      <pr width='fill' height='auto'><pc width='100%'><text type='Text' value='Pending company changes' size='14px' color='#536570' /></pc></pr>
+      <pr width='fill' height='auto'><pc width='100%'><text type='Form Data' value='client-portal.Company_Settings_Requests.ID.count' criteria='Status == &quot;Pending review&quot;' size='32px' color='#0B3D46' /></pc></pr>
+      <pr width='fill' height='auto'><pc width='100%'><text type='Text' value='Settings Requests &#8594; Pending review' size='13px' color='#536570' /></pc></pr>
+    </pc>
+  </pr>
+</panel>
