@@ -9,10 +9,31 @@ invocation, another admission attempt, or a configuration change.
 The module-private error registry stores only this frozen projection. The reason
 is a fixed allowlisted string identifying the first rejecting validation branch.
 A grouped reason identifies that branch, not a unique term within its expression.
-No environment values, part contents, hashes, lengths, identifiers, request data,
+No environment values, part contents, hashes, identifiers, request data,
 exception messages or physical-operation counters enter this projection. An
 unissued error has no projection. Recorder or lookup failure keeps the original
 generic held outcome. The HTTP status and response body remain unchanged.
+
+Only `part_length` can add a version 2 projection with these three fields:
+
+| Field | Meaning and bounds |
+| --- | --- |
+| `partIndex` | First failing zero-based part index, from 0 through 40 |
+| `expectedCodeUnits` | Length required by the parsed marker for this part, from 1 through 400 |
+| `observedCodeUnits` | Actual JavaScript string length from 0 through 4096; the fixed string `above_limit` means strictly greater than 4096 |
+
+The parser captures the length once after the existing string-type check. The
+comparison and validation order remain unchanged. Length means UTF-16 code units,
+not bytes; ASCII validation follows this check. No part, marker or unrelated
+configuration value is read again for logging. Invalid diagnostic arguments retain
+the version 1 enum-only projection. Other failure reasons do not gain fields.
+
+The expected length comes from the effective marker, so a mismatch does not prove
+that the part was copied incorrectly. These fields cannot identify the full marker,
+distinguish stale contents with the same lengths, establish provider propagation,
+or prove retirement of warm workers. Version 2 identifies the enhanced diagnostic
+on that request; its absence does not prove a stale worker. No marker fields,
+configuration fields, part format changes or new acceptance authority are added.
 
 | Validation phase | Reasons distinguish |
 | --- | --- |
@@ -51,3 +72,7 @@ Run the relevant Node test files during iteration and the repository's canonical
 required by this source change. A future deployment needs its own exact source,
 target, authority, rollback and readback review; restoring the previously approved
 artifact is the code rollback. Existing consumed attempts remain consumed.
+
+For owner-controlled, offline comparison of pasted values against a pinned
+three-part artifact, see the [local comparison tool](../../tools/storage-binding-paste-compare.md).
+It verifies local input only and does not establish provider or worker state.
