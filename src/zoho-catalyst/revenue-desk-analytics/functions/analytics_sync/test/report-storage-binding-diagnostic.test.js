@@ -91,14 +91,14 @@ function fixture(mutate = () => {}, format = 'inline') {
     ...f.options })(f.app, f.config);
   return f;
 }
-function rejects(fn, reason) {
+function rejects(fn, reason, details) {
   let error;
   try { fn(); } catch (caught) { error = caught; }
   assert.ok(error, 'expected the original rejection');
   assert.equal(error.code, HELD);
   assert.equal(error.message, HELD);
   assert.deepEqual(diagnostic(error), reason === undefined ? undefined
-    : { schemaVersion: 1, firstFailure: reason });
+    : { schemaVersion: details ? 2 : 1, firstFailure: reason, ...details });
   return error;
 }
 
@@ -143,10 +143,134 @@ test('a recorder failure retains the held rejection without a guessed detail', (
   const set = WeakMap.prototype.set; let error;
   try {
     WeakMap.prototype.set = function () { throw new Error('synthetic recorder failure'); };
-    error = bindingDiagnosticError('marker_missing');
+    error = bindingDiagnosticError('part_length', 0, 400, 399);
   } finally { WeakMap.prototype.set = set; }
   assert.equal(error.code, HELD); assert.equal(error.message, HELD);
   assert.equal(diagnostic(error), undefined);
+});
+
+test('only part_length can issue bounded frozen version two observations', () => {
+  for (const [partIndex, expectedCodeUnits, observed, observedCodeUnits] of [
+    [0, 400, 399, 399], [2, 76, 0, 0], [40, 1, 4096, 4096],
+    [0, 400, 4097, 'above_limit'], [0, 400, Number.MAX_SAFE_INTEGER, 'above_limit'],
+  ]) {
+    const error = bindingDiagnosticError('part_length', partIndex, expectedCodeUnits, observed);
+    const projection = diagnostic(error);
+    assert.deepEqual(projection, { schemaVersion: 2, firstFailure: 'part_length',
+      partIndex, expectedCodeUnits, observedCodeUnits });
+    assert.equal(error.code, HELD); assert.equal(error.message, HELD);
+    assert.ok(Object.isFrozen(projection));
+    assert.throws(() => { projection.observedCodeUnits = 'SYNTHETIC_PRIVATE_VALUE'; }, TypeError);
+    assert.equal(diagnostic(Object.assign(new Error(HELD), error)), undefined);
+    assert.equal(diagnostic(Object.create(error)), undefined);
+    assert.equal(diagnostic(new Proxy(error, {})), undefined);
+  }
+  for (const reason of REASONS.filter(value => value !== 'part_length')) {
+    assert.deepEqual(diagnostic(bindingDiagnosticError(reason, 0, 400, 399)),
+      { schemaVersion: 1, firstFailure: reason });
+  }
+});
+
+test('invalid length observations fall back to the original enum without coercion', () => {
+  let reads = 0;
+  const hostile = new Proxy({}, { get() { reads++; throw new Error('SYNTHETIC_PRIVATE_VALUE'); },
+    ownKeys() { reads++; throw new Error('SYNTHETIC_PRIVATE_VALUE'); } });
+  const invalid = [undefined, null, false, '1', 1n, Symbol('synthetic'), new Number(1), hostile,
+    -0, -1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1];
+  for (const position of [0, 1, 2]) for (const value of invalid) {
+    const args = [0, 400, 399]; args[position] = value;
+    assert.deepEqual(diagnostic(bindingDiagnosticError('part_length', ...args)),
+      { schemaVersion: 1, firstFailure: 'part_length' });
+  }
+  for (const args of [[41, 400, 399], [0, 0, 399], [0, 401, 399], [0, 400, 400]]) {
+    assert.deepEqual(diagnostic(bindingDiagnosticError('part_length', ...args)),
+      { schemaVersion: 1, firstFailure: 'part_length' });
+  }
+  assert.equal(reads, 0);
+});
+
+test('a length diagnostic lookup failure remains absent without changing the held error', () => {
+  const error = bindingDiagnosticError('part_length', 0, 400, 399), get = WeakMap.prototype.get;
+  try {
+    WeakMap.prototype.get = function () { throw new Error('SYNTHETIC_PRIVATE_VALUE'); };
+    assert.equal(diagnostic(error), undefined);
+  } finally { WeakMap.prototype.get = get; }
+  assert.equal(error.code, HELD); assert.equal(error.message, HELD);
+});
+
+function lengthFixture(size = 400, length = 876) {
+  const encoded = encode('A'.repeat(length), { partSize: size });
+  return { ...encoded.parts, [JSON_KEY]: encoded.marker };
+}
+
+test('each three-part short or long failure reports the first index and marker expectation', () => {
+  for (const prefix of ['parts-v1', 'tuple-v1']) for (const index of [0, 1, 2]) {
+    const expectedCodeUnits = [400, 400, 76][index];
+    for (const observedCodeUnits of [0, expectedCodeUnits - 1, expectedCodeUnits + 1]) {
+      const environment = lengthFixture();
+      if (prefix === 'tuple-v1') environment[JSON_KEY] = 'tuple-v1:400:3:876:10:10';
+      environment[PART_PREFIX + index] = 'A'.repeat(observedCodeUnits);
+      if (index < 2) environment[PART_PREFIX + (index + 1)] = '';
+      rejects(() => decode(environment), 'part_length', { partIndex: index, expectedCodeUnits, observedCodeUnits });
+    }
+  }
+  assert.equal(decode(lengthFixture()), 'A'.repeat(876));
+});
+
+test('part expectations come from the effective marker rather than fixed fixture sizes', () => {
+  for (const [size, length, index, expectedCodeUnits] of [[100, 201, 2, 1], [200, 410, 2, 10], [400, 1200, 2, 400]]) {
+    const environment = lengthFixture(size, length);
+    environment[PART_PREFIX + index] = '';
+    rejects(() => decode(environment), 'part_length', { partIndex: index, expectedCodeUnits, observedCodeUnits: 0 });
+  }
+  const changedMarker = lengthFixture(); changedMarker[JSON_KEY] = 'parts-v1:400:3:875';
+  rejects(() => decode(changedMarker), 'part_length', { partIndex: 2, expectedCodeUnits: 75, observedCodeUnits: 76 });
+});
+
+test('missing, nonstring and non-ASCII parts retain precedence without length details', () => {
+  const missing = lengthFixture(); delete missing[PART_PREFIX + '1'];
+  rejects(() => decode(missing), 'part_count');
+  missing[PART_PREFIX + 'extra'] = 'A';
+  rejects(() => decode(missing), 'part_missing');
+  const wrongType = lengthFixture(); wrongType[PART_PREFIX + '0'] = null;
+  rejects(() => decode(wrongType), 'part_type');
+  const earlierAscii = lengthFixture(); earlierAscii[PART_PREFIX + '0'] = '\t' + 'A'.repeat(399);
+  earlierAscii[PART_PREFIX + '1'] = '';
+  rejects(() => decode(earlierAscii), 'part_ascii');
+});
+
+test('length diagnostics count UTF-16 code units and never trim whitespace', () => {
+  for (const [part, observedCodeUnits] of [['\u00e9', 1], ['\ud83d\ude00', 2], ['\r\n', 2], ['\t', 1], [' ', 1]]) {
+    const environment = lengthFixture(); environment[PART_PREFIX + '0'] = part;
+    rejects(() => decode(environment), 'part_length', { partIndex: 0, expectedCodeUnits: 400, observedCodeUnits });
+  }
+  for (const part of ['\u00e9' + 'A'.repeat(399), '\ud83d\ude00' + 'A'.repeat(398), '\n' + 'A'.repeat(399)]) {
+    const environment = lengthFixture(); environment[PART_PREFIX + '0'] = part;
+    rejects(() => decode(environment), 'part_ascii');
+  }
+});
+
+test('oversize observed lengths are bounded without retaining part contents', () => {
+  for (const [length, observedCodeUnits] of [[4096, 4096], [4097, 'above_limit'], [8192, 'above_limit']]) {
+    const environment = lengthFixture(); environment[PART_PREFIX + '0'] = 'A'.repeat(length);
+    rejects(() => decode(environment), 'part_length', { partIndex: 0, expectedCodeUnits: 400, observedCodeUnits });
+  }
+});
+
+test('the failing part is read once and later values are not inspected for logging', () => {
+  const environment = lengthFixture(), privateValue = 'SYNTHETIC_PRIVATE_VALUE';
+  let partReads = 0, laterReads = 0;
+  Object.defineProperty(environment, PART_PREFIX + '0', { enumerable: true,
+    get() { partReads++; return privateValue; } });
+  for (const key of [PART_PREFIX + '1', PART_PREFIX + '2', HASH_KEY, 'UNRELATED_SYNTHETIC_FIELD']) {
+    Object.defineProperty(environment, key, { enumerable: true,
+      get() { laterReads++; throw new Error(privateValue); } });
+  }
+  const error = rejects(() => decode(environment), 'part_length', {
+    partIndex: 0, expectedCodeUnits: 400, observedCodeUnits: privateValue.length });
+  assert.equal(partReads, 1); assert.equal(laterReads, 0);
+  assert.equal(JSON.stringify([diagnostic(error), error]).includes(privateValue), false);
+  assert.deepEqual(Object.keys(error), ['code']);
 });
 
 const transportCases = [
@@ -159,7 +283,8 @@ const transportCases = [
   ['part_count', () => ({ ...transport(), [PART_PREFIX + 'extra']: 'x' })],
   ['part_missing', () => { const e = transport(); e[PART_PREFIX + 'other'] = e[PART_PREFIX + '0']; delete e[PART_PREFIX + '0']; return e; }],
   ['part_type', () => ({ ...transport(), [PART_PREFIX + '0']: null })],
-  ['part_length', () => ({ ...transport(), [PART_PREFIX + '0']: 'A' })],
+  ['part_length', () => ({ [JSON_KEY]: 'parts-v1:400:1:4', [PART_PREFIX + '0']: 'A' }),
+    { partIndex: 0, expectedCodeUnits: 4, observedCodeUnits: 1 }],
   ['part_ascii', () => ({ ...transport(), [PART_PREFIX + '0']: '\t' + transport()[PART_PREFIX + '0'].slice(1) })],
   ['base64_syntax', () => ({ [JSON_KEY]: 'tuple-v1:400:1:4:1:1', [PART_PREFIX + '0']: '!!!!' })],
   ['base64_canonical', () => ({ [JSON_KEY]: 'tuple-v1:400:1:4:1:1', [PART_PREFIX + '0']: 'Zh==' })],
@@ -176,8 +301,8 @@ const transportCases = [
   ['raw_bounds', () => tupleFrame(values => { values[5] = 'café.invalid'; })],
   ['raw_length', () => tupleFrame(() => {}, { rawLength: JSON.stringify(binding()).length + 1 })],
 ];
-for (const [reason, input] of transportCases) test('decoder first failure: ' + reason, () => {
-  rejects(() => decode(input()), reason);
+for (const [reason, input, details] of transportCases) test('decoder first failure: ' + reason, () => {
+  rejects(() => decode(input()), reason, details);
 });
 test('tuple numeric bounds reject fractional and unsafe integers at the scalar branch', () => {
   for (const value of [0.5, Number.MAX_SAFE_INTEGER + 1]) {
@@ -186,7 +311,8 @@ test('tuple numeric bounds reject fractional and unsafe integers at the scalar b
 });
 test('marker bounds remain before part count and part validation remains in original order', () => {
   rejects(() => decode({ [JSON_KEY]: 'tuple-v1:400:11:4097:1:1', [PART_PREFIX + '0']: null }), 'marker_bounds');
-  rejects(() => decode({ ...transport(), [PART_PREFIX + '0']: '\t' }), 'part_length');
+  rejects(() => decode({ [JSON_KEY]: 'parts-v1:400:1:4', [PART_PREFIX + '0']: '\t' }),
+    'part_length', { partIndex: 0, expectedCodeUnits: 4, observedCodeUnits: 1 });
 });
 test('inline, multipart and tuple bytes remain unchanged for all supported schemas', () => {
   for (const schemaVersion of [3, 4, 5, 6]) {
