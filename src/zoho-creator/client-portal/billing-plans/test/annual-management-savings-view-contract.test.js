@@ -223,11 +223,13 @@ test("annual savings: null prototypes, nonenumerable data and frozen records pre
   assert.deepEqual(prepare(e, p), expected());
 });
 
-test("annual savings: old catalog and customer/history exports remain unchanged", () => {
+test("annual savings: existing catalog and customer/history functions retain their contracts", () => {
   const catalog = require("../billing-plan-view-contract");
   const customer = require("../../billing-customer/billing-customer-view-contract");
   assert.deepEqual(Object.keys(catalog), ["prepareBillingPlanView"]);
-  assert.deepEqual(Object.keys(customer), ["prepareBillingCustomerView", "prepareBillingCustomerHistoryView"]);
+  // The portal list view may also export its shared immutable status vocabulary.
+  assert.deepEqual(Object.keys(customer).filter((name) => name !== "BILLING_HISTORY_STATUSES"),
+    ["prepareBillingCustomerView", "prepareBillingCustomerHistoryView"]);
   assert.equal(catalog.prepareBillingPlanView.length, 2);
   assert.equal(customer.prepareBillingCustomerView.length, 4); assert.equal(customer.prepareBillingCustomerHistoryView.length, 4);
   const e = evidence(), rows = [e.monthly.plan, e.annual.plan];
