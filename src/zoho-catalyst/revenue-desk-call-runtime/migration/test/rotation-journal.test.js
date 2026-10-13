@@ -194,6 +194,128 @@ for (const operation of ['begin', 'acknowledge', 'observe', 'reconcile']) {
   });
 }
 
+test('a failure committed between intent and readback holds the original writer until current recovery', () => {
+  for (const phase of PHASES) {
+    for (const writeFault of [null, 'after_write']) {
+      const { controller, journal } = before(phase);
+      const revision = journal.snapshot().revision;
+      let calls = 0;
+      let observed;
+      let committed;
+      journal.afterNextCommit(() => {
+        calls += 1;
+        observed = createJournalController(plan(), journal).observe(observation(phase, 'failed'));
+        committed = journal.snapshot();
+      });
+      if (writeFault) journal.faultNextWrite(writeFault);
+      const result = controller.begin(intent(phase));
+      // Assertions stay outside the scheduler: a callback exception would be
+      // handled as an ambiguous write response by the rehearsal controller.
+      assert.equal(calls, 1);
+      status(observed, 'reconciliation_required', previousPhase(phase), 'failed', revision + 2);
+      status(result, 'readback_required', previousPhase(phase), 'ambiguous', revision);
+      for (const method of ['begin', 'acknowledge']) {
+        status(controller[method](intent(phase)), 'readback_required', previousPhase(phase), 'ambiguous', revision);
+      }
+      assert.deepEqual(journal.snapshot(), committed);
+      status(controller.recover(), 'recovered', previousPhase(phase), 'failed', revision + 2);
+      status(controller.acknowledge(evidence(phase)), 'reconciliation_required', previousPhase(phase), 'failed', revision + 2);
+      status(reconstruct(plan(), journal).controller.status(), 'status', previousPhase(phase), 'failed', revision + 2);
+      assert.deepEqual(journal.snapshot(), committed);
+      assert.equal(calls, 1);
+    }
+  }
+});
+
+test('a next-phase intent committed before acknowledgement readback preserves the accepted prefix and new hold', () => {
+  for (const phase of PHASES.slice(0, -1)) {
+    for (const operation of ['acknowledge', 'reconcile']) {
+      for (const writeFault of [null, 'after_write']) {
+        const { controller, journal } = before(phase);
+        controller.begin(intent(phase));
+        if (operation === 'reconcile') controller.observe(observation(phase, 'failed'));
+        const revision = journal.snapshot().revision;
+        const nextPhase = PHASES[PHASES.indexOf(phase) + 1];
+        let calls = 0;
+        let begun;
+        let committed;
+        journal.afterNextCommit(() => {
+          calls += 1;
+          begun = createJournalController(plan(), journal).begin(intent(nextPhase));
+          committed = journal.snapshot();
+        });
+        if (writeFault) journal.faultNextWrite(writeFault);
+        const result = controller[operation](evidence(phase));
+        assert.equal(calls, 1);
+        status(begun, 'intent_recorded', phase, 'clear', revision + 2);
+        const held = operation === 'reconcile' ? 'failed' : 'ambiguous';
+        status(result, 'readback_required', previousPhase(phase), held, revision);
+        status(controller[operation](evidence(phase)), 'readback_required', previousPhase(phase), held, revision);
+        assert.deepEqual(journal.snapshot(), committed);
+        status(controller.recover(), 'recovered', phase, 'ambiguous', revision + 2);
+        status(controller.acknowledge(evidence(nextPhase)), 'reconciliation_required', phase, 'ambiguous', revision + 2);
+        assert.deepEqual(checkpoint(journal).evidence, PHASES.slice(0, PHASES.indexOf(phase) + 1).map((item) => evidence(item)));
+        assert.deepEqual(checkpoint(journal).intent, { ...intent(nextPhase), recovery: 'clear' });
+        assert.deepEqual(journal.snapshot(), committed);
+      }
+    }
+  }
+});
+
+test('historical exact readback can confirm an intent but cannot overwrite a newer competing failure', () => {
+  for (const phase of PHASES) {
+    for (const writeFault of [null, 'after_write']) {
+      const { controller, journal } = before(phase);
+      const revision = journal.snapshot().revision;
+      let calls = 0;
+      let observed;
+      let committed;
+      journal.afterNextCommit(() => {
+        calls += 1;
+        observed = createJournalController(plan(), journal).observe(observation(phase, 'failed'));
+        committed = journal.snapshot();
+        journal.faultNextRead('stale_snapshot');
+      });
+      if (writeFault) journal.faultNextWrite(writeFault);
+      const result = controller.begin(intent(phase));
+      assert.equal(calls, 1);
+      status(observed, 'reconciliation_required', previousPhase(phase), 'failed', revision + 2);
+      status(result, 'intent_recorded', previousPhase(phase), 'clear', revision + 1);
+      status(controller.acknowledge(evidence(phase)), 'stale_revision', previousPhase(phase), 'ambiguous', revision + 1);
+      status(controller.acknowledge(evidence(phase)), 'readback_required', previousPhase(phase), 'ambiguous', revision + 1);
+      assert.deepEqual(journal.snapshot(), committed);
+      status(controller.recover(), 'recovered', previousPhase(phase), 'failed', revision + 2);
+      status(controller.acknowledge(evidence(phase)), 'reconciliation_required', previousPhase(phase), 'failed', revision + 2);
+      assert.deepEqual(journal.snapshot(), committed);
+    }
+  }
+});
+
+test('the one-shot schedule survives failed or stale writes and fires only after an actual commit', () => {
+  for (const fault of ['before_write', 'drop_write', 'stale_revision']) {
+    const { controller, journal } = before('quiesced');
+    if (fault === 'stale_revision') createJournalController(plan(), journal).begin(intent('quiesced'));
+    const original = journal.snapshot();
+    let calls = 0;
+    let committed;
+    journal.afterNextCommit(() => { calls += 1; committed = journal.snapshot(); });
+    if (fault !== 'stale_revision') journal.faultNextWrite(fault);
+    status(controller.begin(intent('quiesced')), fault === 'stale_revision' ? 'stale_revision' : 'readback_required', 'planned', 'ambiguous', 0);
+    assert.equal(calls, 0);
+    assert.deepEqual(journal.snapshot(), original);
+    controller.recover();
+    if (fault === 'stale_revision') controller.reconcile(evidence('quiesced'));
+    else controller.begin(intent('quiesced'));
+    assert.equal(calls, 1);
+    assert.deepEqual(journal.snapshot(), committed);
+    assert.equal(committed.revision, original.revision + 1);
+    if (fault === 'stale_revision') controller.begin(intent('receiver_acknowledged'));
+    else controller.acknowledge(evidence('quiesced'));
+    assert.equal(journal.snapshot().revision, committed.revision + 1);
+    assert.equal(calls, 1);
+  }
+});
+
 test('failed observations remain locally held after a lost write, and fresh recovery cannot invent an uncommitted cause', () => {
   for (const writeFault of ['before_write', 'drop_write']) {
     const { controller, journal } = before('receiver_acknowledged');

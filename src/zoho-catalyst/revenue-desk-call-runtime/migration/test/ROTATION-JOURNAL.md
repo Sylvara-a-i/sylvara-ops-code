@@ -50,6 +50,16 @@ failed or accepted state without retrying the write. These checks assume the
 fixture's shared revision authority; they do not prove a provider's read
 consistency or protect against replacement of that authority itself.
 
+`afterNextCommit(callback)` is a one-shot, trusted test-harness scheduler, not a
+metadata field or provider callback. It runs after a successful synthetic commit
+and before that writer's readback, allowing another controller to advance the
+same journal. A read of the newer revision cannot confirm the original candidate;
+the original writer must recover without repeating its write. A coherent stale
+read can still confirm that writer's exact historical commit while hiding the
+newer state. It does not prove latestness: any subsequent write remains fenced
+against the current shared revision. The scheduler is cleared before invocation
+and is neither serialized nor available through controller operations.
+
 Malformed checkpoints, incomplete prefixes, mismatched plans,
 epochs or configuration generations fail closed. Metadata inspection is bounded
 and does not execute caller proxies, accessors or serialization hooks. Statuses

@@ -95,6 +95,12 @@ function compareAndSwap(cell, expected, checkpoint) {
   cell.previous = cell.checkpoint;
   cell.checkpoint = checkpoint;
   cell.revision += 1;
+  // Trusted test scheduling only: let a competing controller commit before the
+  // original controller reads back. Clear first so the competing write cannot
+  // recursively invoke the same schedule. No metadata field is executable.
+  const afterCommit = cell.afterCommit;
+  cell.afterCommit = null;
+  if (afterCommit) afterCommit();
   if (fault === 'after_write') throw new Error('Synthetic response lost.');
   return true;
 }
@@ -118,9 +124,13 @@ function createSyntheticJournal(plan, seed) {
     if (!Number.isSafeInteger(snapshot.revision) || snapshot.revision < 0 ||
       typeof snapshot.checkpoint !== 'string') throw new Error('Invalid fixture.');
   }
-  const cell = { ...snapshot, previous: null, previousRevision: null, writeFault: null, readFault: null };
+  const cell = { ...snapshot, previous: null, previousRevision: null, writeFault: null, readFault: null, afterCommit: null };
   const journal = Object.freeze({
     snapshot: () => Object.freeze({ revision: cell.revision, checkpoint: cell.checkpoint }),
+    afterNextCommit(callback) {
+      if (typeof callback !== 'function' || isProxy(callback)) throw new Error('Invalid fixture schedule.');
+      cell.afterCommit = callback;
+    },
     faultNextWrite(fault) {
       if (!['before_write', 'after_write', 'drop_write'].includes(fault)) throw new Error('Invalid fixture fault.');
       cell.writeFault = fault;
