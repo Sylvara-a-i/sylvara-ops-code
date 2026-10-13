@@ -18,7 +18,7 @@ const capability=Object.freeze({origin:'https://api.catalyst.zoho.com',controlle
 const query={query:`SELECT * FROM ReportRuns WHERE IdempotencyKey = 'revenue-desk-report-v1:${key}' LIMIT 2`};
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 function app(){return new CatalystApp({projectId:'123456789',projectKey:'synthetic-project-key',environment:'Development',credential:new CatalystCredential({adminType:'token',adminToken:'synthetic-admin-token','x-zc-user-cred-type':'token','x-zc-user-cred-token':'synthetic-user-token','x-zc-user-type':'admin'})});}
-function load({httpsObject=require('node:https'),onSdkImport,diagnosticModule=diagnostic,sourcePath=path.join(root,'lib/report-successor-physical.js'),version=process.version,initializeBootstrap=true,scope={projectId:'123456789',organizationId:'987654321',controllerFunctionId:'123456786'}}={}){
+function load({httpsObject=require('node:https'),onSdkImport,diagnosticModule=diagnostic,sourcePath=path.join(root,'lib/report-successor-physical.js'),version=process.version,initializeBootstrap=true,environment={X_ZOHO_CATALYST_ORG_ID:'987654321'},scope={projectId:'123456789',organizationId:'987654321',controllerFunctionId:'123456786'}}={}){
  const bootstrap=loadBootstrap(httpsObject);if(initializeBootstrap)bootstrap.initializeHttpsBootstrap();
  const mod={exports:{}};const r=id=>{
   if(id==='node:https')return httpsObject;
@@ -29,7 +29,7 @@ function load({httpsObject=require('node:https'),onSdkImport,diagnosticModule=di
  };
  r.resolve=fromSdk.resolve;r.cache=require.cache;
  const context=vm.createContext({require:r,module:mod,exports:mod.exports,Buffer,TextDecoder,AbortController,Promise,setTimeout,clearTimeout,
-  process:{version,env:{X_ZOHO_CATALYST_ORG_ID:'987654321'}}});
+  process:{version,env:environment}});
  vm.runInContext(fs.readFileSync(sourcePath,'utf8'),context,{filename:'report-successor-physical.js'});
  return mod.exports.createSuccessorPhysicalTransport;
 }
@@ -268,7 +268,7 @@ test('request replacement inside final admission budget callback is rejected bef
 
 for(const [name,scope]of [
  ['missing project',{organizationId:'987654321',controllerFunctionId:'123456786'}],
- ['missing organization',{projectId:'123456789',controllerFunctionId:'123456786'}],
+ ['organization added after issuance',{projectId:'123456789',controllerFunctionId:'123456786'}],
  ['missing function',{projectId:'123456789',organizationId:'987654321'}],
  ['wrong project',{projectId:'111111111',organizationId:'987654321',controllerFunctionId:'123456786'}],
  ['wrong organization',{projectId:'123456789',organizationId:'111111111',controllerFunctionId:'123456786'}],
@@ -279,6 +279,54 @@ for(const [name,scope]of [
  assert.throws(()=>load({scope})({app:a,capability,operationKey:key,assertActive:()=>{}}),heldError);
  assert.equal(credentialReads,0);assert.equal(f.requests.length,0);
 });
+for(const organizationId of [undefined,'','987654321'])test('SDK organization header preserves '+JSON.stringify(organizationId)+' state',async t=>{
+ const f=installSocketFixture({plans:[{statusCode:200,body:{data:[]}}]});t.after(()=>f.restore());
+ const environment=organizationId===undefined?{}:{X_ZOHO_CATALYST_ORG_ID:organizationId};
+ const scope={projectId:'123456789',organizationId,controllerFunctionId:'123456786'};
+ const targeting=[];
+ const httpsObject={request(options,callback){
+  // Record only the synthetic organization header; never capture credentials.
+  targeting.push({present:Object.hasOwn(options.headers,'CATALYST-ORG'),value:options.headers['CATALYST-ORG']});
+  return nativeRequest(options,callback);
+ }};
+ const io=load({scope,environment,httpsObject})({app:app(),capability,operationKey:key,assertActive:()=>{}});
+ t.after(()=>io.stopAndDrain());
+ assert.deepEqual(JSON.parse(JSON.stringify(await io.send('/query',query,true))),[]);
+ assert.equal(f.requests.length,1);assert.equal(f.requests[0].path,'/baas/v1/project/123456789/query');
+ assert.deepEqual(targeting,[{present:organizationId!==undefined&&organizationId!=='',value:organizationId||undefined}]);
+});
+
+for(const organizationId of [null,0,987654321,' ',' 987654321','987654321\n','0','12','0987654321','1'.repeat(31),{},['987654321']])test('malformed organization scope '+JSON.stringify(organizationId)+' rejects before credentials',async t=>{
+ const f=installSocketFixture();t.after(()=>f.restore());const tracker=diagnostic.createStorageDiagnostic();let reads=0;
+ const a=app();Object.defineProperty(a,'credential',{get(){reads++;throw Error('SYNTHETIC_CREDENTIAL_TRIPWIRE');}});
+ const scope={projectId:'123456789',organizationId,controllerFunctionId:'123456786'};
+ assert.throws(()=>load({scope,environment:{X_ZOHO_CATALYST_ORG_ID:organizationId}})({app:a,capability,operationKey:key,storageDiagnostic:tracker,assertActive:()=>{}}),heldError);
+ assert.equal(reads,0);assert.equal(f.requests.length,0);
+ assert.deepEqual(physicalDiagnostic(tracker),{schemaVersion:1,firstFailure:'capability_scope',constructorAttempts:0,insertConstructorAttempts:0,drain:'not_created'});
+});
+
+for(const [before,after]of [[undefined,''],['',undefined],[undefined,'987654321'],['','987654321'],['987654321',undefined],['987654321',''],['987654321','111111111']]){
+ for(const when of ['construction','request','authentication'])test('organization raw-state drift '+JSON.stringify(before)+' to '+JSON.stringify(after)+' at '+when+' rejects without a request',async t=>{
+  const f=installSocketFixture();t.after(()=>f.restore());const tracker=diagnostic.createStorageDiagnostic();
+  const environment=before===undefined?{}:{X_ZOHO_CATALYST_ORG_ID:before};
+  const scope={projectId:'123456789',organizationId:before,controllerFunctionId:'123456786'};
+  const change=()=>{if(after===undefined)delete environment.X_ZOHO_CATALYST_ORG_ID;else environment.X_ZOHO_CATALYST_ORG_ID=after;};
+  const create=load({scope,environment});
+  if(when==='construction'){
+   change();assert.throws(()=>create({app:app(),capability,operationKey:key,storageDiagnostic:tracker,assertActive:()=>{}}),heldError);
+  }else{
+   const io=create({app:app(),capability,operationKey:key,storageDiagnostic:tracker,assertActive:()=>{}});
+   t.after(()=>io.stopAndDrain());
+   if(when==='request')change();
+   const original=Promise.resolve;
+   if(when==='authentication')Promise.resolve=function(value){if(value&&typeof value==='object'&&Object.hasOwn(value,'access_token'))change();return original.call(Promise,value);};
+   let result;try{result=io.send('/query',query,true);}finally{Promise.resolve=original;}
+   await assert.rejects(result,heldError);assert.equal(io.snapshot().physicalStarts,0);
+  }
+  assert.equal(f.requests.length,0);assert.equal(physicalDiagnostic(tracker).firstFailure,'target_scope');
+ });
+}
+
 test('physical SQL guard accepts only the exact asterisk successor head query',async t=>{
  const good="SELECT * FROM ReportRuns WHERE IdempotencyKey LIKE 'revenue-desk-report-v2:"+key+":*' ORDER BY RD_REPORT_VERSION DESC LIMIT 2";
  for(const bad of [good.replace(':*',':%'),good.replace(':*',':?'),good.replace('LIMIT 2','LIMIT 5'),good+' OR 1=1']){
