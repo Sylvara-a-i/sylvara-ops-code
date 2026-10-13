@@ -180,7 +180,7 @@ test('release builder exports only a clean exact Git revision and stamps only it
     assert.ok(manifest.files.some(({ path: relative }) => relative
       === `functions/revenue_desk_call_worker/reporting/revenue-desk-analytics/tools/${name}.js`));
   }
-  for (const name of ['report-https-bootstrap', 'report-successor-physical', 'report-storage-activation']) {
+  for (const name of ['report-https-bootstrap', 'report-successor-physical', 'report-storage-activation', 'report-storage-binding-diagnostic']) {
     const relative = `functions/revenue_desk_route_control/reporting/revenue-desk-analytics/functions/analytics_sync/lib/${name}.js`;
     const entries = manifest.files.filter(entry => entry.path === relative);
     assert.equal(entries.length, 1, `Controller must package exactly one ${name} module`);
@@ -252,8 +252,14 @@ test('release builder exports only a clean exact Git revision and stamps only it
     const error=helper.storageDiagnosticError(tracker);
     assert.equal(bridge.storageFailureDiagnostic(error).attempted,1);
     assert.equal(bridge.storageFailureDiagnostic(Error('unissued')),undefined);
-    assert.throws(()=>bridge.createProtectedStorageQualification({environment:{}})({},{}),
-      {code:'REPORT_STORAGE_QUALIFICATION_HELD'});
+    assert.throws(()=>bridge.createProtectedStorageQualification({environment:{}})({},{}),error=>{
+      assert.equal(error.code,'REPORT_STORAGE_QUALIFICATION_HELD');
+      assert.deepEqual(bridge.storageBindingFailureDiagnostic(error),{schemaVersion:1,firstFailure:'marker_missing'});
+      assert.strictEqual(bridge.storageBindingFailureDiagnostic(error),
+        require(path.join(lib,'report-storage-binding-diagnostic')).storageBindingFailureDiagnostic(error));
+      return true;
+    });
+    assert.equal(bridge.storageBindingFailureDiagnostic(Error('unissued')),undefined);
     assert.equal(blocked,0);
     assert.equal(sdkLoads,0);
   `], isolatedControl);

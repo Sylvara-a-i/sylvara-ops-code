@@ -340,8 +340,13 @@ function createRequestListener({
         const code = typeof candidate === 'string' && allowed.has(candidate) ? candidate : 'unknown';
         let diagnostic;
         try { diagnostic = require('./report-storage-qualification').storageFailureDiagnostic(error); } catch (_) {}
+        let bindingFailure;
+        if (storageFailureStage === 'storage_binding') {
+          try { bindingFailure = require('./report-storage-qualification').storageBindingFailureDiagnostic(error); } catch (_) {}
+        }
         try {
           Promise.resolve(failureLogger(Object.freeze({ stage: storageFailureStage, code,
+            ...(bindingFailure ? { bindingFailure } : {}),
             ...(diagnostic ? { diagnostic } : {}) })))
             .catch(() => {});
         } catch (_) {
