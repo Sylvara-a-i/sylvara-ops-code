@@ -30,8 +30,8 @@ function literal(line, expression) {
   if (typeof value !== 'string' || !value || JSON.stringify(value) !== match[1]) held();
   return { text: match[1], value };
 }
-function acceptanceClauses(digest, verifiedAt, expiresAt) {
-  return [
+function acceptanceClauses(digest, verifiedAt, expiresAt, untimed = false) {
+  const clauses = [
     'received_at.toString().matches("^[0-9]{13}$")', 'envelope != null', 'result != null',
     'envelope.size() == 3', 'envelope.get("ok") == true', 'envelope.get("action") == "qualify_storage"',
     'result.size() == 18', 'result.get("status") == "storage_unique_successor_observed"',
@@ -51,6 +51,7 @@ function acceptanceClauses(digest, verifiedAt, expiresAt) {
     'received_at >= dispatch_at + 1000', 'received_at + 1000 - dispatch_at <= 40000',
     `received_at >= ${verifiedAt}`, `received_at + 1000 <= ${expiresAt}`,
   ];
+  return untimed ? clauses.filter((_, index) => ![25, 26, 30, 31].includes(index)) : clauses;
 }
 // Matching the complete supported frame rejects extra statements, changed guards,
 // duplicate anchors and altered summary projection. Opaque private literals stay local.
@@ -59,24 +60,37 @@ function inspect(text) {
   if (lines.length !== 67 || !/^string (?:standalone|automation)\.[A-Za-z][A-Za-z0-9_]*\(\)$/.test(lines[0])) held();
   const route = literal(lines[5], /^\tapprove_url = ("(?:[^"\\]|\\.)*");$/);
   const body = literal(lines[11], /^\t\tbody = ("(?:[^"\\]|\\.)*")\.toMap\(\);$/);
+  let command;
+  try { command = JSON.parse(body.value); } catch { held(); }
+  const untimed = command?.activation?.schemaVersion === 2;
   const connection = literal(lines[22], /^\t\t\tconnection:("(?:[^"\\]|\\.)*")$/);
   const acceptance = /^\t\t\tif\((.*)\)$/.exec(lines[34]);
   if (!acceptance) held();
   const digest = /result\.get\("operationDigest"\) == "([a-f0-9]{64})"/.exec(acceptance[1])?.[1];
   const verifiedAt = /result\.get\("observedAt"\)\.toLong\(\) >= ([0-9]{13})/.exec(acceptance[1])?.[1];
   const expiresAt = /result\.get\("observedAt"\)\.toLong\(\) < ([0-9]{13})/.exec(acceptance[1])?.[1];
-  if (!digest || !verifiedAt || !expiresAt || Number(expiresAt) <= Number(verifiedAt)) held();
-  const clauses = acceptanceClauses(digest, verifiedAt, expiresAt);
+  if (!digest || (!untimed && (!verifiedAt || !expiresAt || Number(expiresAt) <= Number(verifiedAt)))) held();
+  const clauses = acceptanceClauses(digest, verifiedAt, expiresAt, untimed);
   if (acceptance[1] !== clauses.join(' && ')) held();
-  let command;
-  try { command = JSON.parse(body.value); } catch { held(); }
   if (!command || Object.keys(command).sort().join(',') !== 'action,activation,profile'
     || command.profile !== 'report_storage_qualification_v1' || command.action !== 'qualify_storage'
-    || command.activation?.schemaVersion !== 1 || command.activation.operationDigest !== digest
-    || command.activation.verifiedAt !== Number(verifiedAt) || command.activation.expiresAt !== Number(expiresAt)) held();
+    || command.activation?.schemaVersion !== (untimed ? 2 : 1) || command.activation.operationDigest !== digest
+    || (!untimed && (command.activation.verifiedAt !== Number(verifiedAt) || command.activation.expiresAt !== Number(expiresAt)))) held();
+  if (untimed) {
+    const activation = command.activation;
+    if (Object.keys(activation).sort().join(',') !== 'bindingSha256,evidence,operationDigest,schemaVersion'
+      || typeof activation.bindingSha256 !== 'string' || !HASH.test(activation.bindingSha256) || !activation.evidence
+      || Object.keys(activation.evidence).sort().join(',') !== 'access,ownerAuthorization,ownership') held();
+    for (const receipt of Object.values(activation.evidence)) {
+      if (!receipt || Object.keys(receipt).sort().join(',') !== 'digest,observedAt,stateSha256'
+        || typeof receipt.digest !== 'string' || !HASH.test(receipt.digest)
+        || typeof receipt.stateSha256 !== 'string' || !HASH.test(receipt.stateSha256)
+        || !Number.isSafeInteger(receipt.observedAt) || receipt.observedAt < 0) held();
+    }
+  }
   const dispatch = 'dispatch_at.toString().matches("^[0-9]{13}$")'
     + ` && approve_url == ${route.text} && "${digest}".matches("^[a-f0-9]{64}$") && 25000 == 25000`
-    + ` && dispatch_at >= ${verifiedAt} && dispatch_at + 1000 + 25000 + 1000 <= ${expiresAt}`;
+    + (untimed ? '' : ` && dispatch_at >= ${verifiedAt} && dispatch_at + 1000 + 25000 + 1000 <= ${expiresAt}`);
   const expected = [lines[0], '{', `result_message = ${JSON.stringify(HELD)};`, 'try', '{',
     `\tapprove_url = ${route.text};`, '\tdispatch_utc = zoho.currenttime.toString("dd-MMM-yyyy HH:mm:ss","UTC");',
     '\tdispatch_at = dispatch_utc.unixEpoch("UTC");', '\t// DISPATCH_PREDICATE', `\tif(${dispatch})`, '\t{',
@@ -92,10 +106,10 @@ function inspect(text) {
     '\t\t\t\tresult_message = summary.toString();', '\t\t\t}', '\t\t}', '\t}', '}', 'catch (ignored)', '{',
     `\tresult_message = ${JSON.stringify(UNKNOWN)};`, '}', 'return result_message;', '}', ''];
   if (text !== expected.join('\n')) held();
-  return clauses;
+  return { clauses, diagnosticSchemaVersion: untimed ? 2 : 1 };
 }
-function diagnosticBlock(clauses) {
-  const observation = 27; // Zero-based index in the exact supported predicate.
+function diagnosticBlock(clauses, schemaVersion) {
+  const observation = clauses.indexOf('result.get("observedAt").toLong() <= received_at');
   const lines = [`if(result_message == ${JSON.stringify(UNKNOWN)})`, '{', '\ttry', '\t{',
     '\t\tscd_stage = "diagnostic_unavailable";', '\t\tscd_first = 0;',
     '\t\tscd_other_checked = false;', '\t\tscd_other_passed = false;',
@@ -126,7 +140,7 @@ function diagnosticBlock(clauses) {
     '\t\t\t\t\tif(scd_other_checked && scd_other_passed && scd_observation_checked && scd_observation_passed == false)',
     '\t\t\t\t\t{', '\t\t\t\t\t\tif(received_at < result.get("observedAt").toLong() && result.get("observedAt").toLong() < received_at + 1000)',
     '\t\t\t\t\t\t{', '\t\t\t\t\t\t\tscd_stage = "receipt_second_guard_only";', '\t\t\t\t\t\t}', '\t\t\t\t\t}',
-    '\t\t\t\t}', '\t\t\t}', '\t\t}', '\t\tscd_diagnostic = Map();', '\t\tscd_diagnostic.put("schemaVersion",1);',
+    '\t\t\t\t}', '\t\t\t}', '\t\t}', '\t\tscd_diagnostic = Map();', `\t\tscd_diagnostic.put("schemaVersion",${schemaVersion});`,
     '\t\tscd_diagnostic.put("rejectionStage",scd_stage);');
   for (const flag of FLAGS) lines.push(`\t\tscd_diagnostic.put("${flag}",scd_${flag});`);
   lines.push('\t\tscd_diagnostic.put("allOtherAcceptanceChecksChecked",scd_other_checked);',
@@ -148,7 +162,7 @@ function instrumentStorageCaller(input) {
     || !/^[\x09\x0a\x20-\x7e]+$(?![\s\S])/.test(callerText) || !callerText.endsWith('\n')
     || typeof callerSha256 !== 'string' || !HASH.test(callerSha256) || sha(callerText) !== callerSha256
     || callerText.includes(PREFIX) || /__[A-Z_]+__/.test(callerText)) held();
-  const clauses = inspect(callerText);
+  const { clauses, diagnosticSchemaVersion } = inspect(callerText);
   let text = callerText.replace('\ntry\n', '\n' + FLAGS.map(flag => `scd_${flag} = false;`).join('\n') + '\ntry\n');
   const captures = [
     ['\t\t];\n', '\t\tscd_responseCaptured = true;\n'],
@@ -158,8 +172,8 @@ function instrumentStorageCaller(input) {
     ['\t\t\tresult = envelope.get("result");\n', '\t\t\tscd_resultCaptured = true;\n'],
   ];
   for (const [anchor, capture] of captures) text = text.replace(anchor, anchor + capture);
-  text = text.replace('return result_message;\n', diagnosticBlock(clauses) + 'return result_message;\n');
+  text = text.replace('return result_message;\n', diagnosticBlock(clauses, diagnosticSchemaVersion) + 'return result_message;\n');
   return Object.freeze({ text, sha256: sha(text), bytes: Buffer.byteLength(text, 'utf8'), baseCallerSha256: callerSha256,
-    diagnosticSchemaVersion: 1, grantsExecutionAuthority: false, providerActions: 0 });
+    diagnosticSchemaVersion, grantsExecutionAuthority: false, providerActions: 0 });
 }
 module.exports = Object.freeze({ instrumentStorageCaller });

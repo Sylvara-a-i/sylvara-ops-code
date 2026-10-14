@@ -67,7 +67,7 @@ function stageDormant(input) {
   exact(input, ['binding']);
   canonical(input.binding); // Reject accessors/non-JSON values before serialization or shared validation.
   validateDormantBinding(input.binding);
-  if (input.binding.timeoutMs !== LIMITS.operationTimeoutMs) held();
+  if (input.binding.schemaVersion !== 6 || input.binding.timeoutMs !== LIMITS.operationTimeoutMs) held();
   const raw = JSON.stringify(input.binding), bindingSha256 = sha(raw);
   const transport = encodeStorageBinding(raw, { partSize: 400, format: 'tuple-v1' });
   return freeze({ status: 'dormant_artifacts_prepared', raw, bindingSha256,

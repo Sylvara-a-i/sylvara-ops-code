@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const {PROFILE,diagnosticWindowMs}=require('../lib/report-storage-window');
+const {PROFILE,diagnosticWindowMs,isUntimedDiagnostic}=require('../lib/report-storage-window');
 const held={code:'REPORT_STORAGE_QUALIFICATION_HELD'};
 const contract=schemaVersion=>({schemaVersion,profile:PROFILE,environment:'development'});
 for(const [schemaVersion,expected]of [[3,900000],[4,3600000],[5,900000],[6,3600000]])
@@ -12,4 +12,10 @@ test('schema6 window rejects unsupported versions and broadened or malformed con
  for(const input of [null,{},[],{...contract(6),environment:'production'},{...contract(6),environment:'Development'},
   {...contract(6),profile:'other'},{...contract(6),expiresAt:0},{profile:PROFILE,environment:'development'}])
   assert.throws(()=>diagnosticWindowMs(input),held);
+});
+test('untimed schema7 is an explicit contract, never an unbounded legacy duration',()=>{
+ assert.equal(isUntimedDiagnostic(contract(7)),true);
+ assert.throws(()=>diagnosticWindowMs(contract(7)),held);
+ for(const value of [null,{},[],contract(6),contract(8),{...contract(7),environment:'production'},
+  {...contract(7),profile:'other'},{...contract(7),expiresAt:0}])assert.equal(isUntimedDiagnostic(value),false);
 });

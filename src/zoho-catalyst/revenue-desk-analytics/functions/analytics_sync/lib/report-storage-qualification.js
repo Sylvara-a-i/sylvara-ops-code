@@ -5,7 +5,7 @@ const {canonicalJson}=require('./facts');
 const {createReportSuccessorStore}=require('./report-successor-store');
 const {createReportRunTransport}=require('./report-run-transport');
 const {validateStorageCapability,validateStoredProjection,matchesStoredReportField}=require('./report-storage-capability');
-const {diagnosticWindowMs}=require('./report-storage-window');
+const {diagnosticWindowMs,isUntimedDiagnostic}=require('./report-storage-window');
 const {validateDormantBindingForConstruction,activateDormantBinding,dormantOperationDigest}=require('./report-storage-activation');
 const {bindingDiagnosticError}=require('./report-storage-binding-diagnostic');
 const {createStorageDiagnostic,recordStorageDiagnostic,storageDiagnosticError,recordStorageValidationFailure,
@@ -37,8 +37,8 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
   let b;try{b=JSON.parse(raw);}catch{bindingHeld('binding_json');}
   if(!exact(b,['schemaVersion','enabled','environment','sourceRevision','projectId','controlHost','tableId','nonce',
    'capability','verifiedAt','expiresAt','timeoutMs','singleAdmittedInvocation']))bindingHeld('binding_fields');
-  if(![3,4,5,6].includes(b.schemaVersion))bindingHeld('binding_schema');
-  if(b.enabled!==(b.schemaVersion!==6))bindingHeld('binding_enabled');
+  if(![3,4,5,6,7].includes(b.schemaVersion))bindingHeld('binding_schema');
+  if(b.enabled!==(![6,7].includes(b.schemaVersion)))bindingHeld('binding_enabled');
   if(b.environment!=='development')bindingHeld('binding_environment');
   if(b.singleAdmittedInvocation!==true)bindingHeld('single_admission_flag');
   if(config?.environment!==b.environment)bindingHeld('config_environment_mismatch');
@@ -55,15 +55,16 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
   if(!/^[a-f0-9]{32}$/.test(b.nonce||''))bindingHeld('nonce_syntax');
   if(!Number.isSafeInteger(b.verifiedAt)||b.verifiedAt<0)bindingHeld('verified_at');
   if(!Number.isSafeInteger(b.expiresAt))bindingHeld('expires_at');
-  if(b.schemaVersion!==6&&b.expiresAt<=b.verifiedAt)bindingHeld('legacy_expiry');
+  if(![6,7].includes(b.schemaVersion)&&b.expiresAt<=b.verifiedAt)bindingHeld('legacy_expiry');
   if(!Number.isSafeInteger(b.timeoutMs)||b.timeoutMs<1||b.timeoutMs>60000)bindingHeld('timeout');
   if(typeof now!=='function')bindingHeld('clock_type');
   if(typeof transportFactory!=='function')bindingHeld('transport_factory_type');
-  const dormant=b.schemaVersion===6;
+  const dormant=[6,7].includes(b.schemaVersion);
   if(dormant)validateDormantBindingForConstruction(b);
   function context(binding){
    const diagnosticContract={schemaVersion:binding.schemaVersion,profile:PROFILE,environment:binding.environment};
-   if(binding.expiresAt-binding.verifiedAt>diagnosticWindowMs(diagnosticContract))held();
+   const untimed=isUntimedDiagnostic(diagnosticContract);
+   if(!untimed&&binding.expiresAt-binding.verifiedAt>diagnosticWindowMs(diagnosticContract))held();
    const capabilityOptions={app,config:{projectId:binding.projectId,environment:binding.environment},environment,
     verifiedAt:binding.verifiedAt,expiresAt:binding.expiresAt,diagnosticContract};
    const capability=validateStorageCapability(binding.capability,{...capabilityOptions,now:now()});
@@ -74,11 +75,12 @@ function createProtectedStorageQualification({environment=process.env,now=Date.n
     nonce:binding.nonce,sourceRevision:binding.sourceRevision,capabilitySha256});
    const rootKey='revenue-desk-report-v1:'+key;
    const active=()=>{const at=now();validateStorageCapability(capability,{...capabilityOptions,now:at});
-    if(!Number.isSafeInteger(at)||at<binding.verifiedAt||at>=binding.expiresAt)held();return at;};active();
+    if(!Number.isSafeInteger(at)||at<0||!untimed&&(at<binding.verifiedAt||at>=binding.expiresAt))held();return at;};active();
    return {binding,capability,capabilitySha256,sequential,mechanism,key,rootKey,active};
   }
   // Legacy construction remains fail-closed at its original expiry boundary.
-  // A dormant handler grants no transport access; its lease is invocation-local.
+  // A dormant handler grants no transport access. Schema 7 starts its bounded
+  // execution timer only inside handle; setup and activation age are irrelevant.
   const legacyContext=dormant?null:context(b);
   return Object.freeze({async handle(command,{actor,signal}={}){
    const diagnostic=createStorageDiagnostic();

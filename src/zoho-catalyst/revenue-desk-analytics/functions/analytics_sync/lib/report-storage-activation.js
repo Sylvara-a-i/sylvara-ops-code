@@ -17,14 +17,13 @@ function dormantOperationDigest(bindingSha256){
  // Fresh evidence and lease timestamps must never create another receipt key.
  return hash(canonicalJson({mechanism:'dormant_unique_insert_successor_v1',bindingSha256}));
 }
-/** Schema 6 uses the existing lossless tuple shape. Zero times mean dormant,
- * never infinite authority. Only a separately authenticated command can supply
- * current evidence. Static evidence digests commit reviewed facts/approval scope,
- * not a falsely refreshed timestamp on a historical provider response. */
+/** Schemas 6 and 7 share a lossless dormant tuple shape. Zero times alone never
+ * grant authority: schema 6 requires its timed activation; schema 7 requires a
+ * distinct untimed activation. Static digests commit facts/approval scope. */
 function validateDormant(b,fail){
  if(!exact(b,['schemaVersion','enabled','environment','sourceRevision','projectId','controlHost','tableId','nonce',
   'capability','verifiedAt','expiresAt','timeoutMs','singleAdmittedInvocation']))fail('dormant_fields');
- if(b.schemaVersion!==6||b.enabled!==false||b.environment!=='development'||b.singleAdmittedInvocation!==true)fail('dormant_shape');
+ if(![6,7].includes(b.schemaVersion)||b.enabled!==false||b.environment!=='development'||b.singleAdmittedInvocation!==true)fail('dormant_shape');
  if(b.verifiedAt!==0||b.expiresAt!==0||b.timeoutMs!==25000)fail('dormant_times');
  if(typeof b.sourceRevision!=='string'||!/^[a-f0-9]{40}$(?![\s\S])/.test(b.sourceRevision))fail('dormant_source');
  if(typeof b.projectId!=='string'||!ID.test(b.projectId)||typeof b.tableId!=='string'||!ID.test(b.tableId))fail('dormant_project_or_table');
@@ -49,6 +48,7 @@ function validateDormantBindingForConstruction(b){return validateDormant(b,bindi
  * prove those reads occurred. Runtime capability validation remains mandatory. */
 function activateDormantBinding(binding,bindingSha256,activation,now){
  validateDormantBinding(binding);
+ if(binding.schemaVersion===7)return activateUntimedBinding(binding,bindingSha256,activation);
  if(hash(JSON.stringify(binding))!==bindingSha256
   ||!exact(activation,['schemaVersion','bindingSha256','operationDigest','verifiedAt','expiresAt','evidence'])
   ||activation.schemaVersion!==1||activation.bindingSha256!==bindingSha256
@@ -72,5 +72,27 @@ function activateDormantBinding(binding,bindingSha256,activation,now){
  const active=structuredClone(binding);
  Object.assign(active,{enabled:true,verifiedAt,expiresAt});active.capability.evidence=evidence;
  return Object.freeze({binding:freeze(active),activationDigest:hash(canonicalJson({bindingSha256,verifiedAt,expiresAt,evidence}))});
+}
+function activateUntimedBinding(binding,bindingSha256,activation){
+ // No clock or age comparison occurs in this version. It cannot accept a
+ // legacy activation, and changing evidence never changes its admission key.
+ if(hash(JSON.stringify(binding))!==bindingSha256
+  ||!exact(activation,['schemaVersion','bindingSha256','operationDigest','evidence'])
+  ||activation.schemaVersion!==2||activation.bindingSha256!==bindingSha256
+  ||activation.operationDigest!==dormantOperationDigest(bindingSha256)
+  ||!exact(activation.evidence,ROLES))held();
+ const evidence={};
+ for(const role of ROLES){
+  const current=activation.evidence[role];
+  if(!exact(current,['stateSha256','digest','observedAt'])
+   ||current.stateSha256!==binding.capability.evidence[role].digest
+   ||typeof current.digest!=='string'||!HASH.test(current.digest)
+   ||!Number.isSafeInteger(current.observedAt)||current.observedAt<0)held();
+  evidence[role]={digest:current.digest,verifiedAt:0,expiresAt:0};
+ }
+ const active=structuredClone(binding);
+ active.enabled=true;active.capability.evidence=evidence;
+ return Object.freeze({binding:freeze(active),activationDigest:hash(canonicalJson({schemaVersion:2,
+  bindingSha256,operationDigest:activation.operationDigest,evidence:activation.evidence}))});
 }
 module.exports={validateDormantBinding,validateDormantBindingForConstruction,activateDormantBinding,dormantOperationDigest,MINIMUM_ACTIVATION_REMAINING_MS};
