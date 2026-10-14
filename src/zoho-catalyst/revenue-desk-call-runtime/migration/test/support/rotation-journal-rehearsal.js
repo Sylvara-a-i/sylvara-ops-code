@@ -1,9 +1,10 @@
 'use strict';
 
 // TEST ONLY. A serialized synthetic journal and fresh controllers, without IO,
-// provider adapters, credentials or live authority. Atomic CAS is an assumption
+// live provider clients, credentials or live authority. Atomic CAS is an assumption
 // of this in-memory fixture, not evidence of provider durability or custody.
 const { initialState, apply } = require('./rotation-rollout-model');
+const { fixedTargetJournalOperations } = require('./rotation-provider-rehearsal');
 const { types: { isProxy }, isDeepStrictEqual } = require('node:util');
 
 const PHASES = ['quiesced', 'receiver_acknowledged', 'sender_acknowledged',
@@ -151,6 +152,10 @@ function createJournalController(inputPlan, journal) {
   let recovery = 'invalid_plan';
   let needsReadback = true;
   const cell = cells.get(journal);
+  const operations = cell ? {
+    read: () => read(cell),
+    compareAndSwap: (revision, checkpoint) => compareAndSwap(cell, revision, checkpoint),
+  } : fixedTargetJournalOperations(journal);
   try { plan = initialState(copyData(inputPlan)).plan; } catch { /* fixed status only */ }
 
   const result = (outcome) => Object.freeze({ outcome, phase: state ? state.phase : 'unavailable',
@@ -158,7 +163,7 @@ function createJournalController(inputPlan, journal) {
   function recover() {
     if (!plan) return result('invalid_plan');
     try {
-      const loaded = decode(plan, read(cell));
+      const loaded = decode(plan, operations.read());
       if (doc && loaded.doc.revision < doc.revision) throw new Error('Stale journal.');
       const failedIntent = recovery === 'failed' && doc && doc.intent && loaded.doc.intent &&
         isDeepStrictEqual(doc.evidence, loaded.doc.evidence) &&
@@ -183,7 +188,7 @@ function createJournalController(inputPlan, journal) {
     candidate.revision = doc.revision + 1;
     const checkpoint = JSON.stringify(candidate);
     try {
-      const written = compareAndSwap(cell, doc.revision, checkpoint);
+      const written = operations.compareAndSwap(doc.revision, checkpoint);
       if (!written) {
         needsReadback = true;
         if (recovery !== 'failed') recovery = 'ambiguous';
@@ -191,7 +196,7 @@ function createJournalController(inputPlan, journal) {
       }
     } catch { /* A lost response proves neither success nor failure. Read separately. */ }
     try {
-      const snapshot = read(cell);
+      const snapshot = operations.read();
       if (snapshot.revision !== candidate.revision || snapshot.checkpoint !== checkpoint) {
         throw new Error('Unconfirmed write.');
       }

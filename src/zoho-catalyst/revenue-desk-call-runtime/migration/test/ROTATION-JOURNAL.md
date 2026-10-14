@@ -4,6 +4,9 @@
 the offline report-header rehearsal. It is confined to tests and is not exported
 by the migration package or imported by a runtime function. The older
 `rotation-recovery-rehearsal.js` retains its explicitly in-memory restart latch.
+The [fixed-target provider contract](ROTATION-PROVIDER.md) reuses this controller
+through sealed synthetic audit/write handles while preserving one shared fence
+across new adapters and controllers.
 
 The synthetic journal stores a serialized, plan-bound checkpoint: the complete
 accepted evidence prefix, an optional next-phase intent and its recovery hold,
@@ -78,6 +81,6 @@ This proves behavior of invented metadata and an in-memory atomic fixture only.
 The journal is not durable across an actual process or host loss. Serialized
 snapshot reconstruction does not establish tamper resistance, authenticated
 readback, provider atomicity or protection against a coherently replaced journal.
-No keys, credentials, provider adapters, operational rotation, rollback to old
+No keys, credentials, live provider clients, operational rotation, rollback to old
 material, activation, IAM, protected custody or live security guarantees are
 implemented. No deployment or manual provider setup is authorized by these tests.
