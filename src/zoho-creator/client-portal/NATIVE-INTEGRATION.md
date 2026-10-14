@@ -12,6 +12,7 @@ not add a duplicate business store, replacement shell or placeholder results.
 | Billing history | [`produceBillingCustomerHistoryWithPayments`](billing-customer/billing-customer-history-producer.js), [history/status views](billing-customer/README.md) | Authenticated company/customer binding and qualified customer-scoped provider transport. The original producer still omits payments. |
 | Calls and released reports | [`prepareCompanyCallsPage` and `prepareReleasedReportsPage`](calls-reports/company-call-report-projection.js), [exact source/grant contract](calls-reports/README.md) | Complete scoped source receipts, current operation grants and protected report/artifact actions. |
 | Saved report dates | [`preparePreferredReleasedReportsPage`](calls-reports/README.md#saved-report-date-preferences-offline-opt-in) | Authenticated save/load storage and current entitlement provenance. This stores no data and restores only a reporting-period range, not report-key selections. |
+| Pending service-area requests | [Scoped provider read plan and status-list projection](company-settings-requests/README.md#pending-request-read-contract) over existing Company_Settings_Requests | Independent `company-settings-requests.read` authority, provider-side Account predicate, terminal complete snapshot and protected native pagination. Does not create or approve requests. |
 | Identity concepts | [Protected identity contract](company-settings-requests/OFFLINE-IDENTITY.md), [Creator authorization proposal](company-settings-requests/native/CREATOR-AUTHORIZATION.md) | Qualified native subject/incarnation, protected current registry and canonical links. The existing resolver's operation remains `service-area-request`. |
 
 ## Protected adapter contract
@@ -26,7 +27,9 @@ The adapter must derive current subject/incarnation, principal/audit actor,
 company/contact links and the exact operation permission independently of request
 selectors. Require `billing.read`, `calls.read` or `reports.read` as applicable;
 do not widen the service-area resolver or infer permissions from role names.
-Missing, duplicate, inactive, stale or ambiguous facts deny. Re-created users and
+Pending request reads independently require `company-settings-requests.read`;
+the existing submission scope is not read authority. Missing, duplicate,
+inactive, stale or ambiguous facts deny. Re-created users and
 changed membership must not inherit old authority. Registry ownership, uniqueness,
 lifecycle handling and revocation availability require independent qualification.
 
