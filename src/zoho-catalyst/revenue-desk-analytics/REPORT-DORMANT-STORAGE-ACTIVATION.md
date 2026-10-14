@@ -80,6 +80,53 @@ SHA256 for exact source review/readback. It never alters the route, Connection,
 supplied template review remains responsible for those native semantics; a hash
 alone does not prove them.
 
+### Optional native caller rejection diagnostics
+
+`renderDiagnosticActivationCaller(input)` first uses the unchanged renderer,
+then instruments its exact rendered Deluge source with failure-only diagnostic
+schema 1. This is an explicit alternative to `renderActivationCaller`, not a
+change to that function's output or placeholder contract. The pure helper
+`tools/storage-caller-diagnostics.js` accepts only the supported, pinned caller
+shape and rejects drift. Its output remains a private artifact, including the
+original route, Connection and activation body; never publish that output.
+
+The original dispatch, response and acceptance predicates and accepted summary
+remain intact. A result that was accepted stays accepted; a held result stays
+held. Only `unknown_no_retry` gains a bounded diagnostic containing a finite
+stage, checked/passed facts and, when available, the first rejected or errored
+acceptance clause's ordinal. Diagnostics reuse captured values after rejection; they add
+no clock sample, response parse, request, wait, retry or authority. Capture facts
+distinguish unavailable evidence from a check that actually ran. No response
+body, endpoint, credential, identifier, digest, timestamp or exception text is
+copied into rejected diagnostic output. Diagnostic failure retains the original
+unknown outcome.
+
+`receipt_second_guard_only` means every other acceptance clause passed and the
+server observation lies strictly inside the receipt's whole-second interval.
+It remains a rejection, not proof that the observation preceded the real receipt.
+The conservative `observedAt <= received_at` check is unchanged: adding 999 or
+1000 milliseconds would accept some indistinguishable future observations.
+HTTP 200, row presence and elapsed duration cannot identify the failed clause
+without the captured diagnostic or returned attestation.
+
+Focused tests execute the generated Deluge control flow through a documented
+offline subset harness and compare it with the uninstrumented caller. This
+checks rendering, acceptance parity, failure isolation and synthetic boundaries;
+it does not certify native Deluge compilation or tenant-specific conversions.
+The generated source needs its own exact native formatting/import/readback
+validation before live use. An older private formatter's hash, insertion offset
+or single-try witness must not be reused or relaxed to accept the new source.
+See Zoho's [try-catch](https://www.zoho.com/deluge/help/misc-statements/try-catch.html)
+and [toMap](https://www.zoho.com/deluge/help/functions/string/tomap.html) contracts.
+
+This correction adds no environment variable. A later live attempt still needs
+its own unconsumed identity and reviewed staging/activation inputs. If cleanup
+removed the qualification parts, hash and marker, fresh values must be installed
+and read back again through the authorized configuration procedure. Never reuse
+a consumed caller or old variables. Source rollback is to the legacy renderer;
+restoring a deployed caller requires the separately scoped platform restoration
+and readback. This source change performs no deployment or invocation.
+
 ## Owner handoff and machine execution
 
 1. Review and stage the disabled candidate, untimed descriptor and managed caller;
