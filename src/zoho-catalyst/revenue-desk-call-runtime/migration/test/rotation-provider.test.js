@@ -3,7 +3,8 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { createSyntheticJournal, createJournalController } = require('./support/rotation-journal-rehearsal');
-const { createSyntheticRotationProvider, createFixedTargetRotationJournal } = require('./support/rotation-provider-rehearsal');
+const { createSyntheticRotationProvider, createFixedTargetRotationJournal,
+  fixedTargetJournalOperations } = require('./support/rotation-provider-rehearsal');
 
 // Synthetic identities and evidence only. These tests do not establish provider
 // durability, authenticated identity, credential custody or live authority.
@@ -103,6 +104,63 @@ test('fixed-target factories reject unsafe identities and unsealed or mixed auth
   assert.deepEqual(other.counts(), { reads: 0, writes: 0, commits: 0 });
 });
 
+test('provider capacity is enforced on seeds and audit reads without shrinking the generic journal', () => {
+  const inputPlan = plan();
+  const seed = createSyntheticJournal(inputPlan).snapshot();
+  const padded = (size) => ({ ...seed, checkpoint: seed.checkpoint.padEnd(size, ' ') });
+  assert.ok(seed.checkpoint.length < 10000);
+  const provider = createSyntheticRotationProvider(TARGET, padded(10000));
+  const controller = connect(provider, inputPlan);
+  status(controller.status(), 'status', 'planned', 'clear', 0);
+  assert.throws(() => createSyntheticRotationProvider(TARGET, padded(10001)), /Invalid synthetic provider contract/);
+  // The same valid serialized journal still fits the provider-neutral core.
+  status(createJournalController(inputPlan, createSyntheticJournal(inputPlan, padded(10001))).status(),
+    'status', 'planned', 'clear', 0);
+  provider.overrideNextRead({ target: TARGET, ...padded(10001) });
+  status(controller.recover(), 'journal_unavailable', 'planned', 'ambiguous', 0);
+  assert.equal(provider.counts().writes, 0);
+  assert.deepEqual(provider.snapshot(), padded(10000));
+});
+
+test('provider writes reject oversized checkpoints before dispatch and preserve exact UTF-16 code units', () => {
+  for (const checkpoint of ['a'.repeat(10000), '\u00e9'.repeat(10000), '\ud83d\ude00'.repeat(5000)]) {
+    const seed = createSyntheticJournal(plan()).snapshot();
+    const provider = createSyntheticRotationProvider(TARGET, seed);
+    const operations = fixedTargetJournalOperations(createFixedTargetRotationJournal(TARGET, provider.connect()));
+    assert.equal(checkpoint.length, 10000);
+    assert.throws(() => operations.compareAndSwap(0, checkpoint + 'x'), /Invalid synthetic provider contract/);
+    assert.deepEqual(provider.counts(), { reads: 0, writes: 0, commits: 0 });
+    assert.deepEqual(provider.snapshot(), seed);
+    assert.equal(operations.compareAndSwap(0, checkpoint), true);
+    assert.deepEqual(provider.snapshot(), { revision: 1, checkpoint });
+    assert.deepEqual(provider.counts(), { reads: 0, writes: 1, commits: 1 });
+  }
+});
+
+test('closed predicate budget and malformed write fields fail before dispatch without coercion', () => {
+  const seed = createSyntheticJournal(plan()).snapshot();
+  const provider = createSyntheticRotationProvider(TARGET, seed);
+  const handles = provider.connect();
+  // Four binding conditions plus revision consume the five-condition budget.
+  // A future physical ROWID condition cannot silently be appended or replace revision.
+  assert.throws(() => createFixedTargetRotationJournal({ ...TARGET, ROWID: 'synthetic-row' }, handles),
+    /Invalid synthetic provider contract/);
+  const operations = fixedTargetJournalOperations(createFixedTargetRotationJournal(TARGET, handles));
+  let hooks = 0;
+  const hostile = Object.defineProperty({}, 'length', { get() { hooks += 1; throw new Error(CANARY); } });
+  hostile.toString = () => { hooks += 1; throw new Error(CANARY); };
+  const proxy = new Proxy({}, { get() { hooks += 1; throw new Error(CANARY); } });
+  for (const checkpoint of [null, new String('synthetic'), hostile, proxy]) {
+    assert.throws(() => operations.compareAndSwap(0, checkpoint), /Invalid synthetic provider contract/);
+  }
+  for (const revision of [-1, 0.5, '0', Number.MAX_SAFE_INTEGER, NaN, proxy]) {
+    assert.throws(() => operations.compareAndSwap(revision, seed.checkpoint), /Invalid synthetic provider contract/);
+  }
+  assert.equal(hooks, 0);
+  assert.deepEqual(provider.counts(), { reads: 0, writes: 0, commits: 0 });
+  assert.deepEqual(provider.snapshot(), seed);
+});
+
 test('operation-time identity checks reject retargeting without changing the original fixed target', () => {
   for (const field of ['organizationId', 'projectId', 'journalId']) {
     const expected = { ...TARGET };
@@ -174,7 +232,7 @@ test('malformed audit envelopes and executable fields hold recovery without invo
     { ...valid, target: throwing },
     ...Object.keys(TARGET).map((field) => ({ ...valid, target: { ...TARGET, [field]: 'synthetic-wrong' } })),
     { ...valid, extra: CANARY }, { ...valid, revision: '0' }, { ...valid, revision: -1 },
-    { ...valid, revision: 1 }, { ...valid, checkpoint: '{' }, { ...valid, checkpoint: ' '.repeat(32769) },
+    { ...valid, revision: 1 }, { ...valid, checkpoint: '{' }, { ...valid, checkpoint: ' '.repeat(10001) },
     { ...valid, toJSON() { hooks += 1; throw new Error(CANARY); } }]) {
     const { provider, controller } = fixture();
     provider.overrideNextRead(response);

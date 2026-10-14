@@ -47,15 +47,56 @@ an ambiguous write response. Controller statuses expose fixed outcomes,
 revision/phase and `liveAuthority: false`; they do not expose target labels,
 checkpoints, transport responses or exception text.
 
+## Provider-facing size and predicate budgets
+
+The adapter and provider fixture accept at most 10,000 UTF-16 code units in a
+serialized checkpoint, matching a conservative interpretation of Catalyst's
+documented [10,000-character TEXT limit](https://docs.catalyst.zoho.com/en/cloud-scale/help/data-store/columns/).
+The adapter checks primitive string type, size and revision **before write
+dispatch**. It never truncates, normalizes or coerces a checkpoint. Seed and audit
+response validation use the same limit. The generic journal's 32,768-code-unit
+limit remains unchanged. An adapter rejection can still cause the controller's
+existing independent readback, but cannot increment the fixture's write counter.
+
+Each write derives five closed logical equality conditions: the four fixed
+target fields plus the expected shared revision. Additional target fields are
+rejected; a caller cannot provide queries, predicate counts or substitute a
+condition for the revision fence. The derived write request enforces Catalyst's
+documented [five-condition budget](https://docs.catalyst.zoho.com/en/cloud-scale/help/zcql/where/).
+This is a synthetic budget, not a Catalyst query implementation: a future adapter
+must distinguish authenticated routing from stored predicates and count any
+physical `ROWID` condition too. Neither budget proves query-byte limits, provider
+Unicode handling, conditional-write atomicity or durability. Sources reviewed
+2026-10-14; no provider access or schema change was performed.
+
 ## Verification and remaining provider proof
 
+The SDK regression requires the gateway's existing locked dependencies. CI
+installs them before migration tests; the canonical offline Quick verifier uses
+the existing installation. For a standalone run, install them first:
+
 ```powershell
-node --test src/zoho-catalyst/revenue-desk-call-runtime/migration/test/rotation-provider.test.js
+npm ci --ignore-scripts --no-audit --no-fund --prefix src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway
+```
+
+```powershell
+node --test src/zoho-catalyst/revenue-desk-call-runtime/migration/test/rotation-provider.test.js src/zoho-catalyst/revenue-desk-call-runtime/migration/test/rotation-sdk-transport.test.js
 npm.cmd run ci --prefix src/zoho-catalyst/revenue-desk-call-runtime/migration
 ```
 
-These tests establish behavior only for synchronous synthetic adapters. They do
-not establish network timeout/cancellation semantics, parallel process safety,
+`rotation-sdk-transport.test.js` evaluates the installed, pinned
+`zcatalyst-sdk-node@3.4.0` source and existing gateway timeout wrapper with inert
+HTTP transports, synthetic environment values and a manually fired deadline.
+Unknown imports fail closed; there are no sockets, provider calls or credential
+acquisition. It demonstrates three default JSON insert attempts, an SDK retry
+and late completion after the outer caller has timed out, and a string `"0"`
+retry override exceeding the default attempt limit. It characterizes an existing
+hazard, not a fix or proof of a provider commit. Dependency upgrades must revisit
+these assertions. A future adapter must control dispatch/retry behavior and
+reconcile late outcomes; a caller timeout cannot prove cancellation.
+
+The journal tests establish behavior only for synchronous synthetic adapters.
+Neither suite establishes real network cancellation semantics, parallel process safety,
 host-loss durability, authenticated identity/readback, actual conditional-write
 capability, non-exportable custody, grant separation or operational rotation.
 WeakMap branding proves fixture provenance within this process, not provider

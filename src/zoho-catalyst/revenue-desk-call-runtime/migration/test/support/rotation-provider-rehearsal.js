@@ -6,7 +6,11 @@ const { types: { isProxy }, isDeepStrictEqual } = require('node:util');
 const audits = new WeakMap();
 const changes = new WeakMap();
 const journals = new WeakMap();
-const MAX_CHECKPOINT = 32768;
+// Provider-facing limits only; the generic journal retains its larger budget.
+// String.length counts UTF-16 code units, conservatively bounding characters.
+const MAX_CHECKPOINT = 10000;
+const MAX_PREDICATES = 5;
+const TARGET_FIELDS = Object.freeze(['organizationId', 'projectId', 'environment', 'journalId']);
 const fail = () => { throw new Error('Invalid synthetic provider contract.'); };
 
 // Copy only own data fields; a hostile response cannot execute getters, proxy
@@ -21,7 +25,7 @@ function record(value, keys) {
 }
 
 function target(value) {
-  const result = record(value, ['organizationId', 'projectId', 'environment', 'journalId']);
+  const result = record(value, TARGET_FIELDS);
   if (result.environment !== 'synthetic' || !['organizationId', 'projectId', 'journalId'].every((key) =>
     typeof result[key] === 'string' && /^synthetic-[a-z0-9-]{1,80}$/.test(result[key]))) return fail();
   return Object.freeze(result);
@@ -60,21 +64,30 @@ function read(cell) {
   });
 }
 
-function compareAndSwap(cell, expectedTarget, expectedRevision, checkpoint) {
+function writeRequest(expectedTarget, expectedRevision, checkpoint) {
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 ||
+      expectedRevision === Number.MAX_SAFE_INTEGER) return fail();
+  // Derive the complete closed predicate set, never trust a caller's count or
+  // omit a fence to fit. This models logical conditions, not a SQL mapping.
+  const predicates = Object.freeze({ ...expectedTarget, revision: expectedRevision });
+  if (Object.keys(predicates).length > MAX_PREDICATES) return fail();
+  const candidate = snapshot({ revision: expectedRevision + 1, checkpoint });
+  return Object.freeze({ predicates, candidate });
+}
+
+function compareAndSwap(cell, request) {
   cell.counts.writes += 1;
   // Identity and revision are checked in the same indivisible synthetic write.
   // A separate preflight identity read would leave a retargeting race here.
+  const { revision: expectedRevision, ...expectedTarget } = request.predicates;
   assertTarget(expectedTarget, cell.target);
-  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 ||
-      expectedRevision === Number.MAX_SAFE_INTEGER) return fail();
-  const candidate = snapshot({ revision: expectedRevision + 1, checkpoint });
   if (cell.current.revision !== expectedRevision) return false;
   const fault = cell.writeFault;
   cell.writeFault = null;
   if (fault === 'before_write') return fail();
   if (fault === 'drop_write') return true;
   cell.previous = cell.current;
-  cell.current = candidate;
+  cell.current = request.candidate;
   cell.counts.commits += 1;
   const afterCommit = cell.afterCommit;
   cell.afterCommit = null;
@@ -134,7 +147,10 @@ function createFixedTargetRotationJournal(inputTarget, transport) {
       return snapshot({ revision: response.revision, checkpoint: response.checkpoint });
     },
     compareAndSwap(expectedRevision, checkpoint) {
-      const response = compareAndSwap(change, expectedTarget, expectedRevision, checkpoint);
+      // Reject incompatible requests before the synthetic dispatch counter or
+      // provider state can change. The controller may still independently read.
+      const request = writeRequest(expectedTarget, expectedRevision, checkpoint);
+      const response = compareAndSwap(change, request);
       if (typeof response !== 'boolean') return fail();
       return response;
     },
