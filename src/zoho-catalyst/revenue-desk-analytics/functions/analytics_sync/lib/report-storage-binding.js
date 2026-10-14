@@ -37,7 +37,7 @@ function fromTuple(values,fail=held){
    if(typeof actual==='number'&&(!Number.isSafeInteger(actual)||actual<0)
     ||typeof actual==='string'&&Buffer.byteLength(actual)>TOTAL_LIMIT)fail('tuple_scalar_bounds');result[key]=actual;}
  }return result;}
- const result=object(SHAPE);if(index!==TUPLE_COUNT||![3,4,5,6].includes(result.schemaVersion))fail('tuple_schema');return result;
+ const result=object(SHAPE);if(index!==TUPLE_COUNT||![3,4,5,6,7].includes(result.schemaVersion))fail('tuple_schema');return result;
 }
 function rawBound(raw,fail=held){if(typeof raw!=='string'||!raw.length||raw.length>TOTAL_LIMIT||!/^[\x20-\x7e]+$/.test(raw))fail('raw_bounds');}
 function encodeStorageBinding(raw,{partSize=200,format='json'}={}){
@@ -45,7 +45,7 @@ function encodeStorageBinding(raw,{partSize=200,format='json'}={}){
  let wire=raw,tupleLength;
  if(format==='tuple-v1'){
   let value;try{value=JSON.parse(raw);}catch{held();}
-  const values=shapeValues(value);if(values.length!==TUPLE_COUNT||![3,4,5,6].includes(value.schemaVersion)||JSON.stringify(value)!==raw)held();
+  const values=shapeValues(value);if(values.length!==TUPLE_COUNT||![3,4,5,6,7].includes(value.schemaVersion)||JSON.stringify(value)!==raw)held();
   const reconstructed=JSON.stringify(fromTuple(values));if(reconstructed!==raw)held();
   const tuple=JSON.stringify(values);tupleLength=Buffer.byteLength(tuple);if(tupleLength>TOTAL_LIMIT)held();
   wire=zlib.deflateRawSync(Buffer.from(tuple),{level:9}).toString('base64');if(wire.length>TOTAL_LIMIT)held();

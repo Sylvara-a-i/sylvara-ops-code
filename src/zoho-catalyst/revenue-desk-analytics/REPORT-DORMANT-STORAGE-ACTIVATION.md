@@ -1,4 +1,78 @@
-# Dormant Development storage staging and fresh activation
+# Development storage staging and activation
+
+## Untimed qualification protocol (schema 7)
+
+For the storage testing workflow, use binding schema 7 and activation schema 2.
+There is **no pre-execution activation window, evidence-age cutoff, setup
+deadline or minimum dispatch headroom**. Review, configuration, caller
+publication, readback and editor preparation may take arbitrarily long without
+changing the exact activation or creating another attempt. Do not substitute a
+longer expiry, an infinite numeric deadline or a fresh timestamp on an old read.
+
+[`tools/storage-untimed-activation.js`](tools/storage-untimed-activation.js)
+provides three pure operations:
+
+- `stageUntimed({binding})`: require a Development-only schema-7 descriptor with
+  disabled state, zero binding/evidence time sentinels, fixed scope hashes, a
+  separately allocated nonce and the fixed 25-second operation timeout. The
+  existing tuple codec preserves the complete descriptor.
+- `prepareUntimedActivation({binding,bindingSha256,receipts,readiness})`: retain
+  the existing exact receipt and readiness shapes described below, but accept no
+  `now`, `verifiedAt` or `expiresAt` input. Receipt `observedAt` values remain
+  audit metadata and are hashed unchanged; their age is not authority. The
+  command's activation is exactly `{schemaVersion:2,bindingSha256,
+  operationDigest,evidence}`, with each role exactly
+  `{stateSha256,digest,observedAt}`. It has no expiry or guard times.
+- `renderUntimedActivationCaller(...)`: use an issued untimed preparation and
+  the pinned private template to generate a constant, zero-argument caller.
+  Remove the absolute activation/expiry predicates from dispatch and acceptance.
+  Keep the same route, Connection, one request, response projection, actual
+  request elapsed-time bound and conservative response-observation check. The
+  rejection diagnostic uses schema 2 and 28 acceptance clauses. Legacy
+  diagnostic schema 1 retains its original 32 clauses and byte behavior.
+
+Publish and read back the exact caller, prepare the editor, and reconcile target,
+scope, source, actual aggregate spending and the original unconsumed ledger
+before irreversible consumption. Then consume that exact operation and activation
+once and Execute once. Publication does not consume a runtime budget. Elapsed
+setup time alone never requires replacement settings, renewed approval or a new
+attempt. Changed facts, revoked access, mismatched source, exhausted cost capacity
+or consumed identity still block execution. Never manufacture a read to make a
+timestamp look current. This helper verifies consistency, not provider provenance,
+authorization or durable consumption.
+
+The controller validates schema 7 only with activation 2. It retains exact
+Development/source/project/controller/deployment/table/authentication checks and
+the stable operation digest bound to the complete descriptor. Both warm-instance
+and durable cross-instance replay refusal remain. Altering receipt metadata does
+not change the replay identity. A schema-6 consumed attempt cannot be converted,
+reset, rearmed or replayed; a later schema-7 operation needs its own admitted
+identity and must preserve all original ledger history and liabilities.
+
+Runtime timeouts begin when the invocation starts: 25 seconds for the operation,
+three seconds per request/authentication and one second for owned drain. Physical
+limits remain 13 starts, five insert attempts, eight reads, two active requests
+and at most five new synthetic rows. Cancellation and timeout remain inconclusive
+about a late server-side write; they do not authorize retry. The private aggregate
+spending cap and all prior liabilities remain unchanged. A provider may reject
+an expired authentication credential at execution; no provider expiry is being
+claimed or replaced with a local staging deadline here.
+
+Before live adoption, the private assembly, consumption, source manifest and
+native formatter/readback contracts must select this version consistently. They
+must not call the old deadline validator, expect `guardTimes`, or retain the
+schema-1 clause/frame witness. Existing publication arguments can remain unchanged
+because the new caller still has zero arguments. Native Deluge import and exact
+formatted readback remain unverified by offline tests. This source change does
+not deploy, allocate, write a ledger or invoke a provider.
+
+Tests exercise unchanged commands and generated caller execution after delays
+up to a century, malformed/cross-version inputs, single-use refusal, exact
+physical bounds and runtime cancellation. Legacy schema behavior remains covered.
+Rollback uses the original code/configuration cleanup; reverting source does not
+undo a consumed ledger entry or authorize the old timed workflow for a new test.
+
+## Legacy schema 6 (historical compatibility only)
 
 Schema 6 separates an untimed, non-executable staging descriptor from a fresh
 activation sent with the existing authenticated `qualify_storage` command. It

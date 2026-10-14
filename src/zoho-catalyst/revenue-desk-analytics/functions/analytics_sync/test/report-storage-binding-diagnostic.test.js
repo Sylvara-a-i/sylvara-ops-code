@@ -297,7 +297,7 @@ const transportCases = [
   ['tuple_shape', () => frame(Buffer.from('[]'))],
   ['tuple_scalar_type', () => tupleFrame(values => { values[1] = null; })],
   ['tuple_scalar_bounds', () => tupleFrame(values => { values[37] = -1; })],
-  ['tuple_schema', () => tupleFrame(values => { values[0] = 7; })],
+  ['tuple_schema', () => tupleFrame(values => { values[0] = 8; })],
   ['raw_bounds', () => tupleFrame(values => { values[5] = 'café.invalid'; })],
   ['raw_length', () => tupleFrame(() => {}, { rawLength: JSON.stringify(binding()).length + 1 })],
 ];
@@ -315,8 +315,8 @@ test('marker bounds remain before part count and part validation remains in orig
     'part_length', { partIndex: 0, expectedCodeUnits: 4, observedCodeUnits: 1 });
 });
 test('inline, multipart and tuple bytes remain unchanged for all supported schemas', () => {
-  for (const schemaVersion of [3, 4, 5, 6]) {
-    const b = binding(); b.schemaVersion = schemaVersion; b.enabled = schemaVersion !== 6;
+  for (const schemaVersion of [3, 4, 5, 6, 7]) {
+    const b = binding(); b.schemaVersion = schemaVersion; b.enabled = ![6, 7].includes(schemaVersion);
     const raw = JSON.stringify(b);
     assert.equal(decode({ [JSON_KEY]: raw }), raw);
     for (const format of ['json', 'tuple-v1']) for (const partSize of [100, 200, 400]) {
@@ -368,7 +368,7 @@ const constructorCases = [
   ['pin_mismatch', f => { f.environment[HASH_KEY] = 'f'.repeat(64); }],
   ['binding_json', f => { f.raw = '{'; }],
   ['binding_fields', f => { f.b.extra = true; }],
-  ['binding_schema', f => { f.b.schemaVersion = 7; }],
+  ['binding_schema', f => { f.b.schemaVersion = 8; }],
   ['binding_enabled', f => { f.b.enabled = true; }],
   ['binding_environment', f => { f.b.environment = 'production'; }],
   ['single_admission_flag', f => { f.b.singleAdmittedInvocation = false; }],

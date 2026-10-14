@@ -2,7 +2,7 @@
 const crypto=require('node:crypto');
 const {canonicalJson}=require('./facts');
 const {reportRunProjection}=require('./report-run-store');
-const {LEGACY_WINDOW_MS,diagnosticWindowMs}=require('./report-storage-window');
+const {LEGACY_WINDOW_MS,diagnosticWindowMs,isUntimedDiagnostic}=require('./report-storage-window');
 const {recordStorageValidationFailure}=require('./report-storage-diagnostic');
 const issued=new WeakSet(),issuedScopes=new WeakMap();
 const HASH=/^[a-f0-9]{64}$/,ID=/^[1-9][0-9]{2,29}$/;
@@ -24,11 +24,13 @@ function held(){throw Object.assign(new Error('REPORT_STORAGE_QUALIFICATION_HELD
  * Evidence hashes refer to independently retained metadata, not self-proving provider permission.
  */
 function validateStorageCapability(c,{app,config,environment,now,verifiedAt,expiresAt,diagnosticContract}={}){
+ const untimed=isUntimedDiagnostic(diagnosticContract);
  let windowMs=LEGACY_WINDOW_MS;
  if(diagnosticContract!==undefined){
   if(config?.environment!=='development'||environment?.DEPLOYMENT_ENVIRONMENT!=='development'||String(app?.config?.environment).toLowerCase()!=='development')held();
-  windowMs=diagnosticWindowMs(diagnosticContract);
+  if(!untimed)windowMs=diagnosticWindowMs(diagnosticContract);
  }
+ if(untimed&&(verifiedAt!==0||expiresAt!==0||!Number.isSafeInteger(now)||now<0))held();
  if(!exact(c,['region','origin','controllerFunctionId','deploymentId','sdkVersion','authMode','authType','creatorPolicy','tables','evidence'])
   ||c.region!=='US'||c.origin!=='https://api.catalyst.zoho.com'||c.sdkVersion!=='3.4.0'
   ||c.creatorPolicy!=='observed_consistent_v1'||c.authMode!=='user'||c.authType!=='admin'||!ID.test(c.controllerFunctionId||'')
@@ -45,6 +47,11 @@ function validateStorageCapability(c,{app,config,environment,now,verifiedAt,expi
  }
  if(c.tables.reportRuns.id===c.tables.eventReceipts.id)held();
  for(const e of Object.values(c.evidence)){
+  if(untimed){
+   if(!exact(e,['digest','verifiedAt','expiresAt'])||!HASH.test(e.digest||'')
+    ||e.verifiedAt!==0||e.expiresAt!==0)held();
+   continue;
+  }
   if(!exact(e,['digest','verifiedAt','expiresAt'])
    ||!HASH.test(e.digest||'')||!Number.isSafeInteger(e.verifiedAt)||e.verifiedAt<0
    ||!Number.isSafeInteger(e.expiresAt)||e.verifiedAt>verifiedAt||verifiedAt-e.verifiedAt>windowMs
