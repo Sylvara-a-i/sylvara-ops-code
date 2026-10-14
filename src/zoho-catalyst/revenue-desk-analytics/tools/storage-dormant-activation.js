@@ -145,4 +145,10 @@ function renderActivationCaller(input) {
     templateSha256, operationDigest: prepared.operationDigest, activationDigest: prepared.activationDigest,
     grantsExecutionAuthority: false, providerActions: 0 });
 }
-module.exports = { LIMITS, evidenceDigest, stageDormant, prepareActivation, renderActivationCaller };
+function renderDiagnosticActivationCaller(input) {
+  const base = renderActivationCaller(input);
+  const { instrumentStorageCaller } = require('./storage-caller-diagnostics');
+  const diagnostic = instrumentStorageCaller({ callerText: base.text, callerSha256: base.sha256 });
+  return freeze({ ...base, ...diagnostic });
+}
+module.exports = { LIMITS, evidenceDigest, stageDormant, prepareActivation, renderActivationCaller, renderDiagnosticActivationCaller };
