@@ -5,6 +5,7 @@ const crypto = require("node:crypto");
 const test = require("node:test");
 const { loadConfig } = require("../lib/config");
 const { handleBillingWebhook } = require("../lib/handler");
+const { createCatalystIdempotencyStore } = require("../lib/idempotency");
 const {
   CREATOR_DESTINATION_SHA256,
   TEST_EVENT_TIME,
@@ -200,4 +201,63 @@ test("a completion readback failure is never acknowledged", async () => {
   );
   assert.equal(result.status, 503);
   assert.equal(result.body.code, "reconciliation_required");
+});
+
+test("signed conflicting replays cannot redeliver changed plan/status or rewrite completed evidence", async () => {
+  const config = loadCreatorConfig();
+  // Model only the unique event-key and exact row-readback protocol. This is
+  // not evidence of provider atomicity or distinct-event ordering semantics.
+  let row = null;
+  const updates = [];
+  const table = {
+    async insertRow(input) {
+      if (row) {
+        assert.equal(input.EVENT_KEY, row.EVENT_KEY);
+        throw Object.assign(new Error("synthetic duplicate"), { code: "DUPLICATE_SAMPLE" });
+      }
+      row = { ...input, ROWID: "1000000000001" };
+      return { ROWID: row.ROWID };
+    },
+    async updateRow(input) {
+      assert.equal(input.ROWID, row.ROWID);
+      updates.push({ ...input });
+      row = { ...row, ...input };
+      return { ...row };
+    },
+  };
+  const app = {
+    datastore: () => ({ table: () => table }),
+    zcql: () => ({ async executeZCQLQuery(statement) {
+      assert.ok(statement.includes(`WHERE EVENT_KEY = '${row.EVENT_KEY}'`) ||
+        statement.endsWith(`WHERE ROWID = ${row.ROWID}`));
+      return [{ [config.eventInboxTable]: { ...row } }];
+    } }),
+  };
+  const store = createCatalystIdempotencyStore(app, config);
+  const delivered = [];
+  const creator = { async deliver(envelope) { delivered.push(envelope); } };
+  const original = payload();
+  const handle = (event) => handleBillingWebhook(
+    signedRequest(config, event), dependencies(config, store, creator),
+  );
+  assert.equal((await handle(original)).body.duplicate, false);
+  const completed = { ...row };
+  assert.equal(completed.STATUS, "completed");
+  assert.equal((await handle(structuredClone(original))).body.duplicate, true);
+  for (const changed of [
+    { ...original, data: { ...original.data, plan_code: "synthetic-other-plan" } },
+    { ...original, data: { ...original.data, status: "cancelled" } },
+    { ...original, event_type: "payment_declined" },
+    { ...original, event_time: "2026-08-04T11:58:00Z" },
+  ]) {
+    const result = await handle(changed);
+    assert.equal(result.status, 503);
+    assert.equal(result.body.code, "reconciliation_required");
+    assert.deepEqual(row, completed);
+  }
+  assert.equal(delivered.length, 1);
+  assert.equal(updates.length, 1);
+  assert.deepEqual({ ...delivered[0].fields }, {
+    "data.plan_code": original.data.plan_code, "data.status": original.data.status,
+  });
 });
