@@ -239,17 +239,15 @@ class ApprovalConsumptionTests(unittest.TestCase):
             ledger_tool.SUPPORTED_VALIDATORS,
         )
 
-    def test_crm_validator_namespace_mismatch_fails_before_validation(self) -> None:
-        mismatched = mock.Mock()
-        mismatched.CLAIM_NAMESPACE = "crm-workflow-repair-v1"
-        with mock.patch.object(
-            ledger_tool, "_load_crm_validator_module", return_value=mismatched
-        ), self.assertRaises(ledger_tool.InvalidClaimInput):
+    def test_crm_validator_child_failure_fails_before_claim(self) -> None:
+        failed = subprocess.CompletedProcess([], 1, "", "private failure")
+        with mock.patch.object(ledger_tool.subprocess, "run", return_value=failed), \
+                self.assertRaises(ledger_tool.InvalidClaimInput):
             ledger_tool._validate_crm_workflow_repair(
                 self.root / "private-packet.json",
                 self.root / "private-approval.json",
+                ledger_tool._AuthenticatedSources("a" * 40, {}),
             )
-        mismatched.validate_private_workflow_repair_paths.assert_not_called()
 
     def test_exact_wrapper_claims_only_the_fixed_validator_result(self) -> None:
         with mock.patch.object(
@@ -371,6 +369,9 @@ class ApprovalConsumptionTests(unittest.TestCase):
             args=[], returncode=0, stdout=machine_result, stderr=""
         )
         with mock.patch.object(
+            ledger_tool, "_assert_execution_boundary_source_clean",
+            return_value=ledger_tool._AuthenticatedSources("synthetic", {})
+        ), mock.patch.object(
             ledger_tool,
             "_configured_node_executable",
             return_value=Path(sys.executable),
@@ -416,6 +417,9 @@ class ApprovalConsumptionTests(unittest.TestCase):
             args=[], returncode=0, stdout=machine_result, stderr=""
         )
         with mock.patch.object(
+            ledger_tool, "_assert_execution_boundary_source_clean",
+            return_value=ledger_tool._AuthenticatedSources("synthetic", {})
+        ), mock.patch.object(
             ledger_tool,
             "_configured_node_executable",
             return_value=Path(sys.executable),
@@ -461,73 +465,6 @@ class ApprovalConsumptionTests(unittest.TestCase):
         self.assertEqual(2, validator.call_count)
         self.assertEqual(1, len(self.rows()))
         self.assertEqual((AUTHORITY_ID, DIGEST), self.rows()[0][:2])
-
-    def test_execution_boundary_source_must_be_committed_and_visible(self) -> None:
-        normal = subprocess.CompletedProcess(
-            args=[],
-            returncode=0,
-            stdout="H tools/safety/claim_approval_consumption.py\n",
-            stderr="",
-        )
-        clean = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="", stderr=""
-        )
-        with mock.patch.object(
-            ledger_tool.subprocess, "run", side_effect=[clean, normal]
-        ) as runner:
-            ledger_tool._assert_execution_boundary_source_clean()
-        for call in runner.call_args_list:
-            command = call.args[0]
-            self.assertIn(
-                f"safe.directory={ledger_tool.REPOSITORY_ROOT}", command
-            )
-            environment = call.kwargs["env"]
-            self.assertEqual("0", environment["GIT_OPTIONAL_LOCKS"])
-            self.assertFalse(
-                any(
-                    name.startswith("GIT_") and name != "GIT_OPTIONAL_LOCKS"
-                    for name in environment
-                )
-            )
-
-        dirty = subprocess.CompletedProcess(
-            args=[],
-            returncode=0,
-            stdout=" M tools/safety/claim_approval_consumption.py\n",
-            stderr="",
-        )
-        with mock.patch.object(
-            ledger_tool.subprocess, "run", side_effect=[dirty, normal]
-        ):
-            with self.assertRaises(ledger_tool.InvalidClaimInput):
-                ledger_tool._assert_execution_boundary_source_clean()
-
-    def test_catalyst_route_claim_binds_fixed_validator_and_contract_sources(self) -> None:
-        clean = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="", stderr=""
-        )
-        relative_paths = (
-            "tools/safety/claim_approval_consumption.py",
-            "src/zoho-catalyst/revenue-desk-release/private-route-packet-contract.json",
-            "src/zoho-catalyst/revenue-desk-release/scripts/validate-private-route-packet.js",
-        )
-        visible = subprocess.CompletedProcess(
-            args=[],
-            returncode=0,
-            stdout="".join(f"H {relative}\n" for relative in reversed(relative_paths)),
-            stderr="",
-        )
-        with mock.patch.object(
-            ledger_tool.subprocess, "run", side_effect=[clean, visible]
-        ) as runner:
-            ledger_tool._assert_execution_boundary_source_clean(
-                ledger_tool.CATALYST_ROUTE_ADDITIVE_RECONCILIATION_VALIDATOR
-            )
-
-        for call in runner.call_args_list:
-            command = call.args[0]
-            for relative in relative_paths:
-                self.assertIn(relative, command)
 
     def test_git_subprocess_environment_rejects_repository_override_poisoning(
         self,

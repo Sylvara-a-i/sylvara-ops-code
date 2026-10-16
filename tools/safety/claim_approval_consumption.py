@@ -10,7 +10,6 @@ from __future__ import annotations
 import ctypes
 import datetime as dt
 import hashlib
-import importlib.util
 import json
 import os
 import re
@@ -73,10 +72,127 @@ _CATALYST_ROUTE_VALIDATOR_CLI = (
     / "scripts"
     / "validate-private-route-packet.js"
 )
+# This reviewed closure is intentionally explicit. A new local import or contract
+# must be added here before it can execute inside the approval boundary.
+_VALIDATOR_SOURCES = {
+    CRM_WORKFLOW_TRIGGER_REPAIR_VALIDATOR: (
+        "src/zoho-crm/free-revenue-leak-test/tools/validate_private_workflow_repair_packet.py",
+        "src/zoho-crm/free-revenue-leak-test/validators/workflow_repair_packet.py",
+    ),
+    ANALYTICS_MUTATION_VALIDATOR: (
+        "src/zoho-catalyst/revenue-desk-analytics/tools/validate-private-analytics-mutation-packet.js",
+        "src/zoho-catalyst/revenue-desk-analytics/tools/render-analytics-model-contract.js",
+        "src/zoho-catalyst/revenue-desk-analytics/config/analytics-model-contract.json",
+        "src/zoho-catalyst/revenue-desk-analytics/config/dashboard-contract.json",
+    ),
+    CATALYST_ROUTE_ADDITIVE_RECONCILIATION_VALIDATOR: (
+        "src/zoho-catalyst/revenue-desk-release/private-route-packet-contract.json",
+        "src/zoho-catalyst/revenue-desk-release/scripts/validate-private-route-packet.js",
+    ),
+}
 _VALIDATOR_RESULT_SCHEMA = "sylvara.bound-validator-result.v1"
+_PYTHON_BRIDGE = r"""
+import importlib.machinery
+import importlib.util
+import io
+import json
+import sys
+
+authenticated = json.load(sys.stdin)
+sources = authenticated["files"]
+original_spec = importlib.util.spec_from_file_location
+
+class VerifiedLoader(importlib.machinery.SourceFileLoader):
+    def get_code(self, fullname):
+        if self.path not in sources or not self.path.endswith(".py"):
+            raise ValueError("unverified validator dependency")
+        return compile(sources[self.path], self.path, "exec", dont_inherit=True)
+
+def verified_spec(name, location):
+    selected = str(location)
+    if selected not in sources:
+        raise ValueError("unverified validator dependency")
+    return original_spec(name, selected, loader=VerifiedLoader(name, selected))
+
+# This child has -I -S: neither Python path overrides, checkout shadows nor site
+# hooks participate in direct, transitive or lazy standard-library imports.
+importlib.util.spec_from_file_location = verified_spec
+output = sys.stdout
+sys.stdout = io.StringIO()
+try:
+    spec = verified_spec("_sylvara_crm_workflow_repair_cli", sys.argv[1])
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if module.CLAIM_NAMESPACE != sys.argv[4]:
+        raise ValueError("validator namespace mismatch")
+    validate = module.validate_workflow_repair_packet
+    module.validate_workflow_repair_packet = lambda packet, approval: validate(
+        packet, approval, current_source_revision=authenticated["revision"]
+    )
+    result = module.validate_private_workflow_repair_paths(sys.argv[2], sys.argv[3])
+finally:
+    sys.stdout = output
+output.write(json.dumps({
+    "schema": "sylvara.bound-validator-result.v1",
+    "validator": sys.argv[4],
+    "authorityId": result.authority_id,
+    "consumptionDigest": result.consumption_digest,
+}))
+"""
 _NODE_BRIDGE = r"""
 "use strict";
-const validator = require(process.argv[1]);
+const fs = require("node:fs");
+const path = require("node:path");
+const Module = require("node:module");
+const authenticated = JSON.parse(fs.readFileSync(0, "utf8"));
+const sources = authenticated.files;
+const cache = new Map();
+const privatePathKey = (value) => {
+  const resolved = path.resolve(value);
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+};
+const privatePaths = new Set([privatePathKey(process.argv[2]), privatePathKey(process.argv[3])]);
+// Never resolve checkout modules, package.json, extensionless shadows or cached
+// code. Both executable helpers and contract reads use the authenticated bytes.
+const verifiedFs = Object.create(fs);
+verifiedFs.readFileSync = (file, options) => {
+  const filename = typeof file === "string" ? path.resolve(file) : null;
+  if (filename && Object.hasOwn(sources, filename)) {
+    const content = Buffer.from(sources[filename], "utf8");
+    const encoding = typeof options === "string" ? options : options?.encoding;
+    return encoding ? content.toString(encoding) : content;
+  }
+  const content = fs.readFileSync(file, options);
+  if (filename && privatePaths.has(privatePathKey(filename))) {
+    if (JSON.parse(content.toString()).approvedSourceRevision !== authenticated.revision) {
+      throw new Error("private approval source revision mismatch");
+    }
+  }
+  return content;
+};
+function load(filename) {
+  filename = path.resolve(filename);
+  if (!Object.hasOwn(sources, filename) || !filename.endsWith(".js")) {
+    throw new Error("unverified validator dependency");
+  }
+  if (cache.has(filename)) return cache.get(filename).exports;
+  const selected = new Module(filename);
+  selected.filename = filename;
+  selected.paths = [];
+  selected.require = (name) => {
+    if (name === "node:fs") return verifiedFs;
+    if (name.startsWith("node:")) return require(name);
+    if (!name.startsWith("./") && !name.startsWith("../")) {
+      throw new Error("unverified validator dependency");
+    }
+    const target = path.resolve(path.dirname(filename), name);
+    return load(target.endsWith(".js") ? target : `${target}.js`);
+  };
+  cache.set(filename, selected);
+  selected._compile(sources[filename], filename);
+  return selected.exports;
+}
+const validator = load(process.argv[1]);
 const validatorName = process.argv[4];
 if (
   validatorName === "catalyst-route-additive-reconciliation-v3" &&
@@ -718,17 +834,22 @@ def _configured_node_executable() -> Path:
     return resolved
 
 
-def _assert_execution_boundary_source_clean(validator: str | None = None) -> None:
-    """Bind the wrapper itself to the same committed HEAD as the validators."""
+@dataclass(frozen=True)
+class _AuthenticatedSources:
+    revision: str
+    files: Mapping[str, str]
+
+
+def _assert_execution_boundary_source_clean(
+    validator: str | None = None,
+) -> _AuthenticatedSources:
+    """Authenticate the complete closure and retain its exact committed bytes."""
 
     relatives = ["tools/safety/claim_approval_consumption.py"]
-    if validator == CATALYST_ROUTE_ADDITIVE_RECONCILIATION_VALIDATOR:
-        relatives.extend(
-            [
-                "src/zoho-catalyst/revenue-desk-release/private-route-packet-contract.json",
-                "src/zoho-catalyst/revenue-desk-release/scripts/validate-private-route-packet.js",
-            ]
-        )
+    if validator is not None:
+        if validator not in _VALIDATOR_SOURCES:
+            _fail(InvalidClaimInput)
+        relatives.extend(_VALIDATOR_SOURCES[validator])
     environment = _git_subprocess_environment()
     common = {
         "cwd": REPOSITORY_ROOT,
@@ -740,48 +861,67 @@ def _assert_execution_boundary_source_clean(validator: str | None = None) -> Non
         "timeout": 15,
         "creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0),
     }
+    command = [
+        "git", "-c", f"safe.directory={REPOSITORY_ROOT}",
+        "-c", "core.fsmonitor=false", "--no-optional-locks", "-C", str(REPOSITORY_ROOT),
+    ]
+
+    def git_bytes(*arguments: str) -> bytes:
+        try:
+            result = subprocess.run(
+                [*command, *arguments], **{**common, "encoding": None}
+            )
+        except (OSError, subprocess.SubprocessError, TypeError, ValueError):
+            _fail(InvalidClaimInput)
+        if result.returncode != 0 or result.stderr:
+            _fail(InvalidClaimInput)
+        return result.stdout
+
     try:
-        status = subprocess.run(
-            [
-                "git",
-                "-c",
-                f"safe.directory={REPOSITORY_ROOT}",
-                "--no-optional-locks",
-                "-C",
-                str(REPOSITORY_ROOT),
-                "status",
-                "--porcelain=v1",
-                "--untracked-files=all",
-                "--",
-                *relatives,
-            ],
-            **common,
-        )
-        index = subprocess.run(
-            [
-                "git",
-                "-c",
-                f"safe.directory={REPOSITORY_ROOT}",
-                "--no-optional-locks",
-                "-C",
-                str(REPOSITORY_ROOT),
-                "ls-files",
-                "-v",
-                "--",
-                *relatives,
-            ],
-            **common,
-        )
-    except (OSError, subprocess.SubprocessError, TypeError, ValueError):
-        _fail(InvalidClaimInput)
-    if (
-        status.returncode != 0
-        or status.stdout.strip()
-        or status.stderr
-        or index.returncode != 0
-        or set(index.stdout.splitlines()) != {f"H {relative}" for relative in relatives}
-        or index.stderr
-    ):
+        revision = git_bytes("rev-parse", "--verify", "HEAD").decode("ascii").strip()
+        if re.fullmatch(r"[0-9a-f]{40,64}", revision) is None:
+            _fail(InvalidClaimInput)
+        tree = git_bytes("ls-tree", "-z", revision, "--", *relatives)
+        entries = {}
+        for record in tree.rstrip(b"\0").split(b"\0"):
+            metadata, name = record.split(b"\t", 1)
+            mode, kind, object_id = metadata.split()
+            if mode not in (b"100644", b"100755") or kind != b"blob":
+                _fail(InvalidClaimInput)
+            entries[name.decode("utf-8")] = (mode, object_id.decode("ascii"))
+        if set(entries) != set(relatives):
+            _fail(InvalidClaimInput)
+        # Plumbing commands inspect index/tree blobs without executing working-
+        # tree filters or fsmonitor hooks before the validator is authenticated.
+        index = git_bytes("ls-files", "--stage", "-v", "-z", "--", *relatives)
+        indexed = {}
+        for record in index.rstrip(b"\0").split(b"\0"):
+            metadata, name = record.split(b"\t", 1)
+            flag, mode, object_id, stage = metadata.split()
+            if flag != b"H" or stage != b"0":
+                _fail(InvalidClaimInput)
+            relative = name.decode("utf-8")
+            if relative in indexed:
+                _fail(InvalidClaimInput)
+            indexed[relative] = (mode, object_id.decode("ascii"))
+        if indexed != entries:
+            _fail(InvalidClaimInput)
+        sources = {}
+        for relative in relatives:
+            source_path = REPOSITORY_ROOT / relative
+            _reject_linked_components(source_path)
+            content = git_bytes("cat-file", "blob", entries[relative][1])
+            # Compare bytes directly: Git's stat cache, filters and ignored
+            # bytecode are not authentication for code about to be executed.
+            if _sha256_regular_file(source_path) != hashlib.sha256(content).hexdigest():
+                _fail(InvalidClaimInput)
+            sources[str(source_path)] = content.decode("utf-8", "strict")
+        if git_bytes("rev-parse", "--verify", "HEAD").decode("ascii").strip() != revision:
+            _fail(InvalidClaimInput)
+        return _AuthenticatedSources(revision, sources)
+    except ApprovalConsumptionError:
+        raise
+    except (OSError, UnicodeError, TypeError, ValueError):
         _fail(InvalidClaimInput)
 
 
@@ -1219,41 +1359,30 @@ def _claim_approval_consumption(
         _fail(UnsafeLedger)
 
 
-def _load_crm_validator_module() -> Any:
-    try:
-        spec = importlib.util.spec_from_file_location(
-            "_sylvara_crm_workflow_repair_cli", _CRM_VALIDATOR_CLI
-        )
-        if spec is None or spec.loader is None:
-            _fail(InvalidClaimInput)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-    except ApprovalConsumptionError:
-        raise
-    except (ImportError, OSError, RuntimeError, TypeError, ValueError):
-        _fail(InvalidClaimInput)
-    return module
-
-
 def _validate_crm_workflow_repair(
     packet_path: str | os.PathLike[str],
     approval_path: str | os.PathLike[str],
+    authenticated: _AuthenticatedSources | None = None,
 ) -> tuple[str, str]:
+    selected = authenticated or _assert_execution_boundary_source_clean(
+        CRM_WORKFLOW_TRIGGER_REPAIR_VALIDATOR
+    )
+    environment = _git_subprocess_environment()
+    for name in (LEDGER_DIRECTORY_ENV, NODE_EXECUTABLE_ENV, NODE_EXECUTABLE_SHA256_ENV):
+        environment.pop(name, None)
     try:
-        module = _load_crm_validator_module()
-        if (
-            getattr(module, "CLAIM_NAMESPACE", None)
-            != CRM_WORKFLOW_TRIGGER_REPAIR_VALIDATOR
-        ):
-            _fail(InvalidClaimInput)
-        result = module.validate_private_workflow_repair_paths(
-            packet_path, approval_path
+        process = subprocess.run(
+            [sys.executable, "-I", "-S", "-B", "-c", _PYTHON_BRIDGE,
+             str(_CRM_VALIDATOR_CLI), os.fspath(packet_path), os.fspath(approval_path),
+             CRM_WORKFLOW_TRIGGER_REPAIR_VALIDATOR],
+            input=json.dumps({"revision": selected.revision, "files": selected.files}),
+            cwd=REPOSITORY_ROOT, env=environment, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, check=False, encoding="utf-8", timeout=60,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
-        return result.authority_id, result.consumption_digest
-    except ApprovalConsumptionError:
-        raise
-    except (AttributeError, ImportError, OSError, RuntimeError, TypeError, ValueError):
+    except (OSError, subprocess.SubprocessError, TypeError, ValueError):
         _fail(InvalidClaimInput)
+    return _machine_validator_pair(process, CRM_WORKFLOW_TRIGGER_REPAIR_VALIDATOR)
 
 
 def _strict_json_object(value: str) -> dict[str, Any]:
@@ -1284,7 +1413,9 @@ def _validate_node_mutation(
     validator_name: str,
     packet_path: str | os.PathLike[str],
     approval_path: str | os.PathLike[str],
+    authenticated: _AuthenticatedSources | None = None,
 ) -> tuple[str, str]:
+    sources = authenticated or _assert_execution_boundary_source_clean(validator_name)
     node_path = _configured_node_executable()
     try:
         if not validator_cli.is_file():
@@ -1313,7 +1444,7 @@ def _validate_node_mutation(
             ],
             cwd=REPOSITORY_ROOT,
             env=environment,
-            stdin=subprocess.DEVNULL,
+            input=json.dumps({"revision": sources.revision, "files": sources.files}),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=False,
@@ -1325,9 +1456,15 @@ def _validate_node_mutation(
         raise
     except (OSError, subprocess.SubprocessError, TypeError, ValueError):
         _fail(InvalidClaimInput)
-    if process.returncode != 0 or process.stderr != "":
-        _fail(InvalidClaimInput)
     if not _same_path(node_path, _configured_node_executable()):
+        _fail(InvalidClaimInput)
+    return _machine_validator_pair(process, validator_name)
+
+
+def _machine_validator_pair(
+    process: subprocess.CompletedProcess[str], validator_name: str,
+) -> tuple[str, str]:
+    if process.returncode != 0 or process.stderr != "":
         _fail(InvalidClaimInput)
     result = _strict_json_object(process.stdout)
     if set(result) != {
@@ -1348,24 +1485,28 @@ def _validate_node_mutation(
 def _validate_analytics_mutation(
     packet_path: str | os.PathLike[str],
     approval_path: str | os.PathLike[str],
+    authenticated: _AuthenticatedSources | None = None,
 ) -> tuple[str, str]:
     return _validate_node_mutation(
         _ANALYTICS_VALIDATOR_CLI,
         ANALYTICS_MUTATION_VALIDATOR,
         packet_path,
         approval_path,
+        authenticated,
     )
 
 
 def _validate_catalyst_route_additive_reconciliation(
     packet_path: str | os.PathLike[str],
     approval_path: str | os.PathLike[str],
+    authenticated: _AuthenticatedSources | None = None,
 ) -> tuple[str, str]:
     return _validate_node_mutation(
         _CATALYST_ROUTE_VALIDATOR_CLI,
         CATALYST_ROUTE_ADDITIVE_RECONCILIATION_VALIDATOR,
         packet_path,
         approval_path,
+        authenticated,
     )
 
 
@@ -1373,14 +1514,15 @@ def _validated_pair(
     validator: str,
     packet_path: str | os.PathLike[str],
     approval_path: str | os.PathLike[str],
+    authenticated: _AuthenticatedSources,
 ) -> tuple[str, str]:
     if validator == CRM_WORKFLOW_TRIGGER_REPAIR_VALIDATOR:
-        return _validate_crm_workflow_repair(packet_path, approval_path)
+        return _validate_crm_workflow_repair(packet_path, approval_path, authenticated)
     elif validator == ANALYTICS_MUTATION_VALIDATOR:
-        return _validate_analytics_mutation(packet_path, approval_path)
+        return _validate_analytics_mutation(packet_path, approval_path, authenticated)
     elif validator == CATALYST_ROUTE_ADDITIVE_RECONCILIATION_VALIDATOR:
         return _validate_catalyst_route_additive_reconciliation(
-            packet_path, approval_path
+            packet_path, approval_path, authenticated
         )
     _fail(InvalidClaimInput)
 
@@ -1397,11 +1539,15 @@ def validate_and_claim_approval(
     is accepted as a caller-controlled argument.
     """
 
-    _assert_execution_boundary_source_clean(validator)
+    authenticated = _assert_execution_boundary_source_clean(validator)
     ledger_directory = _configured_ledger_directory()
     authority_id, consumption_digest = _validated_pair(
-        validator, packet_path, approval_path
+        validator, packet_path, approval_path, authenticated
     )
+    # Bind the result to the same revision and closure that preceded dispatch.
+    # A checkout change during validation must never authorize a ledger claim.
+    if _assert_execution_boundary_source_clean(validator) != authenticated:
+        _fail(InvalidClaimInput)
     _claim_approval_consumption(
         ledger_directory, consumption_digest, authority_id
     )
