@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { buildCrmReportSummary } = require('../lib/crm-report-outbox');
 const { queryClientReport } = require('../lib/reporting');
-const { loadDeployment } = require('../lib/runtime-service');
+const { createRuntimeService, loadDeployment } = require('../lib/runtime-service');
+const { CatalystMailAdapter } = require('../lib/catalyst-mail');
 const {
   eventPayload, invoke, payloadInbound, runtimeFixture,
 } = require('./runtime-fixture');
@@ -179,6 +180,202 @@ async function priorTerminalReceipt(outcome, completed, legacyCallback = false) 
   receipt.EVENT_DATA_JSON = JSON.stringify(prior);
   return { fixture, event, receipt };
 }
+
+function makeReceiptDue(fixture, receipt, status) {
+  const dueAt = new Date(fixture.clock.value - 1000).toISOString();
+  Object.assign(receipt, {
+    STATUS: status, RECEIVED_AT: dueAt, PROCESSED_AT: null,
+    LEASE_TOKEN: null,
+    LEASE_EXPIRES_AT: status === 'Processing' ? dueAt : null,
+    NEXT_ATTEMPT_AT: status === 'RetryRequired' ? dueAt : null,
+  });
+  if (status === 'Processing') receipt.LEASE_TOKEN = 'b'.repeat(32);
+}
+
+function eventRetryService(fixture) {
+  const mailAdapter = new CatalystMailAdapter({ app: fixture.app, config: fixture.config });
+  let preparations = 0;
+  const prepare = mailAdapter.prepare.bind(mailAdapter);
+  mailAdapter.prepare = (...args) => { preparations += 1; return prepare(...args); };
+  return {
+    service: createRuntimeService({ store: fixture.store, mailAdapter,
+      config: fixture.config, now: () => fixture.clock.value }),
+    get preparations() { return preparations; },
+  };
+}
+
+async function queuedAnalysisReceipt(data) {
+  const fixture = runtimeFixture();
+  const inbound = await invoke(fixture.listener, { url: '/retell/inbound',
+    payload: payloadInbound('A'), env: fixture.env });
+  const event = eventPayload('call_analyzed', 'retry_analysis_A',
+    inbound.body.call_inbound.metadata, 'A', data);
+  const response = await invoke(fixture.listener, { url: '/retell/events',
+    payload: event, env: fixture.env, processJobs: false });
+  assert.equal(response.status, 200);
+  const receipt = fixture.store.rows.get(fixture.config.tables.EVENT_RECEIPT_TABLE)
+    .find((row) => row.RECEIPT_KIND === 'provider_event');
+  return { fixture, event, receipt };
+}
+
+for (const status of ['Pending', 'Queued', 'RetryRequired', 'Processing']) {
+  for (const outcome of ['configuration_failure', 'unresolved']) {
+    test(`event retry scan holds historical ${outcome} in due ${status} before any mutation`, async () => {
+      const { fixture, receipt } = await priorTerminalReceipt(outcome, false);
+      receipt.SOURCE_REVISION = 'a'.repeat(40);
+      makeReceiptDue(fixture, receipt, status);
+      const deploymentRow = fixture.store.rows.get(fixture.config.tables.DEPLOYMENT_TABLE)[0];
+      const deployment = await loadDeployment(fixture.store, deploymentRow, fixture.config);
+      assert.equal(deployment.deploymentId, 'deployment_A',
+        'current approved ownership must not mask the historical receipt guard');
+      const before = structuredClone(fixture.store.rows);
+      const retry = eventRetryService(fixture);
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const result = await retry.service.retryDueEvents();
+        assert.equal(fixture.store.rows.get(fixture.config.tables.CANONICAL_CALL_TABLE).length, 0);
+        assert.equal(fixture.store.rows.get(fixture.config.tables.NOTIFICATION_TABLE).length, 0);
+        assert.equal(retry.preparations, 0);
+        assert.equal(fixture.mailAccesses, 0);
+        assert.deepEqual(fixture.store.rows, before,
+          'held evidence, counters, leases and outboxes remain byte-for-byte unchanged');
+        assert.deepEqual(result, { examined: 1, results: [
+          { status: 'Failed', errorCode: 'REPORT_RECONCILIATION_REQUIRED' },
+        ] });
+      }
+    });
+  }
+}
+
+for (const bookableOpportunity of [true, false, null]) {
+  test(`event retry scan normalizes missing legacy intent with bookability ${bookableOpportunity}`, async () => {
+    const { fixture, event, receipt } = await queuedAnalysisReceipt({
+      outcome: 'potential_job', bookable_opportunity: bookableOpportunity,
+    });
+    const prior = JSON.parse(receipt.EVENT_DATA_JSON);
+    prior.analysis = require('../lib/analysis').priorRequestIntentAnalysis(event.call);
+    receipt.EVENT_DATA_JSON = JSON.stringify(prior);
+    receipt.SOURCE_REVISION = 'a'.repeat(40);
+    makeReceiptDue(fixture, receipt, 'RetryRequired');
+    const originalPayload = receipt.EVENT_DATA_JSON;
+    const retry = eventRetryService(fixture);
+    const result = await retry.service.retryDueEvents();
+    assert.equal(result.results[0].status, 'Completed');
+    const canonical = JSON.parse(fixture.store.rows.get(fixture.config.tables.CANONICAL_CALL_TABLE)[0]
+      .CANONICAL_CALL_JSON);
+    assert.equal(canonical.requestKind, 'unknown');
+    assert.equal(canonical.bookableOpportunity, bookableOpportunity === true ? null : bookableOpportunity);
+    assert.equal(receipt.EVENT_DATA_JSON, originalPayload,
+      'normalization must not rewrite durable historical evidence');
+    assert.equal(fixture.mailAccesses, 0);
+  });
+}
+
+for (const recovery of ['retry scan', 'direct processing']) {
+ test(`event ${recovery} contains changed claimed evidence without a stranded processing lease`, async () => {
+  const { fixture, receipt } = await queuedAnalysisReceipt({ outcome: 'configuration_failure' });
+  const changed = JSON.parse(receipt.EVENT_DATA_JSON);
+  changed.analysis.sensitiveDataMinimized = false;
+  changed.analysis.callerName = 'Synthetic historical content';
+  const changedPayload = JSON.stringify(changed);
+  const mutate = fixture.store.mutate.bind(fixture.store);
+  let changedBeforeClaim = false;
+  fixture.store.mutate = async (table, column, key, ...args) => {
+    if (!changedBeforeClaim && table === fixture.config.tables.EVENT_RECEIPT_TABLE
+      && key === receipt.EVENT_KEY) {
+      changedBeforeClaim = true;
+      receipt.EVENT_DATA_JSON = changedPayload;
+      receipt.SOURCE_REVISION = 'a'.repeat(40);
+    }
+    return mutate(table, column, key, ...args);
+  };
+  const retry = eventRetryService(fixture);
+  let result;
+  if (recovery === 'direct processing') {
+    await assert.rejects(retry.service.processEventReceipt(receipt.EVENT_KEY),
+      { code: 'REPORT_RECONCILIATION_REQUIRED' });
+  } else result = await retry.service.retryDueEvents();
+  assert.equal(changedBeforeClaim, true);
+  assert.equal(fixture.store.rows.get(fixture.config.tables.CANONICAL_CALL_TABLE).length, 0);
+  assert.equal(fixture.store.rows.get(fixture.config.tables.NOTIFICATION_TABLE).length, 0);
+  assert.equal(fixture.store.rows.get(fixture.config.tables.DEPLOYMENT_TABLE)[0].HANDLED_COUNT, 0);
+  assert.equal(retry.preparations, 0);
+  assert.equal(fixture.mailAccesses, 0);
+  assert.equal(receipt.EVENT_DATA_JSON, changedPayload);
+  assert.equal(receipt.STATUS, 'TerminalFailure');
+  assert.equal(receipt.LAST_ERROR_CODE, 'REPORT_RECONCILIATION_REQUIRED');
+  assert.equal(receipt.LEASE_TOKEN, null);
+  assert.equal(receipt.LEASE_EXPIRES_AT, null);
+  if (recovery === 'retry scan') assert.deepEqual(result, { examined: 1, results: [
+      { status: 'TerminalFailure', errorCode: 'REPORT_RECONCILIATION_REQUIRED' },
+    ] });
+ });
+}
+
+for (const scenario of [
+  { name: 'current minimized configuration failure', status: 'Pending',
+    data: { outcome: 'configuration_failure' } },
+  { name: 'current minimized sensitive outcome with unknown urgency', status: 'Queued',
+    data: { outcome: 'sensitive_data_ended', urgency: 'unknown' } },
+  { name: 'historical minimized sensitive outcome with explicit danger', status: 'RetryRequired',
+    historical: true, data: { outcome: 'sensitive_data_ended', urgency: 'immediate_danger' } },
+  { name: 'current explicit new-service opportunity', status: 'Processing',
+    data: { outcome: 'potential_job', request_kind: 'new_service_request', bookable_opportunity: true } },
+]) {
+  test(`event retry scan preserves valid ${scenario.name}`, async () => {
+    const { fixture, receipt } = await queuedAnalysisReceipt(scenario.data);
+    if (scenario.historical) receipt.SOURCE_REVISION = 'a'.repeat(40);
+    makeReceiptDue(fixture, receipt, scenario.status);
+    const originalPayload = receipt.EVENT_DATA_JSON;
+    const retry = eventRetryService(fixture);
+    const result = await retry.service.retryDueEvents();
+    assert.equal(result.results[0].status, 'Completed');
+    assert.equal(receipt.STATUS, 'Completed');
+    assert.equal(receipt.EVENT_DATA_JSON, originalPayload);
+    const canonical = JSON.parse(fixture.store.rows.get(fixture.config.tables.CANONICAL_CALL_TABLE)[0]
+      .CANONICAL_CALL_JSON);
+    assert.equal(canonical.outcome, scenario.data.outcome);
+    if (scenario.data.urgency) assert.equal(canonical.urgency, scenario.data.urgency);
+    if (scenario.data.request_kind) {
+      assert.equal(canonical.requestKind, 'new_service_request');
+      assert.equal(canonical.bookableOpportunity, true);
+    } else assert.equal(canonical.sensitiveDataMinimized, true);
+    assert.equal(fixture.store.rows.get(fixture.config.tables.DEPLOYMENT_TABLE)[0].HANDLED_COUNT, 1);
+    assert.equal(fixture.store.rows.get(fixture.config.tables.NOTIFICATION_TABLE).length, 1);
+    assert.ok(retry.preparations > 0);
+    assert.equal(fixture.mailAccesses, 0);
+    const after = structuredClone(fixture.store.rows);
+    assert.deepEqual(await retry.service.retryDueEvents(), { examined: 0, results: [] });
+    assert.deepEqual(fixture.store.rows, after);
+  });
+}
+
+test('admitted retry-scan Job fails closed on held historical evidence and accepts current evidence', async () => {
+  const { createWorkerJobHandler } = require('../lib/job-handler');
+  const { retryJobRequest, retryJobContext } = require('./runtime-fixture');
+  for (const historical of [true, false]) {
+    const { fixture, receipt } = historical
+      ? await priorTerminalReceipt('unresolved', false)
+      : await queuedAnalysisReceipt({ outcome: 'sensitive_data_ended', urgency: 'unknown' });
+    if (historical) receipt.SOURCE_REVISION = 'a'.repeat(40);
+    const before = structuredClone(receipt);
+    const handler = createWorkerJobHandler({ catalystSdk: fixture.catalystSdk,
+      environment: fixture.env, artifactSourceRevision: fixture.env.SOURCE_REVISION,
+      now: () => fixture.clock.value, storeFactory: () => fixture.store });
+    if (historical) {
+      await assert.rejects(handler(retryJobRequest(fixture.env), retryJobContext()),
+        { code: 'WORKER_MODE_FAILED' });
+      assert.deepEqual(receipt, before);
+      assert.equal(fixture.store.rows.get(fixture.config.tables.CANONICAL_CALL_TABLE).length, 0);
+      assert.equal(fixture.store.rows.get(fixture.config.tables.NOTIFICATION_TABLE).length, 0);
+      assert.equal(fixture.store.rows.get(fixture.config.tables.DEPLOYMENT_TABLE)[0].HANDLED_COUNT, 0);
+    } else {
+      const result = await handler(retryJobRequest(fixture.env), retryJobContext());
+      assert.equal(result.events.results[0].status, 'Completed');
+      assert.equal(receipt.STATUS, 'Completed');
+    }
+    assert.equal(fixture.mailAccesses, 0);
+  }
+});
 
 test('exact prior terminal receipt replay preserves completed evidence without replaying effects', async () => {
   for (const outcome of ['configuration_failure', 'unresolved']) {
