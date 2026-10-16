@@ -20,9 +20,9 @@ function approvedEnvelope(contract, privateInput) {
   const sortSnapshots = (entries) => entries.map((entry) => ({
     table: entry.table,
     rowCount: entry.rowCount,
-    rows: [...entry.rows].sort((left, right) => compareText(
-      canonicalStringify(left), canonicalStringify(right),
-    )),
+    rows: entry.rows.map((row) => ({ row, sortKey: canonicalStringify(row) }))
+      .sort((left, right) => compareText(left.sortKey, right.sortKey))
+      .map(({ row }) => row),
   })).sort((left, right) => compareText(left.table, right.table));
   return {
     contract,

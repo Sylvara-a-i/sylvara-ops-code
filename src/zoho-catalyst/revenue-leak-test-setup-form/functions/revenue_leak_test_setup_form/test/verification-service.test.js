@@ -75,13 +75,16 @@ function fixture({
       configurationRevision: config.sourceRevision,
     }, config.workflowKeyMaterial),
     status: "issued",
+    lastOutcome: "issued",
+    attemptCount: 0,
+    maxAttempts: 3,
     issuedAt: "2026-08-14T18:00:00.000Z",
     expiresAt: "2026-08-14T19:00:00.000Z",
   };
   let proof = null;
   const sends = [];
   const proofStore = {
-    async readByProofKey() { return proof ? { ...proof } : null; },
+    async readByProofKey(key) { return proof?.proofKey === key ? { ...proof } : null; },
     async reserve(input) {
       proof = {
         rowId: "7100000000001",
@@ -196,6 +199,12 @@ function fixture({
     },
     proofStore,
     sessionStore: {
+      async exchangeSetupToken(tokenHash, owner) {
+        assert.equal(tokenHash, session.tokenHash);
+        if (session.lastOutcome !== "issued") throw new Error("synthetic exchange conflict");
+        session.lastOutcome = owner;
+        return { ...session };
+      },
       async readByTokenHash() { return { ...session }; },
       async readByRowId(rowId) {
         return String(rowId) === session.rowId ? { ...session } : null;
@@ -205,7 +214,7 @@ function fixture({
     randomInt: () => 12345678,
     randomBytes: () => Buffer.alloc(32, 0x03),
   });
-  return { records, sends, service, session, setupToken, get proof() { return proof; } };
+  return { records, sends, service, session, setupToken, proofStore, get proof() { return proof; } };
 }
 
 async function exchange(selected) {
@@ -256,7 +265,7 @@ test("wrong OTP is counted and the correct OTP creates a durable verified proof"
   const result = await selected.service.verifyEmailOtp(verificationId, "12345678");
   assert.equal(result.verified, true);
   assert.equal(selected.proof.status, "verified");
-  assert.equal((await selected.service.requestEmailOtp(verificationId)).state,
+  assert.equal((await selected.service.requestEmailOtp(verificationId, result.recoveryToken)).state,
     "already_verified");
   assert.equal(selected.sends.length, 1);
   selected.proof.expiresAt = "2026-08-14T18:00:00.000Z";
@@ -264,6 +273,77 @@ test("wrong OTP is counted and the correct OTP creates a durable verified proof"
     selected.service.verifyEmailOtp(verificationId, "12345678"),
     (error) => error.publicCode === "verification_required",
   );
+});
+
+test("copied setup token and pre-OTP ID cannot inherit verified or consumed proof", async () => {
+  for (const consumed of [false, true]) {
+    const selected = fixture();
+    const verificationId = (await exchange(selected)).verificationId;
+    const verified = await selected.service.verifyEmailOtp(verificationId, "12345678");
+    assert.match(verified.recoveryToken, /^[a-f0-9]{64}$/);
+    assert.notEqual(verified.recoveryToken, verificationId);
+    if (consumed) {
+      await selected.service.consumeVerifiedProof(verified.binding, "authorized@example.invalid", NOW);
+      // Recovery is bounded by the session, even after the OTP entry deadline.
+      selected.proof.expiresAt = new Date(NOW).toISOString();
+    }
+    await assert.rejects(selected.service.exchangeSetupToken(selected.setupToken));
+    await assert.rejects(selected.service.requestEmailOtp(verificationId));
+    await assert.rejects(selected.service.requestEmailOtp(verificationId, "0".repeat(64)));
+    for (const code of ["00000000", "12345678"]) {
+      await assert.rejects(selected.service.verifyEmailOtp(verificationId, code));
+    }
+    const recovered = await selected.service.requestEmailOtp(verificationId, verified.recoveryToken);
+    assert.equal(recovered.state, "already_verified");
+    assert.deepEqual(recovered.binding, verified.binding);
+    assert.equal(selected.sends.length, 1);
+  }
+});
+
+test("an exchanged token cannot be reused before OTP or after proof reservation fails", async () => {
+  const selected = fixture();
+  const verificationId = (await exchange(selected)).verificationId;
+  await assert.rejects(selected.service.exchangeSetupToken(selected.setupToken));
+  assert.equal((await selected.service.requestEmailOtp(verificationId)).state, "sent_confirmed");
+  assert.equal(selected.sends.length, 1);
+  const failed = fixture();
+  failed.proofStore.reserve = async () => { throw new Error("synthetic reservation unavailable"); };
+  await assert.rejects(failed.service.exchangeSetupToken(failed.setupToken));
+  await assert.rejects(failed.service.exchangeSetupToken(failed.setupToken));
+  assert.equal(failed.sends.length, 0);
+  assert.match(failed.session.lastOutcome, /^exchange_/);
+});
+
+test("recovery is exact to the proof generation, destination and live session budget", async () => {
+  for (const changed of ["generation", "verifiedAt", "destination", "session", "expired", "attempts", "terminal"]) {
+    const selected = fixture();
+    const verificationId = (await exchange(selected)).verificationId;
+    const verified = await selected.service.verifyEmailOtp(verificationId, "12345678");
+    if (changed === "generation") selected.proof.otpGeneration += 1;
+    if (changed === "verifiedAt") selected.proof.verifiedAt = "2026-08-14T18:00:01.000Z";
+    if (changed === "destination") selected.records.Contacts.Email = "changed@example.invalid";
+    if (changed === "session") selected.session.issueRequestKey = "9".repeat(64);
+    if (changed === "expired") selected.session.expiresAt = new Date(NOW).toISOString();
+    if (changed === "attempts") selected.session.attemptCount = selected.session.maxAttempts;
+    if (changed === "terminal") selected.session.status = "submitted";
+    await assert.rejects(selected.service.requestEmailOtp(verificationId, verified.recoveryToken), changed);
+    assert.equal(selected.sends.length, 1);
+  }
+});
+
+test("a delivery request already in flight cannot acquire recovery when another caller verifies", async () => {
+  const selected = fixture();
+  const verificationId = (await exchange(selected)).verificationId;
+  const [pending, verified] = await Promise.allSettled([
+    selected.service.requestEmailOtp(verificationId),
+    selected.service.verifyEmailOtp(verificationId, "12345678"),
+  ]);
+  assert.equal(verified.status, "fulfilled");
+  if (pending.status === "fulfilled") {
+    assert.notEqual(pending.value.state, "already_verified");
+    assert.equal(Object.hasOwn(pending.value, "recoveryToken"), false);
+  }
+  await assert.rejects(selected.service.requestEmailOtp(verificationId));
 });
 
 test("destination changes and cross-binding consumption fail closed", async () => {

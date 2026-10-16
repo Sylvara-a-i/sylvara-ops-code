@@ -74,6 +74,7 @@ function createVerificationService({
     if (
       !session ||
       !new Set(["issued", "verified"]).has(session.status) ||
+      session.attemptCount >= session.maxAttempts ||
       !Number.isFinite(Date.parse(session.expiresAt)) ||
       Date.parse(session.expiresAt) <= current ||
       !validRecordId(session.crmContactId) ||
@@ -163,7 +164,8 @@ function createVerificationService({
       fail("Setup access is unavailable", { publicCode: "setup_not_found", status: 404 });
     }
     const session = await sessionStore.readByTokenHash(tokenHash);
-    if (!session || session.tokenHash !== tokenHash) {
+    if (!session || session.tokenHash !== tokenHash || session.status !== "issued" ||
+        session.lastOutcome !== "issued") {
       fail("Setup access is unavailable", { publicCode: "setup_not_found", status: 404 });
     }
     return buildContext(session);
@@ -217,7 +219,11 @@ function createVerificationService({
   }
 
   function evidencedDeliveryState(proof) {
-    if (new Set(["verified", "consumed"]).has(proof?.status)) return "already_verified";
+    // A delivery request carries only pre-authentication capabilities. Observing
+    // somebody else's completed proof must never elevate that caller.
+    if (new Set(["verified", "consumed"]).has(proof?.status)) {
+      fail("Verified setup requires its recovery capability");
+    }
     if (proof?.status === "sending") return "in_flight";
     if (
       new Set(["issued", "verifying"]).has(proof?.status) &&
@@ -244,9 +250,6 @@ function createVerificationService({
       assertProofOwnership(proof, context);
     }
     const existingState = evidencedDeliveryState(proof);
-    if (existingState === "already_verified") {
-      return Object.freeze({ state: existingState });
-    }
     if (proof && new Set(["ambiguous", "reconciliation_required"]).has(proof.status)) {
       fail("OTP delivery outcome is ambiguous", {
         publicCode: "reconciliation_required",
@@ -363,11 +366,39 @@ function createVerificationService({
 
   async function exchangeSetupToken(setupToken) {
     const context = await readContext(setupToken);
+    await sessionStore.exchangeSetupToken(context.session.tokenHash, randomOwner("exchange"));
     return withPublicIdentity(await requestEmailOtpForContext(context), context);
   }
 
-  async function requestEmailOtp(verificationId) {
+  function recoveryTokenFor(proof) {
+    if (!new Set(["verified", "consumed"]).has(proof?.status) ||
+        !Number.isFinite(Date.parse(proof.verifiedAt))) {
+      fail("Verification proof is unavailable");
+    }
+    // This capability is disclosed only to the successful OTP verifier. It is
+    // distinct from the setup link and pre-OTP ID, and survives proof consumption
+    // without storing another bearer or adding schema. The binding digest covers
+    // the exact session, issue generation, token, CRM records and destination.
+    return crypto.createHmac("sha256", config.proofHmacSecret)
+      .update("sylvara.form2.verified-recovery.v1\0", "utf8")
+      .update(JSON.stringify([
+        proof.proofKey, proof.sessionRowId, proof.bindingDigest, proof.destinationDigest,
+        proof.otpGeneration, proof.otpDigest, proof.verifiedAt,
+      ]), "utf8")
+      .digest("hex");
+  }
+
+  async function requestEmailOtp(verificationId, recoveryToken) {
     const context = await readContextByVerificationId(verificationId);
+    if (recoveryToken !== undefined) {
+      const proof = await proofStore.readByProofKey(context.proofKey);
+      assertProofOwnership(proof, context);
+      if (!/^[a-f0-9]{64}$/.test(recoveryToken ?? "") ||
+          !constantTimeEqual(recoveryToken, recoveryTokenFor(proof))) {
+        fail("Verified setup requires its recovery capability");
+      }
+      return withPublicIdentity({ state: "already_verified" }, context);
+    }
     return withPublicIdentity(await requestEmailOtpForContext(context), context);
   }
 
@@ -379,13 +410,6 @@ function createVerificationService({
     let proof = await proofStore.readByProofKey(context.proofKey);
     assertProofOwnership(proof, context);
     if (!proof) fail("Verification proof is unavailable");
-    if (proof.status === "consumed") {
-      return Object.freeze({ verified: true, binding: context.binding });
-    }
-    if (proof.status === "verified") {
-      if (Date.parse(proof.expiresAt) <= nowMs()) fail("Verification proof is unavailable");
-      return Object.freeze({ verified: true, binding: context.binding });
-    }
     if (
       !new Set(["issued", "verifying"]).has(proof.status) ||
       Date.parse(proof.expiresAt) <= nowMs()
@@ -433,7 +457,9 @@ function createVerificationService({
         ambiguous: true,
       });
     }
-    return Object.freeze({ verified: true, binding: context.binding });
+    return Object.freeze({
+      verified: true, binding: context.binding, recoveryToken: recoveryTokenFor(proof),
+    });
   }
 
   async function consumeVerifiedProof(binding, destinationEmail, selectedNowMs) {

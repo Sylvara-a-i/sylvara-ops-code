@@ -6,6 +6,8 @@ const test = require("node:test");
 const { destinationDigest } = require("../lib/destinations");
 const { CLIENT_KEYS, validateForm2PayloadTypes } = require("../lib/form-contract");
 const { READ_FIELDS, createCrmClient } = require("../lib/crm-client");
+const { createVerificationService } = require("../lib/verification-service");
+const { createVerificationProofStore } = require("../lib/verification-proof-store");
 const { fingerprintSubmission } = require("../lib/snapshot");
 const issueCallerContract = require("../../../config/issue-caller-contract.json");
 const {
@@ -221,7 +223,10 @@ test("OTP request and verify need no browser-held shared secret and expose no CR
 
 function assertVerifiedSetupPending(result, outcome, stage = "otp_verify") {
   assert.equal(result.status, 503);
-  assert.deepEqual(result.body, {
+  const { verificationId, recoveryToken, ...publicState } = result.body;
+  assert.match(verificationId, /^[a-f0-9]{64}$/);
+  assert.match(recoveryToken, /^[a-f0-9]{64}$/);
+  assert.deepEqual(publicState, {
     ok: false, state: "verified_setup_pending", code: "setup_preparation_unavailable",
   });
   assert.equal(result.stage, stage);
@@ -256,7 +261,7 @@ test("the first correct OTP tolerates real elapsed verification time without con
   assert.equal(selected.events.filter((event) => event === "verification.email.request").length, 1);
 });
 
-test("an already verified token resumes at the exact stamped Form without another send", async () => {
+test("an already verified result never elevates a setup token or pre-OTP ID", async () => {
   const selected = fixture();
   await issue(selected);
   selected.dependencies.verificationService.requestEmailOtp = async () => ({
@@ -273,9 +278,15 @@ test("an already verified token resumes at the exact stamped Form without anothe
     },
     rawBody,
   }, selected.dependencies);
-  assert.equal(result.status, 200);
-  assert.equal(result.outcome, "already_verified");
-  assert.match(result.body.formUrl, /^https:\/\/forms\.zohopublic\.com\//);
+  assert.equal(result.status, 403);
+  assert.equal(result.body.code, "verification_required");
+  assert.equal(result.body.formUrl, undefined);
+  assert.equal(selected.events.includes("workflow.prefill.mint"), false);
+  const replay = await handleForm2Request(createRequest(
+    selected.dependencies.config.otpRequestPath, { verificationId: "1".repeat(64) },
+  ), selected.dependencies);
+  assert.notEqual(replay.status, 200);
+  assert.equal(replay.body.formUrl, undefined);
 });
 
 test("verified proof preparation failures remain pending and recover without another email or code", async () => {
@@ -312,11 +323,12 @@ test("verified proof preparation failures remain pending and recover without ano
   selected.dependencies.verificationService.requestEmailOtp = async () => ({
     state: "already_verified", verificationId, binding: verifiedBinding,
   });
-  const pendingResume = await request(selected.dependencies.config.otpRequestPath, { verificationId });
+  const recoveryToken = failed.body.recoveryToken;
+  const pendingResume = await request(selected.dependencies.config.otpRequestPath, { verificationId, recoveryToken });
   assertVerifiedSetupPending(pendingResume, "service_unavailable", "otp_request");
   assert.equal(selected.events.slice(eventCount).includes("verification.email.request"), false);
   selected.setVerifyError(null);
-  const resumed = await request(selected.dependencies.config.otpRequestPath, { verificationId });
+  const resumed = await request(selected.dependencies.config.otpRequestPath, { verificationId, recoveryToken });
   assert.equal(resumed.status, 200);
   assert.equal(resumed.body.state, "already_verified");
   assert.equal(selected.session.status, "verified");
@@ -324,6 +336,84 @@ test("verified proof preparation failures remain pending and recover without ano
   assert.equal(selected.session.maxAttempts, config().maxVerificationAttempts);
   assert.equal(selected.events.filter((event) => event === "verification.email.verify").length, 1);
   assert.equal(selected.events.filter((event) => event === "verification.email.request").length, 1);
+});
+
+test("real OTP proof lifecycle denies copied pre-authentication capabilities at public routes", async () => {
+  const selected = fixture();
+  const proofConfig = {
+    ...selected.dependencies.config,
+    proofHmacSecret: "V".repeat(43), proofMode: "stub",
+    proofTableName: "Form2ProofsV3", form2ProofTtlSeconds: 600,
+    form2ProofMaxAttempts: 5, form2ProofMaxSends: 2,
+    form2ProofResendCooldownSeconds: 60, form2ProofSendLeaseSeconds: 30,
+  };
+  let proofRow;
+  let sends = 0;
+  const proofStore = createVerificationProofStore({
+    async insertRow(_table, row) {
+      if (proofRow) throw new Error("synthetic unique conflict");
+      proofRow = { ...row, ROWID: "7100000000001" };
+    },
+    async updateRow(_table, patch, expected) {
+      if (!proofRow || Object.entries(expected).some(([key, value]) => proofRow[key] !== value)) {
+        throw new Error("synthetic conditional conflict");
+      }
+      Object.assign(proofRow, patch);
+    },
+    async findRowsByProofKey(_table, key) {
+      return proofRow?.PROOF_KEY === key ? [{ ...proofRow }] : [];
+    },
+    async findRowsByRowId(_table, rowId) {
+      return proofRow?.ROWID === rowId ? [{ ...proofRow }] : [];
+    },
+  }, proofConfig, { now: () => NOW_MS });
+  selected.dependencies.sessionStore.exchangeSetupToken = async (tokenHash, owner) => {
+    if (selected.session.tokenHash !== tokenHash || selected.session.lastOutcome !== "issued") {
+      throw new Error("synthetic exchange conflict");
+    }
+    selected.session.lastOutcome = owner;
+    return { ...selected.session };
+  };
+  selected.dependencies.verificationService = createVerificationService({
+    config: proofConfig, crmClient: selected.dependencies.crmClient,
+    sessionStore: selected.dependencies.sessionStore, proofStore,
+    now: () => NOW_MS, randomInt: () => 12345678,
+    mailAdapter: { async sendOtp() {
+      sends += 1;
+      return { outcome: "accepted", providerResultReference: "mail_" + "1".repeat(64) };
+    } },
+  });
+  const request = (path, body) => handleForm2Request(createRequest(path, body), selected.dependencies);
+  await issue(selected);
+  const setupToken = deriveAccessToken(ISSUE_REQUEST_ID, proofConfig.tokenPepper);
+  const exchanged = await request(proofConfig.otpRequestPath, { setupToken });
+  assert.equal(exchanged.status, 202);
+  const verificationId = exchanged.body.verificationId;
+  const verified = await request(proofConfig.otpVerifyPath, { verificationId, code: "12345678" });
+  assert.equal(verified.status, 200);
+  assert.equal(proofRow.STATUS, "consumed");
+  assert.equal(selected.session.status, "verified");
+  assert.match(verified.body.formUrl, /^https:\/\/forms\.zohopublic\.com\//);
+  assert.equal((await submitPrefillHandle(selected, verified.body.formUrl)).status, 200);
+  for (const [path, body] of [
+    [proofConfig.otpRequestPath, { setupToken }],
+    [proofConfig.otpRequestPath, { verificationId }],
+    [proofConfig.otpVerifyPath, { verificationId, code: "00000000" }],
+    [proofConfig.otpVerifyPath, { verificationId, code: "12345678" }],
+    [proofConfig.otpRequestPath, { verificationId, recoveryToken: "0".repeat(64) }],
+  ]) {
+    const replay = await request(path, body);
+    assert.ok([403, 404].includes(replay.status));
+    assert.equal(replay.body.formUrl, undefined);
+    assert.equal(replay.body.recoveryToken, undefined);
+  }
+  const recovered = await request(proofConfig.otpRequestPath, {
+    verificationId, recoveryToken: verified.body.recoveryToken,
+  });
+  assert.equal(recovered.status, 200);
+  assert.match(recovered.body.formUrl, /^https:\/\/forms\.zohopublic\.com\//);
+  assert.equal(selected.session.attemptCount, 2);
+  assert.equal(sends, 1);
 });
 
 test("future proof time, elapsed session, and invalid clocks cannot reach a session verification write", async () => {
@@ -1106,7 +1196,7 @@ function fixture({ now = () => NOW_MS, configOverrides = {} } = {}) {
         error.status = 404;
         throw error;
       }
-      return { verified: true, binding: verificationBinding(selectedSession) };
+      return { verified: true, binding: verificationBinding(selectedSession), recoveryToken: "4".repeat(64) };
     },
     async consumeVerifiedProof(binding, destinationEmail) {
       events.push("verification.proof.consume");
@@ -1767,14 +1857,28 @@ test("token-pepper rotation cannot bypass the stable active Deal lock", async ()
   assert.equal(selected.events.includes("session.issue"), false);
 });
 
-test("an exact issue retry remains valid after verification without downgrading CRM state", async () => {
+test("an issue retry cannot advertise a consumed link or downgrade verified CRM state", async () => {
   const selected = fixture();
   assert.equal((await issue(selected)).status, 200);
   assert.equal((await prefill(selected)).status, 200);
   selected.events.length = 0;
   const result = await issue(selected);
-  assert.equal(result.status, 200);
+  assert.equal(result.status, 409);
+  assert.equal(result.body.code, "setup_conflict");
+  assert.equal(result.body.accessUrl, undefined);
   assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Verified");
+  assert.equal(selected.events.includes("crm.update.Deals"), false);
+});
+
+test("an exchanged link is not reissued after a lost exchange response", async () => {
+  const selected = fixture();
+  assert.equal((await issue(selected)).status, 200);
+  selected.session.lastOutcome = "exchange_" + "8".repeat(64);
+  selected.events.length = 0;
+  const result = await issue(selected);
+  assert.equal(result.status, 409);
+  assert.equal(result.body.accessUrl, undefined);
+  assert.equal(selected.session.lastOutcome, "exchange_" + "8".repeat(64));
   assert.equal(selected.events.includes("crm.update.Deals"), false);
 });
 

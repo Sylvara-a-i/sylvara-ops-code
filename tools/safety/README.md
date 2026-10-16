@@ -45,6 +45,20 @@ single-link file on fixed local storage, contain no link/reparse component, stay
 outside Git, and match the configured digest before and after validation. Node
 preload and module-path environment overrides are removed from the child.
 
+Before dispatch, the wrapper authenticates its own source and the selected
+validator's complete reviewed local import/contract closure against one committed
+Git revision. Dirty, staged, missing, untracked, index-hidden, linked/reparse,
+unsupported-mode, or byte-mismatched dependencies fail closed. Exact source bytes
+must match Git blobs, consistent with the repository's required LF checkout.
+Git plumbing reads avoid pre-authentication filters and fsmonitor hooks. Python
+uses an isolated child without site hooks or caller-controlled import paths and
+compiles the captured source rather than loading cached bytecode; Node
+loads captured modules and contracts without checkout module/package resolution.
+New local dependencies require an explicit addition to the wrapper's closure.
+Validation binds the private envelope to that captured revision, and the revision
+and source snapshot are checked again before the durable claim, so
+a checkout change during validation cannot consume an approval.
+
 Supported invocation shapes after that private executor configuration:
 
 ```text

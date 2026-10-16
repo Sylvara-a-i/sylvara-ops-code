@@ -37,6 +37,7 @@ function renderAccessPage({ otpRequestPath, otpVerifyPath, randomBytes = crypto.
       const fragment = new URLSearchParams(location.hash.slice(1));
       let setupToken = fragment.get("setupToken") || "";
       let verificationId = "";
+      let recoveryToken = "";
       let busy = "";
       let closed = false;
       let emailVerified = false;
@@ -48,13 +49,13 @@ function renderAccessPage({ otpRequestPath, otpVerifyPath, randomBytes = crypto.
         status.dataset.tone = tone;
       };
       const updateControls = () => {
-        code.disabled = Boolean(busy) || closed || !canVerify;
+        code.disabled = Boolean(busy) || closed || !canVerify || emailVerified;
         button.disabled = Boolean(busy) || closed || !canVerify;
         resend.disabled = Boolean(busy) || closed || !canResend;
         button.setAttribute("aria-busy", String(busy === "verify"));
         resend.setAttribute("aria-busy", String(busy === "send"));
         button.textContent = busy === "verify" ? "Verifying…"
-          : emailVerified ? "Email verified" : "Continue to setup";
+          : emailVerified && !closed ? "Retry setup" : emailVerified ? "Email verified" : "Continue to setup";
         resend.textContent = busy === "send" ? "Sending code…" : "Send another code";
       };
       const close = (message, verified = false) => {
@@ -63,6 +64,7 @@ function renderAccessPage({ otpRequestPath, otpVerifyPath, randomBytes = crypto.
         emailVerified = verified;
         setupToken = "";
         verificationId = "";
+        recoveryToken = "";
         code.value = "";
         showStatus(message, verified ? "success" : "warning");
         updateControls();
@@ -107,8 +109,17 @@ function renderAccessPage({ otpRequestPath, otpVerifyPath, randomBytes = crypto.
       };
       const setupPending = (response, body) => {
         if (response.status !== 503 || body.ok !== false ||
-            body.state !== "verified_setup_pending" || body.code !== "setup_preparation_unavailable") return false;
-        close("Email verified. Setup is temporarily unavailable. Contact your operator to resume.", true);
+            body.state !== "verified_setup_pending" || body.code !== "setup_preparation_unavailable" ||
+            body.verificationId !== verificationId ||
+            typeof body.recoveryToken !== "string" || !/^[a-f0-9]{64}$/.test(body.recoveryToken)) return false;
+        // Recovery authority is disclosed only after OTP success and kept only
+        // in this page's memory. Neither the old link nor old ID can resume it.
+        recoveryToken = body.recoveryToken;
+        emailVerified = true;
+        canVerify = true;
+        canResend = false;
+        code.value = "";
+        showStatus("Email verified. Setup is temporarily unavailable. Retry setup when ready, or contact your operator.", "warning");
         return true;
       };
       const requestCode = async (initial = false) => {
@@ -132,8 +143,6 @@ function renderAccessPage({ otpRequestPath, otpVerifyPath, randomBytes = crypto.
             /^[a-f0-9]{64}$/.test(body.verificationId);
           const acceptedRequest = response.status === 202 && body.ok === true && validIdentity;
           const rejectedRequest = response.status === 503 && body.ok === false && validIdentity;
-          if (response.status === 200 && body.ok === true && body.state === "already_verified" &&
-              validIdentity && openSetup(body)) return;
           if (acceptedRequest && body.state === "sent_confirmed") {
             verificationId = body.verificationId;
             canVerify = true;
@@ -167,7 +176,7 @@ function renderAccessPage({ otpRequestPath, otpVerifyPath, randomBytes = crypto.
       const verifyCode = async () => {
         if (busy || closed || !canVerify) return;
         const value = code.value.trim();
-        if (!/^[0-9]{8}$/.test(value)) {
+        if (!recoveryToken && !/^[0-9]{8}$/.test(value)) {
           showStatus("Enter the eight-digit code from your email.", "warning");
           code.focus();
           return;
@@ -176,12 +185,12 @@ function renderAccessPage({ otpRequestPath, otpVerifyPath, randomBytes = crypto.
         updateControls();
         showStatus("Checking your code and preparing setup…");
         try {
-          const { response, body } = await send(${JSON.stringify(verifyPath)}, {
-            verificationId, code: value,
-          });
+          const { response, body } = recoveryToken
+            ? await send(${JSON.stringify(requestPath)}, { verificationId, recoveryToken })
+            : await send(${JSON.stringify(verifyPath)}, { verificationId, code: value });
           if (setupPending(response, body)) return;
           if (response.status === 200 && body.ok === true && openSetup(body)) return;
-          if (response.status === 403 && body.ok === false && body.code === "verification_required") {
+          if (!recoveryToken && response.status === 403 && body.ok === false && body.code === "verification_required") {
             showStatus("This code is not currently accepted. Check the latest email code or contact your operator.", "warning");
           } else {
             close("Verification could not be completed. This does not mean the code was wrong. Do not request another code; contact your operator.");

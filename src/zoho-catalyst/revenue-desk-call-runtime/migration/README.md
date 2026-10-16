@@ -29,6 +29,15 @@ This package plans and executes a one-way copy from reviewed legacy snapshots in
 
 Keep the contract and snapshots in an approved private system. The object passed to the library has two parts:
 
+Offline planning has fixed resource ceilings, independent of `batchSize`. An iterative validation pass runs before recursive canonicalization, digesting, sorting, complete plan construction, or target-binding access. It includes ignored fields, object keys, and all source and target tables together:
+
+- At most 32 resources, 64 combined source/target tables, and 10,000 combined source/target rows.
+- At most 8 MiB of compact JSON UTF-8 bytes for the complete private snapshot, including JSON escaping and punctuation; the contract has a separate 1 MiB ceiling.
+- At most 32 levels below the input root, 100,000 value nodes, 75,000 object fields, 256 fields per object, and 65,536 UTF-8 bytes per string or key. Repeated references count again; cycles, sparse arrays, accessor or hidden properties, symbols, proxies, and custom array properties/prototypes are rejected.
+- At most 64 projection columns per resource. Projection work also has a combined 75,000-field ceiling and an 8 MiB conservative output-size ceiling, so repeated mappings or constants cannot amplify a small snapshot into an unbounded plan.
+
+Inputs exceeding a ceiling fail with `MIGRATION_INPUT_LIMIT_EXCEEDED` and a sanitized limit name. Smaller batches do not bypass these ceilings: an oversized export requires separately captured, reviewed input scopes and their own approval digests. Within these bounds, canonical bytes, row ordering, and approval digests retain their existing format; each row's canonical sorting key is computed once per envelope.
+
 ```js
 const contract = {
   schemaVersion: 1,

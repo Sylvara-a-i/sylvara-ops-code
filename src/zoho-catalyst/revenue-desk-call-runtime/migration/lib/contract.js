@@ -1,6 +1,8 @@
 'use strict';
 
-const { canonicalize } = require('./canonical');
+const {
+  assertCanonicalBounds, withinLimit, jsonStringBytes, SNAPSHOT_LIMITS,
+} = require('./canonical');
 const { invariant } = require('./errors');
 
 const TABLE_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
@@ -33,6 +35,8 @@ function exactKeys(value, allowed, code, message, details) {
 function validateProjection(projection, resourceId, sourceKeyColumn, targetKeyColumn) {
   invariant(plain(projection) && Object.keys(projection).length > 0,
     'INVALID_MIGRATION_CONTRACT', 'Each resource requires a nonempty projection.', { resourceId });
+  withinLimit(Object.keys(projection).length, SNAPSHOT_LIMITS.maxProjectionFields,
+    'maxProjectionFields');
   const normalized = {};
   for (const targetColumn of Object.keys(projection).sort()) {
     invariant(COLUMN_PATTERN.test(targetColumn), 'INVALID_MIGRATION_CONTRACT',
@@ -81,11 +85,13 @@ function validateProjection(projection, resourceId, sourceKeyColumn, targetKeyCo
 }
 
 function validateContract(contract) {
+  assertCanonicalBounds(contract, { ...SNAPSHOT_LIMITS, maxBytes: 1024 * 1024 });
   exactKeys(contract, new Set(['schemaVersion', 'migrationId', 'resources']),
     'INVALID_MIGRATION_CONTRACT', 'Migration contract contains unsupported properties.');
   invariant(contract.schemaVersion === 1 && ID_PATTERN.test(contract.migrationId || '')
     && Array.isArray(contract.resources) && contract.resources.length > 0,
   'INVALID_MIGRATION_CONTRACT', 'Migration contract identity or resources are invalid.');
+  withinLimit(contract.resources.length, SNAPSHOT_LIMITS.maxResources, 'maxResources');
   const resourceIds = new Set();
   const sourceTables = new Set();
   const targetTables = new Set();
@@ -139,7 +145,7 @@ function validateContract(contract) {
   });
 }
 
-function validateTableSnapshots(entries, expectedTables, kind) {
+function validateTableSnapshots(entries, expectedTables, kind, totals) {
   invariant(Array.isArray(entries) && entries.length === expectedTables.size,
     'INVALID_PRIVATE_INPUT', `Private ${kind} snapshots must cover every contracted table exactly once.`);
   const result = new Map();
@@ -151,6 +157,8 @@ function validateTableSnapshots(entries, expectedTables, kind) {
       && entry.rowCount === entry.rows.length,
       'INVALID_PRIVATE_INPUT', `Private ${kind} snapshot table coverage is invalid.`,
       { table: entry.table });
+    totals.rows += entry.rows.length;
+    withinLimit(totals.rows, SNAPSHOT_LIMITS.maxRows, 'maxRows');
     for (const [index, row] of entry.rows.entries()) invariant(plain(row),
       'INVALID_PRIVATE_INPUT', `Private ${kind} rows must be plain objects.`,
       { table: entry.table, rowIndex: index });
@@ -159,7 +167,42 @@ function validateTableSnapshots(entries, expectedTables, kind) {
   return result;
 }
 
+function validateProjectedBudget(sources, targets, contract) {
+  // Constant projections and repeated source mappings can amplify a small
+  // snapshot. Bound that work before constructing any complete projected plan.
+  let fields = 0;
+  let bytes = 0;
+  for (const resource of contract.resources) {
+    const columns = Object.entries(resource.projection).map(([column, descriptor]) => ({
+      column,
+      descriptor,
+      keyBytes: jsonStringBytes(column, SNAPSHOT_LIMITS) + 2,
+    }));
+    for (const [rows, source] of [
+      [sources.get(resource.sourceTable), true], [targets.get(resource.targetTable), false],
+    ]) {
+      for (const row of rows) {
+        bytes += 2;
+        for (const { column, descriptor, keyBytes } of columns) {
+          fields += 1;
+          withinLimit(fields, SNAPSHOT_LIMITS.maxFields, 'maxProjectedFields');
+          const value = source
+            ? (Object.hasOwn(descriptor, 'constant') ? descriptor.constant : row[descriptor.source])
+            : row[column];
+          // Non-primitives are quarantined later; they cannot become output values.
+          if (primitive(value)) bytes += keyBytes + (typeof value === 'string'
+            ? jsonStringBytes(value, SNAPSHOT_LIMITS) : JSON.stringify(value).length);
+          withinLimit(bytes, SNAPSHOT_LIMITS.maxBytes, 'maxProjectedBytes');
+        }
+      }
+    }
+  }
+}
+
 function validatePrivateInput(privateInput, contract) {
+  // Iterative validation includes ignored fields and both sides of the snapshot.
+  // No recursive normalization, digest, sort, or target binding precedes it.
+  assertCanonicalBounds(privateInput, SNAPSHOT_LIMITS);
   exactKeys(privateInput, new Set([
     'schemaVersion', 'captureId', 'capturedAt', 'sources', 'targets',
   ]), 'INVALID_PRIVATE_INPUT', 'Private migration input contains unsupported properties.');
@@ -170,15 +213,18 @@ function validatePrivateInput(privateInput, contract) {
     && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(privateInput.capturedAt)
     && Number.isFinite(Date.parse(privateInput.capturedAt)),
   'INVALID_PRIVATE_INPUT', 'Private migration capture timestamp must be UTC ISO-8601.');
-  // Canonicalization here rejects undefined, non-JSON, unsafe-number, or cyclic input
-  // before an approval digest can be computed over a misleading subset.
-  canonicalize(privateInput);
+  const totals = { rows: 0 };
+  withinLimit((privateInput.sources?.length || 0) + (privateInput.targets?.length || 0),
+    SNAPSHOT_LIMITS.maxTables, 'maxTables');
   const sources = validateTableSnapshots(
     privateInput.sources, new Set(contract.resources.map((resource) => resource.sourceTable)), 'source',
+    totals,
   );
   const targets = validateTableSnapshots(
     privateInput.targets, new Set(contract.resources.map((resource) => resource.targetTable)), 'target',
+    totals,
   );
+  validateProjectedBudget(sources, targets, contract);
   return { sources, targets };
 }
 
