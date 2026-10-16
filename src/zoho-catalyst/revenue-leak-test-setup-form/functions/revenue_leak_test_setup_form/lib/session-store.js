@@ -705,6 +705,36 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
     return readback;
   }
 
+  async function exchangeSetupToken(tokenHash, owner) {
+    if (!/^exchange_[a-f0-9]{64}$/.test(owner ?? "")) {
+      throw new SessionStoreError("Setup exchange owner is invalid", "session_input_invalid");
+    }
+    const current = await readByTokenHash(tokenHash);
+    const nowMs = validateNow(now);
+    if (!current || current.status !== "issued" || current.lastOutcome !== "issued" ||
+        parseIso(current.expiresAt, "EXPIRES_AT") <= nowMs) {
+      throw new SessionStoreError("Setup token is unavailable", "setup_not_found");
+    }
+    const timestamp = new Date(nowMs).toISOString();
+    try {
+      // One exchange wins even when requests share a clock tick. The owner is
+      // an internal random claim, never a public continuation or a raw token.
+      await adapter.updateRow(tableName, {
+        ROWID: current.rowId,
+        LAST_OUTCOME: owner,
+        UPDATED_AT: timestamp,
+      }, { STATUS: "issued", LAST_OUTCOME: "issued", ACCESS_TOKEN_HASH: tokenHash });
+    } catch {
+      // A lost write response is accepted only for this exact durable owner.
+    }
+    const readback = await readByRowId(current.rowId);
+    if (!sameSessionIdentity(current, readback) || readback.status !== "issued" ||
+        readback.lastOutcome !== owner || readback.updatedAt !== timestamp) {
+      throw new SessionStoreError("Setup exchange did not converge", "setup_not_found");
+    }
+    return readback;
+  }
+
   async function verify(tokenHash) {
     const current = await readByTokenHash(tokenHash);
     if (!current) return Object.freeze({ outcome: "not_found", session: null });
@@ -852,6 +882,7 @@ function createCatalystSessionStore(adapter, config, { now = Date.now } = {}) {
 
   return Object.freeze({
     beginSubmission,
+    exchangeSetupToken,
     issue,
     markExpiryReconciliationRequired,
     markExpirySynced,

@@ -124,6 +124,42 @@ function issueInput(overrides = {}) {
   };
 }
 
+test("setup exchange is single use, concurrent-owner fenced and survives a lost write response", async () => {
+  for (const updateFailure of ["none", "after"]) {
+    const selected = fixture({ updateFailure });
+    const session = await selected.store.issue(issueInput());
+    await selected.store.markIssued(session.rowId);
+    const owners = ["exchange_" + "1".repeat(64), "exchange_" + "2".repeat(64)];
+    const results = await Promise.allSettled(owners.map((owner) =>
+      selected.store.exchangeSetupToken(TOKEN_HASH, owner)));
+    assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+    const winner = results.find((result) => result.status === "fulfilled").value;
+    assert.equal(winner.status, "issued");
+    assert.ok(owners.includes(winner.lastOutcome));
+    assert.equal(winner.attemptCount, 0);
+    for (const owner of owners) {
+      await assert.rejects(selected.store.exchangeSetupToken(TOKEN_HASH, owner));
+    }
+    const exchangeWrite = selected.calls.update.find((call) => call.update.LAST_OUTCOME === winner.lastOutcome);
+    assert.deepEqual(exchangeWrite.expected, {
+      STATUS: "issued", LAST_OUTCOME: "issued", ACCESS_TOKEN_HASH: TOKEN_HASH,
+    });
+  }
+});
+
+test("setup exchange rejects uncommitted writes and terminal or expired sessions", async () => {
+  for (const failure of ["uncommitted", "expired", "verified", "revoked"]) {
+    const selected = fixture();
+    const session = await selected.store.issue(issueInput());
+    await selected.store.markIssued(session.rowId);
+    if (failure === "expired") selected.clock.nowMs += 3600000;
+    if (failure === "verified") await selected.store.verify(TOKEN_HASH);
+    if (failure === "revoked") await selected.store.revoke(session.rowId);
+    if (failure === "uncommitted") selected.adapter.updateRow = async () => { throw new Error("before commit"); };
+    await assert.rejects(selected.store.exchangeSetupToken(TOKEN_HASH, "exchange_" + "1".repeat(64)));
+  }
+});
+
 test("issues and reads back a Development session containing no raw token or form payload", async () => {
   const { calls, store } = fixture();
   const issuing = await store.issue(issueInput());

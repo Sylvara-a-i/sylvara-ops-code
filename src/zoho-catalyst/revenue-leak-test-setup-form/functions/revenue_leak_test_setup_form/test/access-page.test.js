@@ -46,7 +46,11 @@ const TOKEN = "T".repeat(43);
 const VERIFICATION_ID = "a".repeat(64);
 const FORM_URL = `https://forms.zohopublic.com/synthetic/form/perma/example?handle=${"H".repeat(43)}`;
 const SENT = { ok: true, state: "sent_confirmed", verificationId: VERIFICATION_ID };
-const PENDING = { ok: false, state: "verified_setup_pending", code: "setup_preparation_unavailable" };
+const RECOVERY_TOKEN = "b".repeat(64);
+const PENDING = {
+  ok: false, state: "verified_setup_pending", code: "setup_preparation_unavailable",
+  verificationId: VERIFICATION_ID, recoveryToken: RECOVERY_TOKEN,
+};
 
 function browserFixture({ fragment = `#setupToken=${TOKEN}`, navigationThrows = false } = {}) {
   const elements = Object.fromEntries(["status", "code", "verify", "resend"].map((id) => [id, {
@@ -194,27 +198,31 @@ test("invalid code input stays local and keyboard Enter invokes one valid verifi
   assert.equal(page.elements.verify.attributes["aria-busy"], "false");
 });
 
-test("accepted OTP with pending setup is explicit and disables verify and resend without retry", async () => {
-  for (const stage of ["request", "verify"]) {
-    const page = stage === "request" ? browserFixture() : await readyPage();
-    if (stage === "verify") {
-      page.elements.code.value = "12345678";
-      page.elements.verify.fire("click");
-    }
-    const count = page.calls.length;
-    await page.reply(count - 1, 503, PENDING);
+test("pending setup retains only the post-OTP recovery capability for a manual bounded retry", async () => {
+  const page = await readyPage();
+  page.elements.code.value = "12345678";
+  page.elements.verify.fire("click");
+  for (const responseIndex of [1, 2]) {
+    await page.reply(responseIndex, 503, PENDING);
     assert.match(page.elements.status.textContent, /^Email verified\. Setup is temporarily unavailable/);
-    assert.equal(page.elements.verify.textContent, "Email verified");
-    assert.equal(page.elements.verify.disabled, true);
+    assert.equal(page.elements.verify.textContent, "Retry setup");
+    assert.equal(page.elements.verify.disabled, false);
     assert.equal(page.elements.resend.disabled, true);
     assert.equal(page.elements.code.disabled, true);
     assert.equal(page.elements.code.value, "");
-    page.elements.verify.fire("click");
     page.elements.resend.fire("click");
-    assert.equal(page.calls.length, count);
+    assert.equal(page.calls.length, responseIndex + 1);
     assert.equal(page.timers.size, 0);
     assert.equal(page.navigations.length, 0);
+    page.elements.verify.fire("click");
+    assert.equal(page.calls[responseIndex + 1].path, "/form2/otp/request");
+    assert.deepEqual(page.calls[responseIndex + 1].body, {
+      verificationId: VERIFICATION_ID, recoveryToken: RECOVERY_TOKEN,
+    });
   }
+  await page.reply(3, 200, { ok: true, formUrl: FORM_URL });
+  await page.runTimers(150);
+  assert.deepEqual(page.navigations, [FORM_URL]);
 });
 
 test("unknown server verification failures never call the code wrong or resend automatically", async () => {
@@ -312,6 +320,8 @@ test("a forged or malformed setup-pending label cannot claim that email was veri
     for (const [status, body] of [
       [200, PENDING], [403, PENDING], [503, { ...PENDING, ok: true }],
       [503, { ...PENDING, code: "service_unavailable" }],
+      [503, { ...PENDING, recoveryToken: undefined }],
+      [503, { ...PENDING, verificationId: "c".repeat(64) }],
       [503, { state: "verified_setup_pending" }],
     ]) {
       const page = stage === "request" ? browserFixture() : await readyPage();
@@ -352,12 +362,17 @@ test("processing, disabled, malformed and unknown send outcomes never imply conf
 
 test("successful resume opens only the approved Forms URL and reports blocked navigation honestly", async () => {
   const page = browserFixture({ navigationThrows: true });
-  await page.reply(0, 200, { ok: true, state: "already_verified", verificationId: VERIFICATION_ID, formUrl: FORM_URL });
+  await page.reply(0, 202, SENT);
+  page.elements.code.value = "12345678";
+  page.elements.verify.fire("click");
+  await page.reply(1, 503, PENDING);
+  page.elements.verify.fire("click");
+  await page.reply(2, 200, { ok: true, state: "already_verified", verificationId: VERIFICATION_ID, formUrl: FORM_URL });
   assert.match(page.elements.status.textContent, /^Email verified\. Opening/);
   await page.runTimers(150);
   assert.match(page.elements.status.textContent, /setup form could not open/);
   assert.equal(page.elements.resend.disabled, true);
-  assert.equal(page.calls.length, 1);
+  assert.equal(page.calls.length, 3);
   for (const formUrl of [
     "javascript:alert(1)", FORM_URL.replace("forms.zohopublic.com", "forms.zohopublic.com.evil.invalid"),
     FORM_URL.replace("https:", "http:"), `${FORM_URL}#fragment`, `${FORM_URL}&extra=x`,
@@ -369,6 +384,16 @@ test("successful resume opens only the approved Forms URL and reports blocked na
     assert.equal(denied.timers.size, 0);
     assert.equal(denied.elements.status.textContent.startsWith("Email verified."), false);
   }
+});
+
+test("an already verified response to the original setup exchange cannot open a form", async () => {
+  const page = browserFixture();
+  await page.reply(0, 200, {
+    ok: true, state: "already_verified", verificationId: VERIFICATION_ID, formUrl: FORM_URL,
+  });
+  assert.equal(page.navigations.length, 0);
+  assert.equal(page.timers.size, 0);
+  assert.equal(page.elements.verify.disabled, true);
 });
 
 test("rejects unsafe routes and an invalid nonce source", () => {

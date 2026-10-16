@@ -49,6 +49,7 @@ const ISSUE_REQUEST_KEYS = new Set(["dealId", "issueRequestId"]);
 const PREFILL_KEYS = new Set(["prefillHandle"]);
 const OTP_REQUEST_EXCHANGE_KEYS = new Set(["setupToken"]);
 const OTP_REQUEST_RESUME_KEYS = new Set(["verificationId"]);
+const OTP_REQUEST_RECOVERY_KEYS = new Set(["verificationId", "recoveryToken"]);
 const OTP_VERIFY_KEYS = new Set(["verificationId", "code"]);
 const SUBMISSION_KEYS = new Set([
   "prefillId", "configurationRevision", "submissionId", ...CLIENT_KEYS,
@@ -1258,6 +1259,15 @@ async function handleIssue(body, dependencies, nowMs) {
       });
     }
   }
+  const accessSession = await dependencies.sessionStore.readByRowId(session.rowId);
+  if (!sameSessionIdentity(session, accessSession) || accessSession.status !== "issued" ||
+      accessSession.lastOutcome !== "issued") {
+    // An idempotent issue retry must not advertise an already exchanged link.
+    // Keep the generation consumed; recovery belongs to the verifying browser.
+    throw new ControllerError("Setup access is already in progress", {
+      status: 409, publicCode: "setup_conflict",
+    });
+  }
   return response(
     200,
     {
@@ -1513,26 +1523,29 @@ function handleAccessPage(dependencies) {
   return response(200, rendered.html, "access", "served", rendered.headers);
 }
 
-function verifiedSetupPending(error, stage) {
+function verifiedSetupPending(error, stage, continuation) {
   // A correct, durably verified code must not be reported as incorrect merely
   // because the subsequent bound session/CRM/prefill preparation failed.
   return response(503, {
     ok: false,
     state: "verified_setup_pending",
     code: "setup_preparation_unavailable",
+    ...continuation,
   }, stage, publicError(error).publicCode);
 }
 
 async function handleOtpRequest(body, dependencies, nowMs) {
   const exchanging = Object.prototype.hasOwnProperty.call(body ?? {}, "setupToken");
+  const recovering = Object.prototype.hasOwnProperty.call(body ?? {}, "recoveryToken");
   assertExactKeys(
     body,
-    exchanging ? OTP_REQUEST_EXCHANGE_KEYS : OTP_REQUEST_RESUME_KEYS,
+    exchanging ? OTP_REQUEST_EXCHANGE_KEYS
+      : recovering ? OTP_REQUEST_RECOVERY_KEYS : OTP_REQUEST_RESUME_KEYS,
     "Verification request is invalid",
   );
   const result = exchanging
     ? await dependencies.verificationService.exchangeSetupToken(body.setupToken)
-    : await dependencies.verificationService.requestEmailOtp(body.verificationId);
+    : await dependencies.verificationService.requestEmailOtp(body.verificationId, body.recoveryToken);
   const verificationId = normalizeVerificationId(result?.verificationId);
   if (!new Set([
     "already_verified",
@@ -1547,6 +1560,11 @@ async function handleOtpRequest(body, dependencies, nowMs) {
     });
   }
   if (result.state === "already_verified") {
+    if (exchanging || !recovering || !/^[a-f0-9]{64}$/.test(body.recoveryToken ?? "")) {
+      throw new ControllerError("Verified setup requires its recovery capability", {
+        status: 403, publicCode: "verification_required",
+      });
+    }
     try {
       const prepared = await preparePrefill(result.binding, dependencies, nowMs);
       return response(
@@ -1555,13 +1573,16 @@ async function handleOtpRequest(body, dependencies, nowMs) {
           ok: true,
           state: result.state,
           verificationId,
+          recoveryToken: body.recoveryToken,
           formUrl: buildFormUrl(dependencies.config, prepared.prefillHandle),
         },
         "otp_request",
         "already_verified",
       );
     } catch (error) {
-      return verifiedSetupPending(error, "otp_request");
+      return verifiedSetupPending(error, "otp_request", {
+        verificationId, recoveryToken: body.recoveryToken,
+      });
     }
   }
   if (new Set(["sent_confirmed", "in_flight"]).has(result.state)) {
@@ -1586,7 +1607,7 @@ async function handleOtpVerify(body, dependencies, nowMs) {
     body.verificationId,
     body.code,
   );
-  if (result?.verified !== true) {
+  if (result?.verified !== true || !/^[a-f0-9]{64}$/.test(result.recoveryToken ?? "")) {
     throw new ControllerError("Verification did not converge", {
       publicCode: "service_unavailable",
     });
@@ -1595,12 +1616,20 @@ async function handleOtpVerify(body, dependencies, nowMs) {
     const prepared = await preparePrefill(result.binding, dependencies, nowMs);
     return response(
       200,
-      { ok: true, formUrl: buildFormUrl(dependencies.config, prepared.prefillHandle) },
+      {
+        ok: true,
+        formUrl: buildFormUrl(dependencies.config, prepared.prefillHandle),
+        verificationId: normalizeVerificationId(body.verificationId),
+        recoveryToken: result.recoveryToken,
+      },
       "otp_verify",
       "verified",
     );
   } catch (error) {
-    return verifiedSetupPending(error, "otp_verify");
+    return verifiedSetupPending(error, "otp_verify", {
+      verificationId: normalizeVerificationId(body.verificationId),
+      recoveryToken: result.recoveryToken,
+    });
   }
 }
 
