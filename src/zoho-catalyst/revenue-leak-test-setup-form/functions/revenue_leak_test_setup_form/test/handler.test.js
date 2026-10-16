@@ -5,6 +5,7 @@ const crypto = require("node:crypto");
 const test = require("node:test");
 const { destinationDigest } = require("../lib/destinations");
 const { CLIENT_KEYS, validateForm2PayloadTypes } = require("../lib/form-contract");
+const { READ_FIELDS, createCrmClient } = require("../lib/crm-client");
 const { fingerprintSubmission } = require("../lib/snapshot");
 const issueCallerContract = require("../../../config/issue-caller-contract.json");
 const {
@@ -559,8 +560,8 @@ function validSubmission(prefillBody, overrides = {}) {
   };
 }
 
-function fixture() {
-  const selectedConfig = config();
+function fixture({ now = () => NOW_MS, configOverrides = {} } = {}) {
+  const selectedConfig = Object.freeze({ ...config(), ...configOverrides });
   const records = initialRecords();
   const events = [];
   let modifiedSequence = 0;
@@ -664,8 +665,8 @@ function fixture() {
           journeyBindingDigest: input.journeyBindingDigest,
           dealIssuanceKey: activeKey,
           status: "issuing",
-          issuedAt: "2026-08-14T18:00:00.000Z",
-          expiresAt: "2026-08-14T19:00:00.000Z",
+          issuedAt: new Date(now()).toISOString(),
+          expiresAt: new Date(now() + 3600000).toISOString(),
           attemptCount: 0,
           maxAttempts: selectedConfig.maxVerificationAttempts,
           verifiedAt: "",
@@ -691,9 +692,9 @@ function fixture() {
       if (!new Set(["issued", "verified"]).has(match.status)) {
         return { outcome: match.status, session: Object.freeze({ ...match }) };
       }
-      if (Date.parse(match.expiresAt) <= NOW_MS) {
+      if (Date.parse(match.expiresAt) <= now()) {
         match.status = "expired";
-        match.expiredAt = new Date(NOW_MS).toISOString();
+        match.expiredAt = new Date(now()).toISOString();
         match.lastOutcome = "crm_expiry_pending";
         return { outcome: "expired", session: Object.freeze({ ...match }) };
       }
@@ -704,7 +705,7 @@ function fixture() {
       match.status = "verified";
       match.lastOutcome = "verified";
       match.attemptCount += 1;
-      match.verifiedAt ||= "2026-08-14T18:00:00.000Z";
+      match.verifiedAt ||= new Date(now()).toISOString();
       return { outcome: "verified", session: Object.freeze({ ...match }) };
     },
     async readByTokenHash(tokenHash) {
@@ -783,7 +784,7 @@ function fixture() {
       session = match;
       match.status = "submitted";
       match.lastOutcome = "submitted";
-      match.submittedAt = new Date(NOW_MS).toISOString();
+      match.submittedAt = new Date(now()).toISOString();
       return Object.freeze({ ...match });
     },
     async markIssued(rowId) {
@@ -837,7 +838,7 @@ function fixture() {
       }
       match.status = "expired";
       match.lastOutcome = "issuing_expiry_pending";
-      match.expiredAt = new Date(NOW_MS).toISOString();
+      match.expiredAt = new Date(now()).toISOString();
       return Object.freeze({ ...match });
     },
     async markExpiryReconciliationRequired(rowId) {
@@ -982,8 +983,8 @@ function fixture() {
       receipt = {
         rowId: "7200000000001",
         leaseOwner: LEASE_OWNER,
-        leaseExpiresAt: "2026-08-14T19:00:00.000Z",
-        claimedAt: "2026-08-14T18:00:00.000Z",
+        leaseExpiresAt: new Date(now() + 3600000).toISOString(),
+        claimedAt: new Date(now()).toISOString(),
         submissionId: input.submissionId,
         submissionKey: input.submissionId,
         prefillId: input.prefillId,
@@ -995,7 +996,7 @@ function fixture() {
         succeededAt: "",
         failedAt: "",
         reconciliationRequiredAt: "",
-        updatedAt: "2026-08-14T18:00:00.000Z",
+        updatedAt: new Date(now()).toISOString(),
         sourceRevision: selectedConfig.sourceRevision,
         lastOutcome: "processing",
       };
@@ -1013,7 +1014,7 @@ function fixture() {
       events.push("workflow.submission.succeeded");
       assert.equal(reference.rowId, receipt.rowId);
       receipt.status = "succeeded";
-      receipt.succeededAt = new Date(NOW_MS).toISOString();
+      receipt.succeededAt = new Date(now()).toISOString();
       receipt.updatedAt = receipt.succeededAt;
       receipt.lastOutcome = "succeeded";
       return Object.freeze({ ...receipt });
@@ -1022,7 +1023,7 @@ function fixture() {
       events.push("workflow.submission.failed");
       assert.equal(reference.rowId, receipt.rowId);
       receipt.status = "failed";
-      receipt.failedAt = new Date(NOW_MS).toISOString();
+      receipt.failedAt = new Date(now()).toISOString();
       receipt.updatedAt = receipt.failedAt;
       receipt.lastOutcome = outcome;
       return Object.freeze({ ...receipt });
@@ -1031,7 +1032,7 @@ function fixture() {
       events.push("workflow.submission.reconciliation");
       assert.equal(reference.rowId, receipt.rowId);
       receipt.status = "reconciliation_required";
-      receipt.reconciliationRequiredAt = new Date(NOW_MS).toISOString();
+      receipt.reconciliationRequiredAt = new Date(now()).toISOString();
       receipt.updatedAt = receipt.reconciliationRequiredAt;
       receipt.lastOutcome = "crm_outcome_unknown";
       return Object.freeze({ ...receipt });
@@ -1078,7 +1079,7 @@ function fixture() {
       const selectedSession = sessions.find((candidate) =>
         candidate.tokenHash === tokenHash &&
         new Set(["issued", "verified"]).has(candidate.status) &&
-        Date.parse(candidate.expiresAt) > NOW_MS);
+        Date.parse(candidate.expiresAt) > now());
       if (!selectedSession) {
         const error = new Error("synthetic setup access unavailable");
         error.publicCode = "setup_not_found";
@@ -1126,8 +1127,8 @@ function fixture() {
         sessionRowId: binding.sessionRowId,
         bindingDigest: "2".repeat(64),
         destinationDigest: "3".repeat(64),
-        verifiedAt: "2026-08-14T18:00:00.000Z",
-        expiresAt: "2026-08-14T18:30:00.000Z",
+        verifiedAt: new Date(now()).toISOString(),
+        expiresAt: new Date(now() + 1800000).toISOString(),
       });
     },
   };
@@ -1138,7 +1139,7 @@ function fixture() {
     sessionStore,
     verificationService,
     workflowStore,
-    now: () => NOW_MS,
+    now,
     randomBytes: (size) => Buffer.alloc(size, entropy++),
   };
   return {
@@ -1274,6 +1275,253 @@ async function submit(fixtureValue, body) {
     fixtureValue.dependencies,
   );
 }
+
+// Keep the existing in-memory session/proof fixtures, but exercise the actual
+// CRM HTTP boundary. This transport has no network fallback and persists only
+// the JSON bytes the adapter sends, including CRM's whole-second DateTimes.
+function fixtureWithCrmTransport({ now = () => NOW_MS, onRead = () => {} } = {}) {
+  const organizationId = "200000000000001";
+  const selected = fixture({ now, configOverrides: {
+    crmOrganizationHash: crypto.createHash("sha256").update(organizationId).digest("hex"),
+  } });
+  const records = {
+    Contacts: selected.records.contact,
+    Accounts: selected.records.account,
+    Deals: selected.records.deal,
+  };
+  // Represent unset projected fields as null in this synthetic CRM. The
+  // handler-only fixtures omit fields required by the real adapter's projection.
+  for (const [module, record] of Object.entries(records)) {
+    for (const field of READ_FIELDS[module]) {
+      if (!Object.hasOwn(record, field)) record[field] = null;
+    }
+  }
+  const calls = [];
+  const transportErrors = [];
+  const proofConsumptions = [];
+  const consumeProof = selected.dependencies.verificationService.consumeVerifiedProof;
+  selected.dependencies.verificationService.consumeVerifiedProof = async (binding, destination, selectedNowMs) => {
+    const proof = await consumeProof(binding, destination, selectedNowMs);
+    proofConsumptions.push({ binding: clone(binding), destination, proof: clone(proof) });
+    return proof;
+  };
+  let revision = 0;
+  let compositeCount = 0;
+  const json = (body, status = 200) => new Response(JSON.stringify(body), {
+    status, headers: { "content-type": "application/json" },
+  });
+  const acknowledgment = (id) => ({ data: [{
+    status: "success", code: "SUCCESS", details: { id },
+  }] });
+  function target(uri) {
+    const match = /^\/crm\/v8\/(Contacts|Accounts|Deals)\/([1-9][0-9]+)$/.exec(uri);
+    assert.ok(match, "unexpected synthetic CRM target");
+    const [, module, id] = match;
+    assert.equal(id, records[module].id);
+    return { module, id, record: records[module] };
+  }
+  function validateWrite(destination, body, headers) {
+    assert.deepEqual(body.trigger, []);
+    assert.equal(body.data.length, 1);
+    assert.equal(body.data[0].id, destination.id);
+    assert.equal(headers["If-Unmodified-Since"], destination.record.Modified_Time);
+  }
+  function applyWrite(destination, body) {
+    const modifiedTime = new Date(NOW_MS + ++revision * 1000)
+      .toISOString().replace(/\.\d{3}Z$/, "+00:00");
+    Object.assign(destination.record, clone(body.data[0]), { Modified_Time: modifiedTime });
+  }
+  selected.dependencies.crmClient = createCrmClient({
+    ...selected.dependencies.config,
+    crmApiBaseUrl: "https://www.zohoapis.com/crm/v8",
+    outboundTimeoutMs: 5000,
+    outboundMaxBytes: 131072,
+  }, {
+    readAuthorizationProvider: async () => "Zoho-oauthtoken SyntheticReadToken123456789",
+    writeAuthorizationProvider: async () => "Zoho-oauthtoken SyntheticWriteToken12345678",
+    fetchImpl: async (input, options) => {
+      try {
+        const url = new URL(input);
+        assert.equal(url.origin, "https://www.zohoapis.com");
+        const call = { method: options.method, path: url.pathname };
+        calls.push(call);
+        if (url.pathname === "/crm/v8/org") {
+          assert.equal(options.method, "GET");
+          return json({ org: [{ zgid: organizationId }] });
+        }
+        if (url.pathname === "/crm/v8/__composite_requests") {
+          assert.equal(options.method, "POST");
+          const body = JSON.parse(options.body);
+          call.body = body;
+          assert.equal(body.rollback_on_fail, true);
+          assert.equal(body.parallel_execution, false);
+          const requests = body.__composite_requests;
+          assert.deepEqual(requests.map((entry) => entry.sub_request_id),
+            ["contact_update", "account_update", "deal_update"]);
+          const destinations = requests.map((entry) => target(entry.uri));
+          assert.deepEqual(destinations.map((entry) => entry.module), ["Contacts", "Accounts", "Deals"]);
+          requests.forEach((entry, index) => {
+            assert.equal(entry.method, "PUT");
+            validateWrite(destinations[index], entry.body, entry.headers);
+          });
+          requests.forEach((entry, index) => applyWrite(destinations[index], entry.body));
+          compositeCount += 1;
+          selected.events.push("crm.http.composite");
+          return json({ __composite_requests: destinations.map(({ id }) => ({
+            status: "success", code: "SUCCESS",
+            details: { response: { status_code: 200, body: acknowledgment(id) } },
+          })) });
+        }
+        const destination = target(url.pathname);
+        call.module = destination.module;
+        if (options.method === "GET") {
+          assert.deepEqual([...url.searchParams.keys()], ["fields"]);
+          const fields = url.searchParams.get("fields").split(",");
+          call.fields = fields;
+          assert.ok(fields.length > 0 && fields.length <= 50);
+          assert.ok(fields.every((field) => READ_FIELDS[destination.module].includes(field)));
+          const record = { id: destination.id,
+            ...Object.fromEntries(fields.map((field) => [field, clone(destination.record[field])])) };
+          onRead({ module: destination.module, fields, record, compositeCount });
+          selected.events.push(`crm.http.get.${destination.module}`);
+          return json({ data: [record] });
+        }
+        assert.equal(options.method, "PUT");
+        assert.equal(destination.module, "Deals");
+        call.body = JSON.parse(options.body);
+        call.ifUnmodifiedSince = options.headers["If-Unmodified-Since"];
+        validateWrite(destination, call.body, options.headers);
+        applyWrite(destination, call.body);
+        return json(acknowledgment(destination.id));
+      } catch (error) {
+        transportErrors.push(error.message);
+        throw error;
+      }
+    },
+  });
+  return Object.assign(selected, { calls, transportErrors, proofConsumptions });
+}
+
+test("CRM wire composition submits once through issuance, OTP and prefill with millisecond clocks", async () => {
+  let clock = NOW_MS + 123;
+  const selected = fixtureWithCrmTransport({ now: () => clock });
+  const preservedFields = ["Intake_Submission_ID", "Entry_Offer", "Submission_Channel",
+    "Free_Test_Request_Submitted_At", "Free_Test_Request_Notes", "Approved_Test_Route",
+    "Test_Duration_Days", "Test_Call_Limit", "Test_Scope_Version", "Pipeline", "Stage",
+    "Setup_Access_Issue_Request_ID", "Deployment_Record_ID", "Go_Live_Approval_Status",
+    "Go_Live_Approved_At", "Approved_Deployment_Record_ID", "Approved_Configuration_Version",
+    "Test_Status", "Test_Start_At", "Test_End_At", "Test_End_Reason", "Rollback_Completed_At"];
+  const preserved = Object.fromEntries(preservedFields.map((field) => [field, selected.records.deal[field]]));
+  assert.equal((await issue(selected)).status, 200);
+  assert.equal(selected.session.issuedAt, "2026-08-14T18:00:00.123Z");
+  assert.equal(selected.records.deal.Setup_Access_Issued_At, "2026-08-14T18:00:00+00:00");
+  clock = NOW_MS + 2456;
+  const prefilled = await prefill(selected);
+  assert.equal(prefilled.status, 200);
+  assert.equal(selected.session.verifiedAt, "2026-08-14T18:00:02.456Z");
+  assert.equal(selected.records.deal.Setup_Access_Verified_At, "2026-08-14T18:00:02+00:00");
+  assert.equal(selected.prefill.sessionRowId, selected.session.rowId);
+  assert.equal(selected.prefill.journeyBindingDigest, selected.session.journeyBindingDigest);
+  // The same consumed proof is rebound after the independent CRM readback.
+  assert.equal(selected.proofConsumptions.length, 2);
+  assert.deepEqual(selected.proofConsumptions[1], selected.proofConsumptions[0]);
+  const consumedProof = selected.proofConsumptions[0];
+  assert.equal(consumedProof.proof.status, "consumed");
+  assert.equal(consumedProof.proof.sessionRowId, selected.session.rowId);
+  assert.equal(consumedProof.binding.journeyBindingDigest, selected.session.journeyBindingDigest);
+  assert.equal(consumedProof.binding.crmContactId, IDS.contact);
+  assert.equal(consumedProof.binding.crmAccountId, IDS.account);
+  assert.equal(consumedProof.binding.crmDealId, IDS.deal);
+  assert.equal(consumedProof.destination, selected.records.contact.Email);
+  clock = NOW_MS + 4789;
+  const body = validSubmission(prefilled.body);
+  const accepted = await submit(selected, body);
+  assert.deepEqual(accepted.body, { ok: true, accepted: true, duplicate: false });
+  assert.equal(accepted.status, 200);
+  assert.equal(selected.receipt.status, "succeeded");
+  assert.equal(selected.receipt.prefillId, prefilled.body.prefillId);
+  assert.equal(selected.receipt.sessionRowId, selected.session.rowId);
+  assert.equal(selected.receipt.submissionId, "form2-v1:10001");
+  assert.equal(selected.records.deal.Configuration_Version, CONFIGURATION_REFERENCE);
+  assert.equal(selected.records.deal.Setup_Access_Status, "Synthetic Submitted");
+  assert.equal(selected.session.status, "submitted");
+  assert.deepEqual(Object.fromEntries(preservedFields.map((field) => [field, selected.records.deal[field]])), preserved);
+  for (const field of ["Authority_Confirmed_At", "Test_Scope_Accepted_At", "Setup_Form_Submitted_At"]) {
+    assert.equal(selected.records.deal[field], "2026-08-14T18:00:04+00:00");
+  }
+  const dealReads = selected.calls.filter((call) => call.method === "GET" && call.module === "Deals");
+  assert.ok(dealReads.length >= 2);
+  for (let index = 0; index < dealReads.length; index += 2) {
+    assert.equal(dealReads[index].fields.length, 50);
+    assert.equal(dealReads[index + 1].fields.length, 5);
+    assert.deepEqual(new Set([...dealReads[index].fields, ...dealReads[index + 1].fields]), new Set(READ_FIELDS.Deals));
+  }
+  const compositeIndex = selected.events.indexOf("crm.http.composite");
+  const succeededIndex = selected.events.indexOf("workflow.submission.succeeded");
+  const proofIndex = selected.events.indexOf("verification.proof.consume");
+  assert.ok(proofIndex >= 0 && proofIndex < compositeIndex);
+  assert.ok(compositeIndex < succeededIndex);
+  for (const module of ["Contacts", "Accounts", "Deals"]) {
+    const readbackIndex = selected.events.indexOf(`crm.http.get.${module}`, compositeIndex);
+    assert.ok(readbackIndex > compositeIndex && readbackIndex < succeededIndex);
+  }
+  const writeCount = selected.calls.filter((call) => call.method !== "GET").length;
+  const replayed = await submit(selected, body);
+  assert.equal(replayed.status, 200);
+  assert.deepEqual(replayed.body, { ok: true, accepted: true, duplicate: true });
+  assert.equal(selected.calls.filter((call) => call.method !== "GET").length, writeCount);
+  assert.equal(selected.calls.filter((call) => call.path.endsWith("/__composite_requests")).length, 1);
+  assert.deepEqual(selected.transportErrors, []);
+});
+
+test("CRM wire composition rejects a torn Deal projection before issuance or CRM mutation", async () => {
+  const selected = fixtureWithCrmTransport({ onRead({ module, fields, record }) {
+    if (module === "Deals" && fields.includes("Free_Test_Request_Notes")) {
+      record.Modified_Time = "2026-08-14T12:00:01-05:00";
+    }
+  } });
+  const result = await issue(selected);
+  assert.equal(result.status, 409);
+  assert.equal(result.body.ok, false);
+  assert.equal(selected.session, null);
+  assert.equal(selected.calls.some((call) => call.method !== "GET"), false);
+  assert.deepEqual(selected.transportErrors, []);
+});
+
+test("CRM wire composition rejects relationship drift without issuing an unbound token", async () => {
+  const selected = fixtureWithCrmTransport();
+  selected.records.account.Primary_Contact = { id: `${"9".repeat(17)}4` };
+  const result = await issue(selected);
+  assert.equal(result.status, 409);
+  assert.equal(result.body.ok, false);
+  assert.equal(selected.session, null);
+  assert.equal(selected.calls.some((call) => call.method !== "GET"), false);
+  assert.deepEqual(selected.transportErrors, []);
+});
+
+test("CRM wire composition cannot acknowledge or repeat a composite whose timestamp readback diverges", async () => {
+  const selected = fixtureWithCrmTransport({ now: () => NOW_MS + 789,
+    onRead({ module, record, compositeCount }) {
+      if (module === "Deals" && compositeCount > 0 && Object.hasOwn(record, "Setup_Form_Submitted_At")) {
+        record.Setup_Form_Submitted_At = "2026-08-14T18:00:01+00:00";
+      }
+    },
+  });
+  assert.equal((await issue(selected)).status, 200);
+  const prefilled = await prefill(selected);
+  assert.equal(prefilled.status, 200);
+  const body = validSubmission(prefilled.body);
+  const result = await submit(selected, body);
+  assert.equal(result.status, 503);
+  assert.equal(result.body.ok, false);
+  assert.equal(selected.receipt.status, "reconciliation_required");
+  assert.equal(selected.session.status, "reconciliation_required");
+  assert.equal(selected.events.includes("workflow.submission.succeeded"), false);
+  const replayed = await submit(selected, body);
+  assert.equal(replayed.body.ok, false);
+  assert.equal(selected.calls.filter((call) => call.path.endsWith("/__composite_requests")).length, 1);
+  assert.deepEqual(selected.transportErrors, []);
+});
 
 test("rejects a bad route-specific source header before body, stores, or CRM", async () => {
   const selected = fixture();
