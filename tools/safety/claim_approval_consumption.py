@@ -151,7 +151,10 @@ const privatePathKey = (value) => {
   const resolved = path.resolve(value);
   return process.platform === "win32" ? resolved.toLowerCase() : resolved;
 };
-const privatePaths = new Set([privatePathKey(process.argv[2]), privatePathKey(process.argv[3])]);
+// Validators canonicalize private paths before reading. Bind that same identity,
+// including aliases such as symlinks, Windows junctions and short path names.
+const privatePaths = new Set([process.argv[2], process.argv[3]]
+  .map((value) => privatePathKey(fs.realpathSync(value))));
 // Never resolve checkout modules, package.json, extensionless shadows or cached
 // code. Both executable helpers and contract reads use the authenticated bytes.
 const verifiedFs = Object.create(fs);
@@ -162,11 +165,12 @@ verifiedFs.readFileSync = (file, options) => {
     const encoding = typeof options === "string" ? options : options?.encoding;
     return encoding ? content.toString(encoding) : content;
   }
+  if (!filename || !privatePaths.has(privatePathKey(fs.realpathSync(filename)))) {
+    throw new Error("unverified validator data dependency");
+  }
   const content = fs.readFileSync(file, options);
-  if (filename && privatePaths.has(privatePathKey(filename))) {
-    if (JSON.parse(content.toString()).approvedSourceRevision !== authenticated.revision) {
-      throw new Error("private approval source revision mismatch");
-    }
+  if (JSON.parse(content.toString()).approvedSourceRevision !== authenticated.revision) {
+    throw new Error("private approval source revision mismatch");
   }
   return content;
 };

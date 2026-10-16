@@ -276,8 +276,11 @@ class ApprovalValidatorBootstrapTests(unittest.TestCase):
         for selected in (cli, helper, helper.with_suffix("")):
             selected.write_text("throw new Error('unchecked checkout code executed');", encoding="utf-8")
         contract.write_text("{}", encoding="utf-8")
+        packet, approval = self.root / "packet.json", self.root / "approval.json"
+        packet.write_text("{}", encoding="utf-8")
+        approval.write_text("{}", encoding="utf-8")
         result = subprocess.run(
-            [node, "-e", tool._NODE_BRIDGE, str(cli), "packet", "approval", tool.ANALYTICS_MUTATION_VALIDATOR],
+            [node, "-e", tool._NODE_BRIDGE, str(cli), str(packet), str(approval), tool.ANALYTICS_MUTATION_VALIDATOR],
             input=json.dumps({"revision": "synthetic", "files": sources}),
             encoding="utf-8", capture_output=True, timeout=15,
         )
@@ -289,21 +292,44 @@ class ApprovalValidatorBootstrapTests(unittest.TestCase):
         if node is None:
             self.skipTest("Node is unavailable")
         cli = self.root / "validator.js"
-        packet = self.root / "packet.json"
+        private_target = self.root / "private-target"
+        private_target.mkdir()
+        packet = private_target / "packet.json"
+        approval = private_target / "approval.json"
+        approval.write_text("{}", encoding="utf-8")
         marker = self.root / "validation-continued"
         packet.write_text(json.dumps({"approvedSourceRevision": "b" * 40}), encoding="utf-8")
         sources = {str(cli): "const fs = require('node:fs'); exports.run = ([packet]) => {"
                    "if (process.platform === 'win32') packet = packet.toUpperCase();"
-                   "fs.readFileSync(packet, 'utf8');"
+                   "fs.readFileSync(fs.realpathSync(packet), 'utf8');"
                    f"fs.writeFileSync({json.dumps(str(marker))}, 'executed'); }};"}
+        alias = self.root / "private-alias"
+        if os.name == "nt":
+            subprocess.run(["cmd", "/c", "mklink", "/J", str(alias), str(private_target)],
+                           check=True, capture_output=True, timeout=10)
+        else:
+            alias.symlink_to(private_target, target_is_directory=True)
+        for selected in (packet, alias / "packet.json"):
+            with self.subTest(alias=selected != packet):
+                result = subprocess.run(
+                    [node, "-e", tool._NODE_BRIDGE, str(cli), str(selected), str(approval), tool.ANALYTICS_MUTATION_VALIDATOR],
+                    input=json.dumps({"revision": "a" * 40, "files": sources}),
+                    encoding="utf-8", capture_output=True, timeout=15,
+                )
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn("private approval source revision mismatch", result.stderr)
+                self.assertFalse(marker.exists())
+        other = self.root / "unbound-packet.json"
+        other.write_text(json.dumps({"approvedSourceRevision": "a" * 40}), encoding="utf-8")
+        sources[str(cli)] = ("const fs = require('node:fs'); exports.run = () => {"
+                             f"fs.readFileSync({json.dumps(str(other))}, 'utf8'); }};")
         result = subprocess.run(
-            [node, "-e", tool._NODE_BRIDGE, str(cli), str(packet), "approval", tool.ANALYTICS_MUTATION_VALIDATOR],
+            [node, "-e", tool._NODE_BRIDGE, str(cli), str(packet), str(approval), tool.ANALYTICS_MUTATION_VALIDATOR],
             input=json.dumps({"revision": "a" * 40, "files": sources}),
             encoding="utf-8", capture_output=True, timeout=15,
         )
         self.assertNotEqual(0, result.returncode)
-        self.assertIn("private approval source revision mismatch", result.stderr)
-        self.assertFalse(marker.exists())
+        self.assertIn("unverified validator data dependency", result.stderr)
 
 
 if __name__ == "__main__":
