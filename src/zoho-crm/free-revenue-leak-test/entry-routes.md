@@ -68,6 +68,15 @@ G1 remains partial and still requires both routes.
 
 ## Retained Acceptance And Remaining Subchecks
 
+The [offline booking lineage contract](booking-lineage-contract.md) now compares
+separately supplied original-intake bindings with normalized appointment, native
+Event, conversion and calendar evidence. Its result is a consistency candidate
+only: no provider authentication, customer-write containment, durable association,
+setup eligibility or live handoff is established. Missing requester-to-booking
+binding cannot be replaced by a valid transported carrier. The implementation
+adds no issuer, route, provider adapter or storage behavior and does not change
+any retained acceptance or remaining subcheck below.
+
 The private September 24–25 records supersede older G1 labels that described all
 public recovery and new-business conversion as unexecuted. They retain selected
 same-entry native recovery with identity/timestamp preservation, one new-business

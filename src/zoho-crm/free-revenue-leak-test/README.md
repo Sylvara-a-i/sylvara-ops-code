@@ -64,6 +64,14 @@ Both historical timestamps are projected and fenced in prewrite and final readba
 
 For a separately approved synthetic smoke test, first reconcile the elapsed active generation through the existing Issue expiry path and verify its retained tombstone plus CRM `Expired` history. That operation can reject the old identity without issuing a replacement. Then use the actual Deal launcher under one fresh replacement-session allocation. Verify one new session, unchanged old evidence, exact CRM issuance readback, and only the approved email budget. Do not delete rows, clear history, reset counters, or replay a consumed approval. An ambiguous write or response requires readback before any retry. Containment disables the replacement launcher and preserves all generations; it must not re-enable the known defective renewal path. This caller-only repair does not change Catalyst guards, runtime artifacts, source holds, deferred workflows, or Retell authority.
 
+## Offline Route B Booking Lineage
+
+The [booking lineage consistency contract](booking-lineage-contract.md) provides
+a dependency-free validator and synthetic regressions for the original
+intake-to-booking-to-Event join. It grants no live or setup authority, performs no
+storage or provider operations, and leaves the existing native-writer
+qualification and public-intake holds unchanged.
+
 ## Private Development Workflow Repair Guard
 
 [`validators/workflow_repair_packet.py`](validators/workflow_repair_packet.py) validates the version-3 single-use private packet for the bounded Development workflow repair without calling CRM or performing a mutation. It binds the committed source revision; the private organization, rule, condition, field, action, task-owner, and task-description identifiers or digests; fresh evidence windows no longer than 15 minutes; the exact Sylvara CRM Audit and CRM Changes V2 tools; 11 ordered main operations; five main mutation calls; an independent by-ID rule readback after every write; independent field-update-definition reads; a complete unfiltered Deals workflow-task inventory; and three failure-containment operations with at most one conditional deactivation. The reviewed desired criterion trees apply to Lead Intake, Controls, Limits, and the Form 2 candidate. The Form 2 criterion uses only controller-owned persisted submission, representative-authority, scope-acceptance, version, and approval-status fields; it deliberately excludes a standalone CRM proof Boolean and `Authorization_Signed_At`. The distinct `crm-workflow-trigger-repair-v3` claim namespace and v3 digest domains prevent either consumed predecessor contract from being reused as this repair authority.
