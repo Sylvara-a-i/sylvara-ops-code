@@ -1866,6 +1866,27 @@ function createRuntimeService({
     };
   }
 
+  function recoveryEventData(receipt) {
+    const eventData = parseJsonColumn(receipt.EVENT_DATA_JSON, 'EVENT_DATA_JSON');
+    invariant(eventData.analysis?.outcome !== 'configuration_failure'
+      || eventData.analysis.sensitiveDataMinimized === true,
+    'REPORT_RECONCILIATION_REQUIRED',
+    'Historical terminal analysis requires controlled correction before recovery.',
+    { httpStatus: 409 });
+    invariant(receipt.SOURCE_REVISION === config.sourceRevision
+      || eventData.analysis?.outcome !== 'sensitive_data_ended'
+      || eventData.analysis.urgency !== 'unknown',
+    'REPORT_RECONCILIATION_REQUIRED',
+    'Historical minimized safety evidence requires controlled reconciliation.',
+    { httpStatus: 409 });
+    if (eventData.analysis && !Object.hasOwn(eventData.analysis, 'requestKind')) {
+      eventData.analysis = { ...eventData.analysis, requestKind: 'unknown',
+        bookableOpportunity: eventData.analysis.bookableOpportunity === true
+          ? null : eventData.analysis.bookableOpportunity };
+    }
+    return eventData;
+  }
+
   async function processEventReceipt(receiptKey) {
     invariant(typeof receiptKey === 'string' && /^evt_[a-f0-9]{64}$/.test(receiptKey),
       'INVALID_JOB_PARAMETER', 'process_event requires one valid event_key.',
@@ -1879,25 +1900,15 @@ function createRuntimeService({
     if (new Set(['Completed', 'TerminalFailure', 'ReconciliationRequired']).has(current.STATUS)) {
       return (await claimExistingReceipt(receiptKey, current)).terminal;
     }
-    const priorEvent = parseJsonColumn(current.EVENT_DATA_JSON, 'EVENT_DATA_JSON');
-    invariant(priorEvent.analysis?.outcome !== 'configuration_failure'
-      || priorEvent.analysis.sensitiveDataMinimized === true,
-    'REPORT_RECONCILIATION_REQUIRED',
-    'Historical terminal analysis requires controlled correction before recovery.',
-    { httpStatus: 409 });
-    invariant(current.SOURCE_REVISION === config.sourceRevision
-      || priorEvent.analysis?.outcome !== 'sensitive_data_ended'
-      || priorEvent.analysis.urgency !== 'unknown',
-    'REPORT_RECONCILIATION_REQUIRED',
-    'Historical minimized safety evidence requires controlled reconciliation.',
-    { httpStatus: 409 });
+    recoveryEventData(current);
     const claimed = await claimExistingReceipt(receiptKey, current);
     if (claimed.terminal) return claimed.terminal;
-    const eventData = parseJsonColumn(claimed.row.EVENT_DATA_JSON, 'EVENT_DATA_JSON');
-    if (eventData.analysis && !Object.hasOwn(eventData.analysis, 'requestKind')) {
-      eventData.analysis = { ...eventData.analysis, requestKind: 'unknown',
-        bookableOpportunity: eventData.analysis.bookableOpportunity === true
-          ? null : eventData.analysis.bookableOpportunity };
+    let eventData;
+    try {
+      eventData = recoveryEventData(claimed.row);
+    } catch (error) {
+      await containClaimedEventFailure(claimed.row, claimed.workerToken, error);
+      throw error;
     }
     return executeClaimedEvent(
       eventData,
@@ -1928,6 +1939,13 @@ function createRuntimeService({
     for (const candidate of candidates) {
       let workerToken = null;
       try {
+        try {
+          recoveryEventData(candidate);
+        } catch (error) {
+          // Historical holds must not claim or rewrite retained evidence. Other
+          // malformed rows still enter the existing claimed-error containment.
+          if (error.code === 'REPORT_RECONCILIATION_REQUIRED') throw error;
+        }
         const claimed = await claimExistingReceipt(candidate.EVENT_KEY, candidate);
         if (claimed.terminal) {
           results.push({ status: claimed.terminal.status });
@@ -1937,8 +1955,8 @@ function createRuntimeService({
         assertScanTimestamp(candidate, candidate.STATUS === 'RetryRequired'
           ? 'NEXT_ATTEMPT_AT' : candidate.STATUS === 'Processing'
             ? 'LEASE_EXPIRES_AT' : 'RECEIVED_AT');
-        const eventData = parseJsonColumn(candidate.EVENT_DATA_JSON, 'EVENT_DATA_JSON');
-        results.push(await executeClaimedEvent(eventData, candidate.CALL_KEY, candidate.EVENT_KEY,
+        const eventData = recoveryEventData(claimed.row);
+        results.push(await executeClaimedEvent(eventData, claimed.row.CALL_KEY, claimed.row.EVENT_KEY,
           claimed.workerToken));
       } catch (error) {
         let containedStatus = null;
