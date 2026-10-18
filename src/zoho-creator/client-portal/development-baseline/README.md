@@ -58,3 +58,12 @@ Creator action or imported-source execution is part of source versioning.
 
 Reverting this directory's commit removes the repository baseline; it does not
 alter or roll back any Creator environment.
+
+## Later Operations presentation checkpoint
+
+This baseline remains historical and unchanged. The [2026-10-18 native Operations
+checkpoint](../operations-overview/native-counts/README.md) separately retains the
+fresh complete source preimage, exact saved HTML remainder, native heading/counts,
+page-local queue navigation and rollback. It preserves all four existing reports
+and the chart. Its owner/admin Development empty-state observations do not qualify
+client identity, broader staff access, nonempty counts or production publication.

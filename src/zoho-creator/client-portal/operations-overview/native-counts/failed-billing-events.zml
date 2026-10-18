@@ -1,8 +1,16 @@
-<panel elementName='FailedBillingEventsCount'>
+<panel elementName='Panel 5'>
   <pr width='fill' height='auto'>
-    <pc width='100%' padding='20px' bgColor='#FFFFFF'>
-      <pr width='fill' height='auto'><pc width='100%'><text type='Text' value='Failed billing events' size='14px' color='#536570' /></pc></pr>
-      <pr width='fill' height='auto'><pc width='100%'><text type='Form Data' value='client-portal.Billing_Webhook_Events.ID.count' criteria='Environment == &quot;Development&quot; &amp;&amp; Processing_Status == &quot;Failed&quot;' size='32px' color='#0B3D46' /></pc></pr>
+    <pc padding='20px' bgColor='#FFFFFF' width='100%' hAlign='left' vAlign='middle'>
+      <pr width='fill' height='auto'>
+        <pc width='100%'>
+          <text color='#536570' size='14px' type='Text' value='Failed billing events'> </text>
+        </pc>
+      </pr>
+      <pr width='fill' height='auto'>
+        <pc width='100%'>
+          <text color='#0B3D46' size='32px' type='Form Data' displayType='actual' criteria='Environment == &quot;Development&quot; &amp;&amp; Processing_Status == &quot;Failed&quot;' value='thisapp.Billing_Webhook_Events.ID.count'> </text>
+        </pc>
+      </pr>
     </pc>
   </pr>
 </panel>

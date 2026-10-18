@@ -1,29 +1,226 @@
 {
-  "status": "prepared-only-not-installed-or-native-qualified",
-  "target": { "application": "client-portal", "environment": "Development", "space": "Sylvara.ai", "page": "Operations_Dashboard" },
-  "owningWorkflow": "Existing staff record inventory and review queues; read-only presentation",
-  "replacement": "Six HTML count cards only; do not change count criteria, native report/chart, queue queries, staff roles or client visibility",
-  "sourceReference": "../../development-baseline/Operations_Dashboard.html",
+  "status": "installed-development-owner-empty-state-qualified",
+  "observedOn": "2026-10-18",
+  "target": {
+    "application": "client-portal",
+    "environment": "Development",
+    "page": "Operations_Dashboard"
+  },
+  "owningWorkflow": "Read-only operational record inventory and review queues; no subscription entitlement or approval decisions",
+  "sourceReference": "Operations_Dashboard.preimage.html",
+  "savedHtml": "Operations_Dashboard.saved-readback.html",
   "header": "operations-header.zml",
-  "pageOrder": ["Native existing heading/intro", "Six native Count panels in two rows", "Existing remaining HTML sync/queue sections", "Existing native settings-request report", "Existing native provisioning-status chart"],
   "panels": [
-    { "file": "company-records.zml", "form": "Accounts", "aggregate": "ID.count", "criteria": "ID != 0", "legacyVariable": "company_count" },
-    { "file": "subscription-records.zml", "form": "Subscriptions", "aggregate": "ID.count", "criteria": "ID != 0", "legacyVariable": "subscription_count" },
-    { "file": "pending-provisioning.zml", "form": "Account_Services", "aggregate": "ID.count", "criteria": "Provisioning_Status == \"Pending\"", "legacyVariable": "pending_provision_count" },
-    { "file": "failed-provisioning.zml", "form": "Account_Services", "aggregate": "ID.count", "criteria": "Provisioning_Status == \"Failed\"", "legacyVariable": "failed_provision_count" },
-    { "file": "failed-billing-events.zml", "form": "Billing_Webhook_Events", "aggregate": "ID.count", "criteria": "Environment == \"Development\" && Processing_Status == \"Failed\"", "legacyVariable": "failed_billing_count" },
-    { "file": "pending-company-changes.zml", "form": "Company_Settings_Requests", "aggregate": "ID.count", "criteria": "Status == \"Pending review\"", "legacyVariable": "pending_request_count" }
+    {
+      "file": "company-records.zml",
+      "form": "Accounts",
+      "aggregate": "ID.count",
+      "criteria": "ID != 0",
+      "legacyVariable": "company_count"
+    },
+    {
+      "file": "subscription-records.zml",
+      "form": "Subscriptions",
+      "aggregate": "ID.count",
+      "criteria": "ID != 0",
+      "legacyVariable": "subscription_count"
+    },
+    {
+      "file": "pending-provisioning.zml",
+      "form": "Account_Services",
+      "aggregate": "ID.count",
+      "criteria": "Provisioning_Status == \"Pending\"",
+      "legacyVariable": "pending_provision_count"
+    },
+    {
+      "file": "failed-provisioning.zml",
+      "form": "Account_Services",
+      "aggregate": "ID.count",
+      "criteria": "Provisioning_Status == \"Failed\"",
+      "legacyVariable": "failed_provision_count"
+    },
+    {
+      "file": "failed-billing-events.zml",
+      "form": "Billing_Webhook_Events",
+      "aggregate": "ID.count",
+      "criteria": "Environment == \"Development\" && Processing_Status == \"Failed\"",
+      "legacyVariable": "failed_billing_count"
+    },
+    {
+      "file": "pending-company-changes.zml",
+      "form": "Company_Settings_Requests",
+      "aggregate": "ID.count",
+      "criteria": "Status == \"Pending review\"",
+      "legacyVariable": "pending_request_count"
+    }
   ],
-  "display": { "data": "Native Form Data Count; actual integers only; no simulated values, units, percentages, links or write actions", "font": "Inherit existing application theme; no global change", "desktop": "Two rows of three separate native panels; original order", "phoneTablet": "Existing Stacked native layout", "web390": "Unqualified. Verify wrapping, clipping and desktop quality before keeping; no unsupported breakpoint or DOM overrides" },
-  "prerequisites": [
-    "Fresh source/metadata prestate confirms existing forms, field APIs/picklists, all six criteria and native aggregate semantics",
-    "Existing internal roles have intended page and aggregate access; native aggregation honors those roles. If unavailable or unknown, stop without granting access",
-    "All client permission sets deny this internal page and its staff-wide aggregates; page navigation separation alone is insufficient",
-    "Native aggregate unavailable/permission errors must not render a fabricated 0. Empty valid dataset and denied source must be distinguished",
-    "No existing panel/preset already supplies these exact six metrics; reuse matching components before adding duplicates"
+  "sourceDigests": {
+    "operations-header.zml": "1fb36e4c2981a69d8799c6d54c86f45a6db026369091494e4e3c78f337525363",
+    "company-records.zml": "6acf88700b57fd7f11a41762eeb4d574e0e4280c7b3cf7f4de07d438890c7b19",
+    "subscription-records.zml": "f64962e5e5fd07ad1fd9c0dae7f6e80c51c6338bc48e848d2416b9a521510de7",
+    "pending-provisioning.zml": "a03c6ad21535659c1de2f5bd9f0c422edd2f63fabc8c7a8c8043b55648268003",
+    "failed-provisioning.zml": "4e889d45d9bd8ba6440e9ad4f64948f1c4200e428042128e47d91d79b5cff688",
+    "failed-billing-events.zml": "590612f5d77d50eca2fe3e8daee8023bc4d0eba65ff5014dd7b896cbf38e25d5",
+    "pending-company-changes.zml": "e3ef1516d2c17e70af9763629760a1b3f7b4098d99cfb6616ac719e8e491f411",
+    "all-company-requests.zml": "32b410a442b126d76261875aeda43a41ee030047df2354cfaec1e43e75a76390",
+    "Operations_Dashboard.preimage.html": "8ff3079a4bbf6e588b8cc63f8c5b83069a27844c8c19eaf7db9f71ecbfb9104f",
+    "Operations_Dashboard.saved-readback.html": "f050df4d5cc9caef599dfc2a9cf901d842383156caf55eb689c2bc03f55c7b60"
+  },
+  "htmlReplacement": {
+    "removedStartInclusive": 8204,
+    "removedEndExclusive": 9389,
+    "removedBytes": 1185,
+    "preimageBytes": 11000,
+    "savedBytes": 9814,
+    "creatorNormalization": "One final LF removed from the 9815-byte reviewed remainder; no other difference"
+  },
+  "originalComponentOrder": [
+    "html_snippet5",
+    "report_1",
+    "report_4",
+    "chart_1",
+    "report_3",
+    "report_2"
   ],
-  "preservedComponents": ["All_Company_Settings_Requests native report", "Account_Services native provisioning-status bar chart", "existing HTML latest-sync and bounded queue sections"],
-  "scopeLimits": ["No portal users or personas selected", "No grants, roles, auth endpoints, forms, fields, records, external connections or business writes", "No Stage/Production changes", "Billing event environment filter remains Development; this packet is not portable promotion configuration"],
-  "rollback": "Remove/unbind only new native panels and restore captured original HTML count block; preserve all data and native report/chart. No irreversible deletion or permission changes",
-  "verification": "README.md; XML/source parity checks do not prove Creator syntax, rendering, aggregate permission enforcement or runtime acceptance"
+  "savedRows": [
+    [
+      "panel_1"
+    ],
+    [
+      "panel_2",
+      "panel_3"
+    ],
+    [
+      "panel_4",
+      "panel_5"
+    ],
+    [
+      "panel_6",
+      "panel_7"
+    ],
+    [
+      "html_snippet5"
+    ],
+    [
+      "report_1"
+    ],
+    [
+      "panel_8"
+    ],
+    [
+      "report_4"
+    ],
+    [
+      "chart_1"
+    ],
+    [
+      "report_3"
+    ],
+    [
+      "report_2"
+    ]
+  ],
+  "nativeComponents": {
+    "panel_1": "operations-header.zml",
+    "panel_2": "company-records.zml",
+    "panel_3": "subscription-records.zml",
+    "panel_4": "pending-provisioning.zml",
+    "panel_5": "failed-provisioning.zml",
+    "panel_6": "failed-billing-events.zml",
+    "panel_7": "pending-company-changes.zml",
+    "panel_8": "all-company-requests.zml"
+  },
+  "preservedReports": [
+    {
+      "component": "report_1",
+      "source": "All_Company_Settings_Requests"
+    },
+    {
+      "component": "report_4",
+      "source": "All_Subscriptions",
+      "title": "Subscription attention"
+    },
+    {
+      "component": "report_3",
+      "source": "All_Account_Services",
+      "title": "Provisioning attention"
+    },
+    {
+      "component": "report_2",
+      "source": "All_Billing_Webhook_Events",
+      "title": "Development billing failures"
+    }
+  ],
+  "preservedChart": {
+    "component": "chart_1",
+    "source": "Account_Services",
+    "kind": "bar",
+    "title": "Service records by provisioning status"
+  },
+  "pendingQueue": {
+    "component": "report_1",
+    "previousTitle": "",
+    "title": "Pending company changes",
+    "criteria": "Status == \"Pending review\"",
+    "criteriaChanged": false,
+    "historyPanel": "panel_8",
+    "historySource": "all-company-requests.zml",
+    "sharedReportChanged": false,
+    "sharedReportCriteriaObserved": null,
+    "statusChoicesObserved": [
+      "Pending review"
+    ],
+    "controls": {
+      "add": false,
+      "edit": false,
+      "delete": false,
+      "duplicate": false,
+      "search": true,
+      "retainChanges": false,
+      "print": false,
+      "export": false,
+      "recordCount": true,
+      "bulkEdit": false,
+      "bulkDelete": false,
+      "bulkDuplicate": false,
+      "publicAccess": false
+    }
+  },
+  "qualification": {
+    "installedInDevelopment": true,
+    "savedSourceReadback": true,
+    "ownerEmptyCountParity": true,
+    "ownerQueueEmptyState": true,
+    "ownerHistoryNavigation": true,
+    "countCardWebWidths": [
+      391,
+      770,
+      1179
+    ],
+    "queueTitleButtonNarrowWebWidth": 391,
+    "nativePhoneTablet": "Stacked layout previews only; Ct() placeholders",
+    "nonemptyCounts": false,
+    "nonpendingRows": false,
+    "errorVersusZero": false,
+    "realNativeDeviceExecution": false,
+    "clientTenantIsolation": false,
+    "broaderStaffAccess": false,
+    "productionPublished": false
+  },
+  "accessBoundary": "Existing owner/admin-only Development access retained; other internal profiles and client profiles remain denied. No grants changed. This is not a broad staff rollout.",
+  "layoutBoundary": "Three rows of two Count cards. Native Phone/Tablet previews stack. Narrow web qualifies card/title/button readability; the dense report and Creator owner shell still horizontally scroll. Full mobile optimization is unqualified.",
+  "rollback": {
+    "queueOnly": [
+      "Restore report_1 blank title and disabled title visibility",
+      "Remove only panel_8 and its empty row",
+      "Keep pending filter, shared report, HTML, header/counts and all existing components"
+    ],
+    "fullReplacement": [
+      "First undo queue-only additions",
+      "Restore complete Operations_Dashboard.preimage.html including original heading, intro and all six count cards",
+      "Remove only panel_1 through panel_7, including native header",
+      "Keep HTML snippet, all four reports, chart, source filters, data and grants"
+    ]
+  },
+  "privateEvidence": "Exact screenshots, account/profile metadata and detailed readbacks retained privately in Library; excluded from Git and CI. This sanitized manifest records dated observations, not a live attestation or future authorization."
 }

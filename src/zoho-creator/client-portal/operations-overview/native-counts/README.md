@@ -1,40 +1,159 @@
-# Operations native Count replacement packet
+# Operations native Development checkpoint
 
-Status, 2026-10-12: **prepared source only**. No native component was installed, no record was read for this packet, and no permission or data changed. This replaces the existing functional HTML counters with six real native aggregate panels; it does not turn client call/report placeholders into live data. The client identity gate remains open. The packet targets only the internal Sylvara.ai space's Development Operations_Dashboard.
+Status, 2026-10-18: **installed and retained in Development under the existing
+owner/admin context**. This checkpoint reconciles the saved native header, six
+Count cards, HTML remainder, and page-local pending-request navigation. It
+supersedes the prepared-only packet dated 2026-10-12. It is not a client portal
+integration, broader staff rollout, Stage/Production publication, or launch.
 
-[`packet.json`](packet.json) fixes the six source forms, ID counts and exact current criteria. Each linked `.zml` file is a concrete native panel using `type='Form Data'`, not a hardcoded number or page-variable fixture. The sources reproduce the six count queries in the immutable [Development baseline](../../development-baseline/Operations_Dashboard.html). Fresh live prestate must still be captured before installation. Source names are proposed local element names; no native import/save or Count/permission behavior has been qualified.
+Creator owns this bounded operational record inventory and human review view.
+CRM, Billing and Books retain their business/accounting authority. Counts do not
+establish active paid plans, entitlement, revenue, service availability, approval,
+or an applied company-settings change.
 
-The six existing HTML metrics share one snippet with the page header, empty-inventory message, latest sync and bounded queue tables. A coherent replacement must migrate the count group together; a separate single native card would leave duplicate metrics and disjoint spacing. Use native two-row/three-column cards in their original order. Move the two existing heading/intro strings to [`operations-header.zml`](operations-header.zml), then place the six native panels before the remaining HTML sync/queue snippet. Preserve that snippet's complete Deluge and empty-inventory condition, which still needs the six count variables. Preserve existing copy and theme. Do not introduce filler panels or explanatory placeholder text. Do not overwrite the baseline.
+## Exact saved sources and preservation
 
-## Exact installation sequence after prerequisites pass
+- The seven header/count `.zml` files are exact saved Code readbacks, including
+  Creator's `thisapp` normalization and generated element names. The pending
+  company-change Count omits `displayType` in its saved source; the native UI
+  showed Actual/default and the observed empty result was zero. Nonzero number
+  formatting remains unqualified.
+- [`all-company-requests.zml`](all-company-requests.zml) is the exact saved native
+  OpenReport button source. It targets the existing `All_Company_Settings_Requests`
+  in the same window, without parameters, selectors, or a custom URL. Native
+  new-window navigation was blocked by the browser; same-window navigation and
+  return to Operations were tested without changing browser permissions.
+- [`Operations_Dashboard.preimage.html`](Operations_Dashboard.preimage.html) is
+  the complete safe source preimage captured before replacement. The historical
+  [baseline](../../development-baseline/Operations_Dashboard.html) stays unchanged.
+  Their only differences are an already-absent `Failed` note under the old billing
+  count and the preimage's final newline. No query or other logic differs.
+- [`Operations_Dashboard.saved-readback.html`](Operations_Dashboard.saved-readback.html)
+  is the exact persisted remainder. Removal of preimage bytes `[8204, 9389)`
+  removes only the complete original heading, intro and six-card group. Creator
+  then removes one final LF: 11,000 → 9,815 → 9,814 bytes. All Deluge, CSS, sync,
+  empty-inventory condition and bounded HTML queues are preserved. The six old
+  count queries remain because the retained Deluge condition uses them.
+- [`packet.json`](packet.json) records source digests, six exact mappings,
+  page-local queue controls, component order, observed qualification and rollback.
+  It is a sanitized dated checkpoint, not an automated live-state attestation.
 
-1. Read back current Development page components and source; capture the HTML snippet and panel/report/chart positions privately. Verify existing internal roles and client denial without modifying them. Confirm no matching native count panels/presets already exist. Verify field/picklist and Count semantics; neither an owner preview nor a hidden navigation entry proves staff/client isolation.
-2. Add/configure six separate native panels with these exact sources, or use the native Display tab: Zoho Creator -> the fixed form -> Count -> Selected records -> the exact criterion -> Actual -> no units. Use the component's Code readback to verify `ID.count` and all filters. No panel action is configured. Do not create a preset shared with another page.
-3. Verify each native aggregate against the current authorized staff projection. Counts describe records, not active subscriptions, service availability, revenue or paid entitlement. Unknown, denied or failed reads must not be presented as valid zero counts. A known empty dataset qualifies zero only; nonempty/filter boundaries need separately authorized synthetic records or already authorized evidence.
-4. Once parity is proven, remove the six `<div class="sv-card">` counters and their enclosing `sv-counts` block from the saved HTML candidate. Remove exactly the existing `<h1>Operations Overview</h1>` and `<p>Record inventory and review queues.</p>` after the native header is present. Keep the complete Deluge block, empty-inventory logic, sync/queue sections and their encoding unchanged. Native report `All_Company_Settings_Requests` and the provisioning chart remain in place. Verify no duplicate heading/metric, duplicate count panel, report or chart remains.
-5. Render desktop at 1534px, tablet web at 768px and narrow web at 390px; inspect screenshots, text/number clipping, whitespace and original desktop compactness. Inspect native Phone and Tablet Stacked previews separately. Native Count syntax has no verified web breakpoint: if narrow web quality fails, restore the captured prestate and report the failure. Do not call all-size quality achieved from width measurements or native device previews alone.
-6. Re-read saved sources/configuration, compare all six count/filter bindings and component IDs, and verify unchanged existing role visibility and disabled business actions. Any missing staff or client-negative session blocks access qualification; do not create users, select demo personas, grant access or infer a result. No Stage/Production publish follows this packet.
+Final page order is:
 
-## Verification matrix
+1. Native heading `panel_1`
+2. Company and subscription Counts `panel_2`, `panel_3`
+3. Pending and failed provisioning Counts `panel_4`, `panel_5`
+4. Failed billing and pending company-change Counts `panel_6`, `panel_7`
+5. Preserved HTML `html_snippet5`
+6. Existing settings-request report `report_1`, titled **Pending company changes**
+7. Native **View all company requests** button `panel_8`
+8. Existing subscription-attention report `report_4`
+9. Existing provisioning-status bar chart `chart_1`
+10. Existing provisioning-attention report `report_3`
+11. Existing Development billing-failure report `report_2`
 
-| Check | Required result |
-| --- | --- |
-| Five source forms and six Count/criteria bindings | Exact match; Billing event filter retains Environment == Development and Processing_Status == Failed |
-| Empty valid data | Actual native count 0; source is available and authorized |
-| Nonempty/filter boundaries | Matches authorized legacy aggregate; unrelated status/environment does not count; otherwise unqualified |
-| Existing staff role | Intended internal aggregates only; no role change |
-| Client/anonymous role | Denied page/aggregate; no staff counts or source errors disclosed; otherwise unqualified |
-| Unavailable/denied source | Explicit failure/blocked rendering; no fabricated 0; provider behavior needs empirical qualification |
-| Duplicate/preset inventory | No extra metric, shared preset mutation, duplicate report or chart |
-| Three web widths and native devices | Screenshots prove readable labels/counts, acceptable spacing and preserved compact desktop; otherwise restore |
-| Existing native report/chart/actions | Same component targets and behavior; no record mutation |
+All **four** reports and the chart were retained in their prior relative order.
+Do not replace this inventory with the old packet's one-report assumption.
 
-Rollback restores only the captured count display and unbinds new panels. It does not delete data, change permissions or attempt to undo native record writes. No live rollback is needed for the current prepared-only files.
+## Pending queue and full history
 
-Reproduce the offline packet check with `python src/zoho-creator/client-portal/operations-overview/native-counts/verify-packet.py`. It parses all seven XML sources, verifies each aggregate/criterion against the existing independent baseline query, checks the exact header strings, and rejects actions or source-set drift. This is source validation, not native runtime or access qualification.
+The settings-request embed already had `Status == "Pending review"`; its filter
+was inspected and left unchanged. The exact current Status choice was verified.
+The only changes were an enabled page-local title and the separate native
+navigation panel. Search and record count remain enabled; all mutation, bulk,
+print/export, retain-changes and public-access controls remain disabled.
 
-## Supported capability and layout boundary
+The full existing report has no configured report-level criteria. Its metadata
+was identical before and after this change. Owner click-through opened its empty
+state without a page-local filter, and both Operations navigation and browser
+Back returned correctly. The button inherits existing destination permissions;
+it grants no access. The shared report, records and original HTML queue were
+not changed. Only the current empty data state was exercised, so exclusion of
+non-pending records and real historical-row behavior remain unqualified.
 
-Official sources checked 2026-10-12: [native panel display](https://help.zoho.com/portal/en/kb/creator/developer-guide/pages/panel/articles/configure-panel-display-element) documents Count/selected records/Actual; [ZML text](https://help.zoho.com/portal/en/kb/creator/developer-guide/zml-guide/articles/text-tag) documents `Form Data`, `appLinkName.formLinkName.ID.count` and criteria. These establish source capability, not Sylvara runtime permissions or import success.
+## What was and was not qualified
 
-The [native layout controls](https://help.zoho.com/portal/en/kb/creator/developer-guide/pages/create-and-manage-pages/articles/customize-layout-for-web) offer Web Card/Plain plus margins, and Phone/Tablet Stacked/Actual. Fresh Overview screenshots retain three compact columns at 1534px and readable three columns at 768px; 390px remains squeezed/clipped. Native Phone/Tablet previews stack. No supported web breakpoint was found among the inspected controls; no current page layout was changed. This packet does not solve that provider-rendering gap or authorize native portal authentication testing.
+Observed and independently reviewed private evidence established:
+
+- Saved native sources and all six form/Count/criterion bindings
+- Empty owner-data parity between the original six counters and native Counts
+- Preserved HTML bytes, existing components and page-local report controls
+- Native-card desktop 1179px, tablet-web 770px and narrow-web 390–391px readability
+- A readable pending queue title and usable full-report button at 391px
+- Native Phone/Tablet Stacked **layout previews**, with `Ct()` placeholders
+
+The retained layout is **three rows of two** Count cards. The initial three-column
+layout clipped labels at narrow width and was replaced before final acceptance.
+Native preview stacking does not prove native-device data execution. The dense
+embedded table and Creator owner shell still horizontally scroll at narrow
+widths; do not describe the entire dashboard as mobile-optimized.
+
+Access remains **owner/admin-only Development**. Other internal profiles remain
+denied, and inspected client profiles remain denied. No grant, identity, account,
+provider transport, record or billing change was made. Owner rendering and
+configured denials do not establish real client-negative/session isolation.
+Nonempty/filter-boundary counts, denied/error-versus-zero behavior, actual native
+mobile-device execution and broader staff access remain unqualified. A future
+broader rollout requires fresh authorized acceptance, not this packet alone.
+
+Client-facing Calls, Settings and Billing still require the independent
+[identity, tenant binding, operation grants and provider transport gates](../../NATIVE-INTEGRATION.md).
+This staff Operations checkpoint does not close any of those gates.
+
+## Reproduce offline checks
+
+From the repository root:
+
+```sh
+python3 src/zoho-creator/client-portal/operations-overview/native-counts/verify-packet.py
+python3 -m unittest discover -s src/zoho-creator/client-portal/operations-overview/native-counts -p 'test_*.py' -v
+```
+
+The verifier checks exact HTML preservation/rollback, legacy/native predicate
+parity, eight native source files, one bounded navigation action, all four
+reports/chart, component order and unchanged queue controls. Mutation tests cover
+wrong counts, missing environment predicates, actions, static zeros, query
+selectors, target changes, source drift, dropped components and inflated
+qualification. It performs no Creator IO or record mutation and cannot refresh
+live qualification. The canonical `tools/verify.ps1` invokes these checks, including
+through the existing Linux CI verifier job.
+
+Before any future native edit, capture fresh source/configuration, verify the
+current Development target and grants, reconcile prior writers, independently
+review the bounded patch, and re-read the saved result. Do not replay this
+installation blindly or create duplicate panels/presets.
+
+## Reversible rollback
+
+### Queue-only rollback
+
+1. On `report_1`, restore the previously blank title and disabled title visibility.
+   The native title icon toggles visibility; enabling it opens the stored title.
+2. Remove only `panel_8` and its now-empty row. Its saved source display name is
+   `Panel 7`; use the component ID/location, not that display name alone.
+3. Keep the Pending review filter, shared report, all controls, HTML remainder,
+   header/Count panels, other three reports and chart unchanged. Reload and verify.
+
+### Full header/Count replacement rollback
+
+1. Undo the queue-only additions above if returning to the complete pre-change page.
+2. Restore the **entire** captured preimage HTML, including the original heading,
+   intro and all six count cards. The verifier's `restore_preimage` function proves
+   the byte-exact reconstruction but does not write to Creator.
+3. Remove only `panel_1` through `panel_7`, **including the native header**. Restoring
+   count markup alone or leaving the native header would be an incomplete rollback.
+4. Retain `html_snippet5`, all four reports, chart and prior relative order; keep all
+   data, filters, grants and external bindings unchanged. Verify saved source and
+   empty-state rendering after restoration. No irreversible deletion is required.
+
+Source rollback does not undo business data because this change wrote none. Any
+future changed preimage, unknown save result or unavailable recovery control
+requires reconciliation before retry or rollback.
+
+## Evidence retention and public boundary
+
+Private Library packages retain screenshots, account/profile metadata and exact
+UI/connector readbacks. Those materials, identifiers and storage locations are
+intentionally absent from Git and CI. This repository contains only safe source,
+portable component names, preservation tests and bounded outcome statements.
+Merging source reconciliation does not publish or redeploy the Creator page.

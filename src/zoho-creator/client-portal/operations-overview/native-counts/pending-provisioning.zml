@@ -1,9 +1,21 @@
-<panel elementName='PendingProvisioningCount'>
+<panel elementName='Panel 3'>
   <pr width='fill' height='auto'>
-    <pc width='100%' padding='20px' bgColor='#FFFFFF'>
-      <pr width='fill' height='auto'><pc width='100%'><text type='Text' value='Pending provisioning' size='14px' color='#536570' /></pc></pr>
-      <pr width='fill' height='auto'><pc width='100%'><text type='Form Data' value='client-portal.Account_Services.ID.count' criteria='Provisioning_Status == &quot;Pending&quot;' size='32px' color='#0B3D46' /></pc></pr>
-      <pr width='fill' height='auto'><pc width='100%'><text type='Text' value='Account Services &#8594; Pending' size='13px' color='#536570' /></pc></pr>
+    <pc padding='20px' bgColor='#FFFFFF' width='100%' hAlign='left' vAlign='middle'>
+      <pr width='fill' height='auto'>
+        <pc width='100%'>
+          <text color='#536570' size='14px' type='Text' value='Pending provisioning'> </text>
+        </pc>
+      </pr>
+      <pr width='fill' height='auto'>
+        <pc width='100%'>
+          <text color='#0B3D46' size='32px' type='Form Data' displayType='actual' criteria='Provisioning_Status == &quot;Pending&quot;' value='thisapp.Account_Services.ID.count'> </text>
+        </pc>
+      </pr>
+      <pr width='fill' height='auto'>
+        <pc width='100%'>
+          <text color='#536570' size='13px' type='Text' value='Account Services → Pending'> </text>
+        </pc>
+      </pr>
     </pc>
   </pr>
 </panel>
