@@ -5,6 +5,16 @@ guide records the remaining seams, not deployed state or permission to perform
 live work. Reuse the existing projections and inspected native components; do
 not add a duplicate business store, replacement shell or placeholder results.
 
+## Separate internal Operations checkpoint
+
+The [native Operations checkpoint](operations-overview/native-counts/README.md)
+was saved and read back in Development on 2026-10-18: one native heading, six
+Count cards, preserved HTML/four reports/chart, and a page-local pending queue
+heading with a route to the existing full report. Qualification is bounded to
+existing owner/admin access and empty-data/layout observations. Other internal
+profiles remain denied. No grants changed, and no client identity, tenant-binding,
+provider-transport or real-session isolation gate below was closed by that work.
+
 ## Existing source seams
 
 | Workflow | Reuse | Boundary still missing |

@@ -641,6 +641,15 @@ try {
                 "-p", "test_*.py", "-v"
             )
 
+        Invoke-Native -Label "Creator Operations native saved-source preservation" -Executable $python `
+            -Arguments @("src/zoho-creator/client-portal/operations-overview/native-counts/verify-packet.py")
+        Invoke-Native -Label "Creator Operations native preservation regression tests" -Executable $python `
+            -Arguments @(
+                "-m", "unittest", "discover", "-s",
+                "src/zoho-creator/client-portal/operations-overview/native-counts",
+                "-p", "test_*.py", "-v"
+            )
+
         if ($Mode -eq "All") {
             Invoke-Native -Label "Gateway production dependency audit" -Executable $npm `
                 -Arguments @(

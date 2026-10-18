@@ -1,9 +1,21 @@
-<panel elementName='SubscriptionRecordsCount'>
+<panel elementName='Panel 2'>
   <pr width='fill' height='auto'>
-    <pc width='100%' padding='20px' bgColor='#FFFFFF'>
-      <pr width='fill' height='auto'><pc width='100%'><text type='Text' value='Subscription records' size='14px' color='#536570' /></pc></pr>
-      <pr width='fill' height='auto'><pc width='100%'><text type='Form Data' value='client-portal.Subscriptions.ID.count' criteria='ID != 0' size='32px' color='#0B3D46' /></pc></pr>
-      <pr width='fill' height='auto'><pc width='100%'><text type='Text' value='Records, not active paid plans' size='13px' color='#536570' /></pc></pr>
+    <pc padding='20px' bgColor='#FFFFFF' width='100%' hAlign='left' vAlign='middle'>
+      <pr width='fill' height='auto'>
+        <pc width='100%'>
+          <text color='#536570' size='14px' type='Text' value='Subscription records'> </text>
+        </pc>
+      </pr>
+      <pr width='fill' height='auto'>
+        <pc width='100%'>
+          <text color='#0B3D46' size='32px' type='Form Data' displayType='actual' criteria='ID != 0' value='thisapp.Subscriptions.ID.count'> </text>
+        </pc>
+      </pr>
+      <pr width='fill' height='auto'>
+        <pc width='100%'>
+          <text color='#536570' size='13px' type='Text' value='Records, not active paid plans'> </text>
+        </pc>
+      </pr>
     </pc>
   </pr>
 </panel>

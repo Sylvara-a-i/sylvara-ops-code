@@ -1,0 +1,10 @@
+<panel elementName='Panel 7'>
+  <pr width='fill' height='fill'>
+    <pc padding='20px' bgColor='#FFFFFF' width='100%' hAlign='center' vAlign='middle'>
+      <pr width='auto' height='auto'>
+        <pc vAlign='middle'>
+          <button margin='0px' paddingTop='12px' paddingLeft='15px' paddingRight='15px' paddingBottom='12px' action='OpenReport' componentLinkName='All_Company_Settings_Requests' target='same-window' color='theme' size='16px' borderColor='theme' borderWidth='1px' text='View all company requests' bgColor='transparent' bgColorType='noFill' cornerRadius='3px' /> </pc>
+      </pr>
+    </pc>
+  </pr>
+</panel>

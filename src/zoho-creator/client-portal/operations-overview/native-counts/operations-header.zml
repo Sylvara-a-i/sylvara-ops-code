@@ -1,8 +1,16 @@
-<panel elementName='OperationsInventoryHeading'>
+<panel elementName='Panel'>
   <pr width='fill' height='auto'>
-    <pc width='100%' padding='20px' bgColor='#FFFFFF'>
-      <pr width='fill' height='auto'><pc width='100%'><text type='Text' value='Operations Overview' size='30px' color='#0B3D46' /></pc></pr>
-      <pr width='fill' height='auto'><pc width='100%'><text type='Text' value='Record inventory and review queues.' size='14px' color='#536570' /></pc></pr>
+    <pc padding='20px' bgColor='#FFFFFF' width='100%' hAlign='left' vAlign='middle'>
+      <pr width='fill' height='auto'>
+        <pc width='100%'>
+          <text color='#0B3D46' size='30px' bold='true' type='Text' value='Operations Overview'> </text>
+        </pc>
+      </pr>
+      <pr width='fill' height='auto'>
+        <pc width='100%'>
+          <text marginTop='10px' color='#536570' size='14px' type='Text' value='Record inventory and review queues.'> </text>
+        </pc>
+      </pr>
     </pc>
   </pr>
 </panel>
