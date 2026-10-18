@@ -139,20 +139,25 @@ Then run the repository verifier as documented in the root README. Tests use
 synthetic metadata only; private independently collected evidence stays outside
 Git and CI.
 
-### Offline Paired-ID Metadata Normalization
+### Offline Local And Paired-ID Metadata Normalization
 
 [`tools/normalize-paid-crm-metadata.js`](tools/normalize-paid-crm-metadata.js)
 exports the pure `normalizePaidCrmMetadata(readbacks, expected)` helper for the
-bounded case where a raw option readback contains one global ID and one local
-field ID for each actual API value. It reconciles four independently collected
-inventories before projecting the single local field option. It does not change
+bounded cases where each field is explicitly local-only, or its raw option
+readback contains one global ID and one local field ID for each actual API value.
+The two fields may use different binding modes. It reconciles four independently
+collected inventories before projecting the single local field option. It does not change
 the validator's rejection of duplicate normalized option values, including
 identical duplicates.
 
 `expected` contains `organizationId`, `layoutId`, `notBefore`, `evaluatedAt`, and
 exactly two `fields` binding rows with `apiName`, `fieldId`, `globalSetId` for
-`Plan` and `Subscription_Status`. Field IDs and global-set IDs must each be
-unique. Each of the following four readbacks has its own nonempty, distinct
+`Plan` and `Subscription_Status`. Each binding must include `globalSetId`: an
+explicit `null` means independently verified local-only scope; a nonempty string
+binds the exact global set. Missing, blank or malformed bindings are rejected,
+never inferred as local-only. Field IDs and non-null global-set IDs must each be
+unique. Every captured field binding must match the expected binding exactly.
+Each of the following four readbacks has its own nonempty, distinct
 `readbackId`, plus `organizationId`, `moduleApiName: "Deals"`,
 `source: "independent_readback"`, `complete: true`, and canonical `capturedAt`
 within the expected interval. A readback ID identifies a private capture, not
@@ -161,9 +166,9 @@ invent four capture IDs for copies of the same response.
 
 | Readback | Payload beyond its envelope |
 | --- | --- |
-| `globalSets` | `sets`: exactly the two bound `{ globalSetId, options }` inventories |
+| `globalSets` | `sets`: exactly the non-null bound `{ globalSetId, options }` inventories; an explicit empty array when both fields are local-only |
 | `fields` | `fields`: binding rows plus `dataType`, optional boolean `apiUpdate`/`readOnly`, and `options` |
-| `rawOptions` | `fields`: binding rows plus the expected `layoutId` and raw paired `options` |
+| `rawOptions` | `fields`: binding rows plus the expected `layoutId` and raw local-only or paired `options` |
 | `layout` | Expected `layoutId`, boolean `active`, `fields`: binding rows plus optional boolean `readOnly` and `options` |
 
 Every option contains `id`, `actualValue`, boolean `active`, and optional
@@ -174,11 +179,20 @@ status. An omitted or unfamiliar status cannot be guessed as active. Exclude
 all unrelated provider keys, records and credentials before calling the helper.
 Labels never establish stored API values or ID namespace membership.
 
+The global readback envelope remains required even when no global sets are bound;
+local-only scope does not waive provenance, completeness or freshness checks.
+An unbound extra global set is rejected. The collector maps a verified absence
+of a global binding to explicit `null`; an omitted provider property or partial
+response is not evidence of that absence.
+
 The global and field inventories must each have unique IDs and actual values;
-their actual values and active states must agree exactly. No inventory ID may
+for a globally bound field their actual values and active states must agree exactly. No inventory ID may
 belong to multiple rows or namespaces. Raw IDs must resolve to this exact
 field's global or local inventory, once each, with matching actual value and
-active state. Missing, repeated, unknown or cross-field IDs fail closed.
+active state. For a local-only field, raw options must contain exactly the local
+inventory IDs once each; global IDs cannot substitute or add a second copy.
+Missing, repeated, unknown or cross-field IDs fail closed. The helper never
+deduplicates by actual value or display label, repairs case or invents an option.
 Configured layout options must resolve exclusively to local field IDs, once
 each, with matching actual values and active states. This bounded normalizer
 requires the whole local inventory in the configured layout; a restricted

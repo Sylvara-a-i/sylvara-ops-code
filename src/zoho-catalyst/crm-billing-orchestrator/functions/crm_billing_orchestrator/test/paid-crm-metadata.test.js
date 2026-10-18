@@ -23,8 +23,7 @@ function envelope(readbackId, details) {
     capturedAt: "2026-01-01T12:00:00.000Z", ...details };
 }
 
-function fixture() {
-  const values = [["Option 1", "Option 2", "Pro"], ["Scheduled", "Active"]];
+function fixture(values = [["Option 1", "Option 2", "Pro"], ["Scheduled", "Active"]]) {
   const global = EXPECTED.fields.map((binding, index) => ({ globalSetId: binding.globalSetId,
     options: values[index].map((actualValue, option) => ({
       id: `synthetic-global-${index}-${option}`, actualValue, active: true,
@@ -47,6 +46,22 @@ function fixture() {
         ...(index === 1 ? { readOnly: false } : {}), options: structuredClone(fields[index].options),
       })) }),
   };
+}
+
+function localFixture(localNames = ["Plan"], values) {
+  const readbacks = fixture(values);
+  const expected = structuredClone(EXPECTED);
+  for (const name of localNames) {
+    const binding = expected.fields.find((field) => field.apiName === name);
+    readbacks.globalSets.sets = readbacks.globalSets.sets.filter((set) => set.globalSetId !== binding.globalSetId);
+    binding.globalSetId = null;
+    for (const section of ["fields", "rawOptions", "layout"]) {
+      readbacks[section].fields.find((field) => field.apiName === name).globalSetId = null;
+    }
+    readbacks.rawOptions.fields.find((field) => field.apiName === name).options =
+      structuredClone(readbacks.fields.fields.find((field) => field.apiName === name).options);
+  }
+  return { readbacks, expected };
 }
 
 function assertRejected(readbacks, reason, expected = EXPECTED) {
@@ -87,6 +102,196 @@ test("paired global and local IDs normalize to one option without changing dupli
   rows.push(structuredClone(rows[0]));
   assert.deepEqual(preflight(duplicate).checks.futureStatus,
     { status: "unknown", reasons: ["option_rows_malformed_or_duplicate"] });
+});
+
+test("explicit local Plan and paired status inventories normalize without deduplication", () => {
+  const { readbacks, expected } = localFixture(["Plan"], [
+    ["Option 1", "Option 2", "Pro", "synthetic-extra-plan", "synthetic-retired-plan"],
+    ["Scheduled", "Active", ...Array.from({ length: 5 }, (_, index) => `synthetic-status-${index}`)],
+  ]);
+  for (const options of optionArrays(readbacks)) {
+    for (const row of options) if (row.actualValue === "synthetic-retired-plan") row.active = false;
+  }
+  assert.deepEqual(readbacks.rawOptions.fields.map((field) => field.options.length), [5, 14]);
+  assert.equal(readbacks.globalSets.sets.length, 1);
+  const report = normalizePaidCrmMetadata(readbacks, expected);
+  assert.equal(report.status, "normalized");
+  assert.deepEqual(report.fieldInventory.picklists.fields.map((field) => field.options.length), [5, 7]);
+  assert.deepEqual(report.fieldInventory.picklists.fields[0].options.at(-1),
+    { actualValue: "synthetic-retired-plan", active: false });
+  assert.equal(preflight(report).checks.plan.status, "compatible");
+  assert.equal(preflight(report).checks.futureStatus.status, "compatible");
+  assert.equal(preflight(report).checks.liveStatus.status, "compatible");
+  assert.equal(preflight(report).status, "unknown");
+  assert.equal(Object.hasOwn(report.fieldInventory, "effectiveLayout"), false);
+  assert.equal(Object.hasOwn(report.fieldInventory, "permissions"), false);
+});
+
+test("both explicitly local fields require an independently complete empty global inventory", () => {
+  const { readbacks, expected } = localFixture(["Plan", "Subscription_Status"]);
+  assert.deepEqual(readbacks.globalSets.sets, []);
+  assert.equal(normalizePaidCrmMetadata(readbacks, expected).status, "normalized");
+  for (const mutate of [
+    (value) => { delete value.globalSets; },
+    (value) => { delete value.globalSets.sets; },
+    (value) => { value.globalSets.complete = false; },
+    (value) => { value.globalSets.sets = null; },
+    (value) => { value.globalSets.readbackId = value.fields.readbackId; },
+  ]) {
+    const invalid = structuredClone(readbacks);
+    mutate(invalid);
+    assertRejected(invalid, undefined, expected);
+  }
+});
+
+test("explicit local-only bindings apply independently to either field", () => {
+  const { readbacks, expected } = localFixture(["Subscription_Status"]);
+  assert.equal(readbacks.globalSets.sets[0].globalSetId, EXPECTED.fields[0].globalSetId);
+  const report = normalizePaidCrmMetadata(readbacks, expected);
+  assert.equal(report.status, "normalized");
+  assert.deepEqual(report.fieldInventory.picklists.fields[1].options,
+    ["Scheduled", "Active"].map((actualValue) => ({ actualValue, active: true })));
+  for (const key of ["futureStatus", "liveStatus"]) assert.equal(preflight(report).checks[key].status, "compatible");
+});
+
+test("missing or malformed expected global binding never means local-only", () => {
+  for (const index of [0, 1]) {
+    for (const value of [undefined, "", " ", " synthetic-set", 0, false, [], {}]) {
+      const { readbacks, expected } = localFixture(["Plan", "Subscription_Status"]);
+      expected.fields[index].globalSetId = value;
+      assertRejected(readbacks, "expected_scope_or_interval_invalid", expected);
+    }
+    const { readbacks, expected } = localFixture(["Plan", "Subscription_Status"]);
+    delete expected.fields[index].globalSetId;
+    assertRejected(readbacks, "expected_scope_or_interval_invalid", expected);
+  }
+});
+
+test("every captured binding must explicitly match local-only or its bound global set", () => {
+  for (const section of ["fields", "rawOptions", "layout"]) {
+    for (const index of [0, 1]) {
+      for (const value of [undefined, "", " ", 0, false, [], {}, "synthetic-other-set",
+        index === 0 ? EXPECTED.fields[0].globalSetId : null]) {
+        const { readbacks, expected } = localFixture();
+        readbacks[section].fields[index].globalSetId = value;
+        assertRejected(readbacks, undefined, expected);
+      }
+      const { readbacks, expected } = localFixture();
+      delete readbacks[section].fields[index].globalSetId;
+      assertRejected(readbacks, "field_rows_malformed_or_duplicate", expected);
+    }
+  }
+});
+
+test("global inventory contains exactly the distinct non-null expected bindings", () => {
+  for (const mutate of [
+    (value) => { value.globalSets.sets = []; },
+    (value) => value.globalSets.sets.push(structuredClone(value.globalSets.sets[0])),
+    (value) => value.globalSets.sets.push(structuredClone(fixture().globalSets.sets[0])),
+    (value) => { value.globalSets.sets[0].globalSetId = null; },
+    (value) => { value.globalSets.sets[0].globalSetId = EXPECTED.fields[0].globalSetId; },
+  ]) {
+    const { readbacks, expected } = localFixture();
+    mutate(readbacks);
+    assertRejected(readbacks, undefined, expected);
+  }
+  for (const section of ["fields", "rawOptions", "layout"]) {
+    for (const key of ["fieldId", "globalSetId"]) {
+      const readbacks = fixture();
+      readbacks[section].fields[1][key] = readbacks[section].fields[0][key];
+      assertRejected(readbacks, "field_rows_malformed_or_duplicate");
+    }
+  }
+  const expected = structuredClone(EXPECTED);
+  expected.fields[1].globalSetId = expected.fields[0].globalSetId;
+  assertRejected(fixture(), "expected_scope_or_interval_invalid", expected);
+});
+
+test("local raw inventory requires each exact local ID once without global substitutes", () => {
+  for (const mutate of [
+    (rows) => rows.push(structuredClone(rows[0])),
+    (rows) => rows.pop(),
+    (rows) => { rows[0].id = "synthetic-global-0-0"; },
+    (rows) => { rows[0].id = "synthetic-global-1-0"; },
+    (rows) => { rows[0].id = "synthetic-local-1-0"; },
+    (rows) => { rows[0].id = "synthetic-unknown-option"; },
+    (rows) => rows.push({ ...rows[0], id: "synthetic-extra-id" }),
+    (rows) => { rows[0].actualValue = "option 1"; },
+    (rows) => { rows[0].active = false; },
+  ]) {
+    const { readbacks, expected } = localFixture();
+    mutate(readbacks.rawOptions.fields[0].options);
+    assertRejected(readbacks, undefined, expected);
+  }
+});
+
+test("local inventory and configured layout retain strict IDs, values, statuses and completeness", () => {
+  for (const section of ["fields", "layout"]) {
+    for (const mutate of [
+      (rows) => rows.push(structuredClone(rows[0])),
+      (rows) => rows.push({ ...rows[0], id: "synthetic-extra-id" }),
+      (rows) => rows.pop(),
+      (rows) => { rows[0].id = "synthetic-global-1-0"; },
+      (rows) => { rows[0].id = "synthetic-local-1-0"; },
+      (rows) => { rows[0].actualValue = "option 1"; },
+      (rows) => { rows[0].active = false; },
+      (rows) => { rows[0].active = "true"; },
+    ]) {
+      const { readbacks, expected } = localFixture();
+      mutate(readbacks[section].fields[0].options);
+      assertRejected(readbacks, undefined, expected);
+    }
+  }
+});
+
+test("local normalization preserves missing, inactive and case-sensitive values without granting compatibility", () => {
+  for (const mode of ["missing", "inactive", "case"]) {
+    const { readbacks, expected } = localFixture(["Plan", "Subscription_Status"]);
+    for (const section of ["fields", "rawOptions", "layout"]) {
+      const status = readbacks[section].fields[1];
+      if (mode === "missing") status.options = status.options.filter((row) => row.actualValue !== "Scheduled");
+      else {
+        const row = status.options.find((option) => option.actualValue === "Scheduled");
+        if (mode === "inactive") row.active = false;
+        else Object.assign(row, { actualValue: "scheduled", displayValue: "Scheduled" });
+      }
+    }
+    const report = normalizePaidCrmMetadata(readbacks, expected);
+    assert.equal(report.status, "normalized");
+    assert.equal(preflight(report).checks.futureStatus.status, "incompatible");
+    assert.equal(preflight(report).checks.liveStatus.status, "compatible");
+    assert.equal(preflight(report).checks.effectiveLayout.status, "unknown");
+    assert.equal(preflight(report).checks.permissions.status, "unknown");
+  }
+});
+
+test("local normalization is immutable and deterministic while labels and row order stay descriptive", () => {
+  function freeze(value) {
+    if (value && typeof value === "object") {
+      for (const nested of Object.values(value)) freeze(nested);
+      Object.freeze(value);
+    }
+    return value;
+  }
+  const { readbacks, expected } = localFixture();
+  for (const [index, rows] of optionArrays(readbacks).entries()) {
+    rows.reverse();
+    for (const row of rows) row.displayValue = `Synthetic shared label ${index}`;
+  }
+  for (const section of ["fields", "rawOptions", "layout"]) readbacks[section].fields.reverse();
+  expected.fields.reverse();
+  readbacks.globalSets.capturedAt = EXPECTED.notBefore;
+  const before = JSON.stringify({ readbacks, expected });
+  freeze(readbacks);
+  freeze(expected);
+  const report = normalizePaidCrmMetadata(readbacks, expected);
+  assert.equal(report.status, "normalized");
+  assert.deepEqual(normalizePaidCrmMetadata(readbacks, expected), report);
+  assert.equal(JSON.stringify({ readbacks, expected }), before);
+  assert.deepEqual(report.fieldInventory.picklists.fields.map((field) => field.options.length), [3, 2]);
+  assert.equal(report.fieldInventory.picklists.capturedAt, EXPECTED.notBefore);
+  assert.equal(report.layoutInventory.capturedAt, EXPECTED.notBefore);
+  assert.equal(preflight(report).checks.plan.status, "compatible");
 });
 
 test("complete metadata never implies the effective runtime principal or its permissions", () => {
