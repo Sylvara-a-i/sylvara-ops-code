@@ -30,8 +30,10 @@ function unique(rows, key) {
 function fieldRows(rows, keys) {
   return Array.isArray(rows) && rows.length === FIELDS.length &&
     rows.every((row) => shape(row, ["apiName", "fieldId", "globalSetId", ...keys]) &&
-      FIELDS.includes(row.apiName) && text(row.fieldId) && text(row.globalSetId)) &&
-    ["apiName", "fieldId", "globalSetId"].every((key) => unique(rows, key));
+      FIELDS.includes(row.apiName) && text(row.fieldId) && Object.hasOwn(row, "globalSetId") &&
+      (row.globalSetId === null || text(row.globalSetId))) &&
+    ["apiName", "fieldId"].every((key) => unique(rows, key)) &&
+    unique(rows.filter((row) => row.globalSetId !== null), "globalSetId");
 }
 
 function flags(row, keys) {
@@ -97,7 +99,8 @@ function normalizePaidCrmMetadata(readbacks, expected) {
   }
 
   const { globalSets, fields, rawOptions, layout } = readbacks;
-  if (!Array.isArray(globalSets.sets) || globalSets.sets.length !== FIELDS.length ||
+  const globalBindingCount = expected.fields.filter((field) => field.globalSetId !== null).length;
+  if (!Array.isArray(globalSets.sets) || globalSets.sets.length !== globalBindingCount ||
       globalSets.sets.some((set) => !shape(set, ["globalSetId", "options"]) || !text(set.globalSetId)) ||
       !unique(globalSets.sets, "globalSetId")) return reject("global_sets_malformed_or_duplicate");
   if (!fieldRows(fields.fields, ["dataType", "apiUpdate", "readOnly", "options"]) ||
@@ -128,17 +131,20 @@ function normalizePaidCrmMetadata(readbacks, expected) {
     const field = fields.fields.find((row) => row.apiName === name);
     const raw = rawOptions.fields.find((row) => row.apiName === name);
     const configured = layout.fields.find((row) => row.apiName === name);
-    const global = globalSets.sets.find((set) => set.globalSetId === binding.globalSetId);
-    if (!global || [field, raw, configured].some((row) => row.fieldId !== binding.fieldId ||
+    // Explicit null is verified local-only scope, never a missing global binding.
+    const global = binding.globalSetId === null ? null :
+      globalSets.sets.find((set) => set.globalSetId === binding.globalSetId);
+    if (global === undefined || [field, raw, configured].some((row) => row.fieldId !== binding.fieldId ||
         row.globalSetId !== binding.globalSetId)) return reject("field_or_global_set_binding_mismatch");
     if (!options(raw.options, false) || !options(configured.options, true)) {
       return reject("raw_or_layout_options_malformed_or_duplicate");
     }
-    const globalById = new Map(global.options.map((row) => [row.id, row]));
+    const globalOptions = global === null ? [] : global.options;
+    const globalById = new Map(globalOptions.map((row) => [row.id, row]));
     const fieldById = new Map(field.options.map((row) => [row.id, row]));
-    const globalByValue = new Map(global.options.map((row) => [row.actualValue, row]));
-    if (global.options.length !== field.options.length || field.options.some((row) =>
-      !globalByValue.has(row.actualValue) || !sameOption(row, globalByValue.get(row.actualValue)))) {
+    const globalByValue = new Map(globalOptions.map((row) => [row.actualValue, row]));
+    if (global !== null && (globalOptions.length !== field.options.length || field.options.some((row) =>
+      !globalByValue.has(row.actualValue) || !sameOption(row, globalByValue.get(row.actualValue))))) {
       return reject("global_field_inventory_contradiction");
     }
     for (const row of raw.options) {
@@ -149,7 +155,7 @@ function normalizePaidCrmMetadata(readbacks, expected) {
       if (!match) return reject("raw_option_id_unknown_or_wrong_namespace");
       if (!sameOption(row, match)) return reject("raw_option_contradiction");
     }
-    if (raw.options.length !== global.options.length + field.options.length) {
+    if (raw.options.length !== globalOptions.length + field.options.length) {
       return reject("raw_namespace_inventory_incomplete");
     }
     for (const row of configured.options) {
