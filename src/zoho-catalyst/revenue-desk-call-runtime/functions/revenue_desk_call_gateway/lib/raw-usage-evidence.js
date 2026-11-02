@@ -74,13 +74,14 @@ function projectRow(row) {
  */
 function projectRawUsageEvidence({ scope, rows, complete = false } = {}) {
   const holds = [];
+  const validScope = scopeIsValid(scope);
   const finish = (calls) => Object.freeze({
     schemaVersion: 1, calls: Object.freeze(calls), holds: Object.freeze(unique(holds)),
-    completeness: Object.freeze({ scopedReadComplete: complete === true && Array.isArray(rows),
+    completeness: Object.freeze({ scopedReadComplete: validScope && complete === true && Array.isArray(rows),
       population: 'internal_accepted_calls', providerCompleteness: 'unproven' }),
     ...noncharging(),
   });
-  if (!scopeIsValid(scope)) { holds.push('scope_invalid'); return finish([]); }
+  if (!validScope) { holds.push('scope_invalid'); return finish([]); }
   if (!Array.isArray(rows)) { holds.push('snapshot_invalid'); return finish([]); }
   if (complete !== true) holds.push('snapshot_incomplete');
   const groups = new Map();

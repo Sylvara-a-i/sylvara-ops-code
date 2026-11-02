@@ -177,6 +177,15 @@ test('cross-period, error, not-connected and free-test facts stay raw and noncha
   }
 });
 
+test('invalid scope cannot assert scoped read completeness', () => {
+  const output = projectRawUsageEvidence({ scope: {}, rows: [], complete: true });
+  assert.equal(output.completeness.scopedReadComplete, false);
+  assert.deepEqual(output.holds, ['scope_invalid']);
+  assert.deepEqual(output.calls, []);
+  assertNoncharging(output);
+  assert.equal(project([]).completeness.scopedReadComplete, true, 'valid empty scoped read stays complete');
+});
+
 test('malformed rows and incomplete reads cannot imply complete evidence', () => {
   assert.ok(project(null).holds.includes('snapshot_invalid'));
   assert.ok(project([null]).holds.includes('call_key_invalid'));
