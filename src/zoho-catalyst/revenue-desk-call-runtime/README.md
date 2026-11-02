@@ -14,6 +14,36 @@ This shared Zoho Catalyst package contains exactly three deployable functions:
 
 The canonical source profile is `free_test/call_gap_monitor_v1`. Registered paid-service profiles `launch_v1`, `growth_v1`, and `scale_v1` remain disabled drafts and fail closed. The Development definition deployment and subsequent reconciliation do not authorize route invocation or further route mutation, a customer test, paid offer, Production traffic, migration, mail send, binding, Retell test, or Retell change.
 
+## Noncharging raw usage evidence
+
+`lib/raw-usage-evidence.js` in the gateway exports the pure
+`projectRawUsageEvidence({ scope, rows, complete })` helper. Supply durable
+`RevenueDeskCalls` rows and an explicit `environment`, `clientId`, `deploymentId`,
+`configurationVersionId`, and `configurationVersion` scope. `complete: true` means
+the caller proved the scoped read exhausted its pages; it does not prove that
+internal accepted calls cover every Retell call. No reader, route, job, table or
+ingestion change is installed by this helper.
+
+The projection contains one entry per existing HMAC `CALL_KEY`, raw canonical
+start/end and integer `durationMs`, canonical/projection versions, source revisions,
+terminal/disconnection/engagement facts, a stable evidence fingerprint and holds.
+Analysis changes do not create more duration. Conflicting immutable evidence is
+held with no selected duration. Schema v1 remains unchanged with unsupported
+duration represented as null; zero remains zero. Missing or malformed evidence is
+held. Optional end/disconnection evidence may converge as the runtime already permits.
+The allowlist excludes canonical JSON, caller details, transcript and recordings.
+The fingerprint is a comparison digest, not an authentication or payment token.
+
+All outputs have `billableMinutes: null`, `chargeMinor: null`, and
+`billingAuthority: false`. There is no rounding, cross-period allocation, included
+minutes, free/paid eligibility decision or pricing policy. Focused synthetic tests
+live in `test/webhook-replay.test.js`, already selected by the offline runner and
+canonical verifier. The next wiring step is a separately reviewed, read-only scoped
+row adapter plus the orchestrator's [Billing link snapshot contract](../crm-billing-orchestrator/README.md#noncharging-billing-link-reconciliation).
+These helpers are not operational Billing synchronization. Deployment, provider
+completeness, effective historical mapping and any usage submission remain separate
+work; reverting the helper/tests/docs is the containment path before wiring.
+
 ## Boundaries
 
 `POST /retell/events` verifies the raw-body signature, validates and minimizes the envelope, durably claims one `provider_event` receipt, and conditionally submits `{ mode: "process_event", event_key }` to `RevenueDeskCallJobs` without business processing. Before the external submit, a compare-and-set transition to `Queued` places a private dispatch token in the existing receipt lease field; only that token owner may submit. This fences a timed-out original request from submitting again after a provider retry has won the race. A submit/readback ambiguity clears the dispatch token but remains `Queued`; HTTP replay never re-submits, and `retry_scan` directly processes the durable receipt. Both Retell ingress routes enforce an eight-second end-to-end response budget, leaving two seconds of margin under Retell's current ten-second webhook timeout; exhaustion returns a sanitized retryable 503 rather than claiming completion. Catalyst SDK operations are not cancellable, so delayed completion and provider retry converge through this dispatch fence, the durable receipt, processing lease, idempotency, and readback controls. The pinned `zcatalyst-sdk-node@3.4.0` adapter uses `app.jobScheduling().JOB.submitJob()` with `target_type=Function` and `target_name=revenue_desk_call_worker`; there is no REST fallback.
