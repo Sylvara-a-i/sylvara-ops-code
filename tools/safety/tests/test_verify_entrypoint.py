@@ -270,7 +270,8 @@ class VerifyEntrypointTests(unittest.TestCase):
         )
         for path in canonical_paths:
             with self.subTest(path=path):
-                self.assertEqual(3, self.workflow.count(path))
+                expected = 4 if path.endswith("/revenue_desk_call_gateway") else 3
+                self.assertEqual(expected, self.workflow.count(path))
                 self.assertEqual(1, self.dependabot.count(f"/{path}"))
         for obsolete in (
             "src/zoho-catalyst/retell-free-test/functions/retell_free_test",
@@ -279,6 +280,13 @@ class VerifyEntrypointTests(unittest.TestCase):
             with self.subTest(obsolete=obsolete):
                 self.assertNotIn(obsolete, self.workflow)
                 self.assertNotIn(obsolete, self.dependabot)
+
+    def test_synthetic_webhook_lane_runs_in_ci_and_canonical_verifier(self) -> None:
+        path = "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway"
+        self.assertIn(f"run: node --test {path}/test/webhook-replay.test.js", self.workflow)
+        self.assertIn('(Join-Path $RevenueDeskCallGatewayRoot "test/webhook-replay.test.js")', self.script)
+        self.assertIn("./tools/setup-node.ps1", self.workflow)
+        self.assertTrue((ROOT / path / "test" / "webhook-replay.test.js").is_file())
 
     def test_documentation_uses_the_canonical_command(self) -> None:
         root_readme = ROOT_README.read_text(encoding="utf-8")

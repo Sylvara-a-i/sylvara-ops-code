@@ -1,0 +1,37 @@
+{
+  "provenance": "Hand-authored synthetic fixtures; no provider capture or customer data.",
+  "call": {
+    "call_id": "synthetic_webhook_replay",
+    "agent_id": "agent_shared_free_test",
+    "agent_version": 7,
+    "call_status": "ended",
+    "disconnection_reason": "user_hangup",
+    "to_number": "+15550000001",
+    "start_timestamp": 1787400000000,
+    "end_timestamp": 1787400060000,
+    "duration_ms": 60000,
+    "transcript": "Agent: Synthetic offline example.\nUser: Please review this fictional water heater request.",
+    "transcript_object": [
+      { "role": "agent", "content": "Synthetic offline example." },
+      { "role": "user", "content": "Please review this fictional water heater request." }
+    ],
+    "recording_url": "https://example.invalid/synthetic-recording"
+  },
+  "analysis": {
+    "outcome": "potential_job",
+    "coverage_trigger": "AfterHours",
+    "caller_name": "Synthetic Caller",
+    "callback_number": "+15551110001",
+    "customer_type": "new",
+    "caller_intent": "service_request",
+    "issue_summary": "Fictional water heater request",
+    "city_or_zip": "Lenexa",
+    "urgency": "routine",
+    "specific_person_requested": null,
+    "sensitive_data_detected": false,
+    "bookable_opportunity": true,
+    "office_follow_up_required": true,
+    "workflow_failure_code": null,
+    "workflow_failure_text": null
+  }
+}

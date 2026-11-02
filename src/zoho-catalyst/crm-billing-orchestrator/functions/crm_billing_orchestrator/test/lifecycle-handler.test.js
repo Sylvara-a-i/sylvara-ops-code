@@ -2,6 +2,12 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const { installOfflineGuard } = require("../../../../revenue-desk-release/test/helpers/offline-guard");
+const offlineGuard = installOfflineGuard();
+test.after(() => {
+  assert.deepEqual(offlineGuard.blocked, []);
+  offlineGuard.restore();
+});
 const { loadConfig } = require("../lib/config");
 const { CANONICAL_PLAN_BY_CRM_API_VALUE } = require("../lib/crm-client");
 const {
