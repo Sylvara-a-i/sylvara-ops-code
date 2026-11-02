@@ -89,6 +89,15 @@ Run the canonical verifier once before handoff, after installing 64-bit CPython
 3.12 and bootstrapping dependencies with the commands above. Existing npm lockfiles
 and the hash-pinned Python requirements remain the dependency authority.
 
+Windows full verification has an additional existing prerequisite: the private
+staging-packet CLI tests expect their hash-approved PowerShell helper at
+`../../native/powershell/pwsh.exe` relative to the Node executable directory.
+The portable Node setup above does not supply that signing-toolchain layout.
+Without it, those existing tests fail during synthetic ACL setup; the focused
+58-test runner still works. Use the approved signing toolchain for those Windows
+tests, or the canonical Linux CI result. The production helper/hash checks are
+unchanged.
+
 ## Future saved Sylvara coding environment
 
 This repository provides setup commands, not a saved cloud environment. Create a
