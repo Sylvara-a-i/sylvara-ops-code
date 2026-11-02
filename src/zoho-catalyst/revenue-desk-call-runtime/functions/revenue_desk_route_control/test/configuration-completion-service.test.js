@@ -93,6 +93,11 @@ async function fixture() {
 }
 
 function assertHistory(v) {
+  for (const receipt of [v.originalReceipt, v.recoveryReceipt]) {
+    assert.equal(receipt.STATUS, 'Processing');
+    assert.equal(receipt.RECEIPT_VERSION, 0);
+    assert.equal(receipt.ATTEMPT_COUNT, 1);
+  }
   assert.deepEqual(v.f.store.rowsFor(v.config.tables.EVENT_RECEIPT_TABLE)
     .filter((row) => [RECEIPT_KIND, RECONCILIATION_RECEIPT_KIND].includes(row.RECEIPT_KIND)), v.historicalRows.receipts);
   assert.deepEqual(v.f.store.rowsFor(v.config.tables.CONFIGURATION_VERSION_TABLE).slice(0, 2), v.historicalRows.configurations);

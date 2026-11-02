@@ -625,6 +625,8 @@ try {
         ) {
             throw "Revenue Desk call-worker dependencies are missing. Run .\tools\verify.cmd -Bootstrap once before offline Quick verification."
         }
+        Invoke-Native -Label "Offline synthetic webhook replay regressions" -Executable $node `
+            -Arguments @("--test", (Join-Path $RevenueDeskCallGatewayRoot "test/webhook-replay.test.js"))
         Invoke-Native -Label "Public repository safety scan" -Executable $python `
             -Arguments @("tools/safety/pre-commit-safety-check.py")
         Invoke-Native -Label "Workflow security policy" -Executable $python `
