@@ -87,7 +87,7 @@ Do not claim that Sylvara is globally unique as a feature category. The defensib
 
 The test uses one business number and one approved call-gap route. Its job is to find and work one real leak in inbound revenue with the contractor's own calls, not to imitate the complete paid Revenue Desk.
 
-The current technical MVP remains a bounded shared free-test monitor governed by [ADR 0006](../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md). It captures and classifies approved calls and produces evidence; it is not automatically promoted into a paid agent and does not inherit paid booking, dispatch, transfer, messaging, or integration authority.
+The technical target is governed by the [consolidated release contract](free-revenue-leak-test-release-contract.md), whose linked JSON defines the required repository architecture. [ADR 0006](../adr/0006-shared-seven-day-monitor-with-client-number-isolation.md) remains historical number-isolation and provider-failure evidence. The bounded free-test profile captures and classifies approved calls and produces evidence; it is not automatically promoted into paid service and does not inherit paid booking, dispatch, transfer, messaging, or integration authority. Target architecture is not proof of deployment or live acceptance.
 
 [ADR 0003](../adr/0003-initial-after-hours-service-request-workflow.md) remains accepted for offline synthetic validation only as the first provider-neutral service-request workflow. It does not limit the approved paid-plan commercial architecture.
 
