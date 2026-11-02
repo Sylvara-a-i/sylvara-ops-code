@@ -11,6 +11,58 @@ provider write outcome. An interrupted write requires authoritative reconciliati
 with no automatic write retry. Existing safe-read retries remain capped at two attempts.
 This source contract does not qualify an installed transport or authorize paid execution.
 
+## Noncharging Billing link reconciliation
+
+`lib/billing-link-reconciliation.js` is an unwired read-only foundation. Its pure
+`reconcileBillingLink({ scope, attribution, snapshot })` returns `verified`,
+`missing`, `conflict`, or `read_unavailable` with fixed, sanitized holds. `verified`
+proves only the relationship within the supplied snapshot; it is not subscription
+entitlement, commercial acceptance, current provider access, or charging authority.
+Every result has null billable minutes/charge and `billingAuthority: false`.
+`readBillingLink` accepts an injected read-only `readSnapshot` and redacts read
+failures. It constructs no SDK, credential, write authority or lifecycle action.
+The read wrapper has a maximum three-second deadline and no retries. A timeout
+does not cancel an underlying read; adapters must also bound transport reads.
+
+The normalized snapshot contract is intentionally not a guessed provider API:
+
+- `scope`: `environment`, `clientId`, `deploymentId`, `configurationVersionId`,
+  `configurationVersion`, `crmAccountId`, `crmDealId`, `billingOrganizationId`,
+  `billingMode` (`test` or `live`). Both `snapshot.crm.scope` and
+  `snapshot.billing.scope` must independently attest this exact binding.
+- `snapshot.readStatus: 'complete'`; CRM `account.id`, `deal.id`,
+  `deal.Account_Name.id`, and explicitly read `Billing_Customer_ID` /
+  `Billing_Subscription_ID`. Null means proven missing; omitted fields are incomplete.
+- Billing `customerPages` and `subscriptionPages`: ordered `{ page, hasMorePage,
+  items }` pages, beginning at 1 with an explicit final false, at most 25 pages.
+  Customer items contain `customerId` and authoritative `crmAccountId`; subscription
+  items contain `subscriptionId`, `customerId`, `referenceId`. Exact reference
+  filtering must yield one match. Independently read `customer` and `subscription`
+  detail objects use the same normalized identity fields and must agree.
+- `attribution.kind: 'current'` requires an explicit `subscriptionReference`.
+  Historical attribution instead requires `startedAt`, `endedAt`, and `mapping`
+  containing the exact scope, Billing IDs, subscription reference, private
+  `evidenceReference`, and an explicit `[effectiveFrom, effectiveTo)` interval
+  covering the whole call. Missing/invalid mapping yields `historical_link_unresolved`;
+  current mutable CRM Billing fields never backfill history. Dates are canonical UTC.
+
+A future scoped read adapter must establish these facts from authoritative reads,
+including organization/mode attestation, exact pagination, independently verified
+customer-to-CRM identity, and the existing deterministic subscription reference.
+Do not populate attestations by copying requested IDs. The existing Billing client's
+customer lookup verifies a deterministic synthetic TEST identity, not a generic
+live CRM-account link; that implementation is a reference, not live mapping proof.
+An empty TEST inventory correctly returns missing and must not be provisioned to
+make this check pass. No real provider reads were used for these synthetic tests.
+
+Do not call `ensureCustomer`, `ensurePaidSubscription`, lifecycle `reconcile` (which
+can update CRM), or the commercial/catalog verifier from this path. There are no
+new routes, actions, durable tables, customer communications, invoices, payments or
+usage submissions. Existing pricing/catalog behavior is unchanged. Future Usage
+Billing writes require a separately verified provider contract and explicit authority;
+one-time add-ons do not establish a usage-submission contract. Revert these unwired
+helpers/tests/docs to contain this source-only change.
+
 ## Public Contract
 
 | Action | Required authoritative CRM state | Bounded outcome |
