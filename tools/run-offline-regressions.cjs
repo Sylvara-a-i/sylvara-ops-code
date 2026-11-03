@@ -20,6 +20,7 @@ const result = spawnSync(process.execPath, ['--test', '--test-concurrency=1',
   `${gateway}/test/webhook-replay.test.js`,
   `${control}/test/configuration-completion-service.test.js`,
   `${billing}/test/lifecycle-handler.test.js`,
+  'src/zoho-catalyst/revenue-desk-release/test/noncharging-usage-reconciliation.test.js',
 ], { cwd: root, env, stdio: 'inherit', timeout: 120_000 });
 if (result.error) console.error('Offline regression runner failed:', result.error.code);
 process.exit(result.status ?? 1);
