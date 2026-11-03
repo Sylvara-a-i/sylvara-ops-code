@@ -1,5 +1,42 @@
 # Revenue Desk Release Boundary
 
+### Offline raw usage and Billing link reconciliation
+
+[`lib/noncharging-usage-reconciliation.js`](lib/noncharging-usage-reconciliation.js)
+composes the existing canonical call projection and read-only Billing relationship
+validator. `reconcileRawUsageWithBilling({ scope, rows, complete, billingSnapshot,
+effectiveMapping })` accepts normalized snapshots only. Scope includes the exact
+environment, client, deployment, configuration ID/version, CRM account/deal,
+Billing organization and test/live mode required by the existing validators.
+`complete` is an explicit assertion about the scoped internal read; provider-wide
+Retell completeness remains unproven.
+
+Each deduplicated `CALL_KEY` retains raw `durationMs`; `rawDurationSeconds` is only
+that value divided by 1000. It never uses elapsed timestamps, rounds duration,
+allocates billing periods, or determines free-test/paid/error-call billability.
+Every dated call requires the existing historical mapping contract, including its
+evidence reference and effective interval covering the entire call. Current CRM
+Billing fields do not establish historical ownership. A call crossing the mapping
+boundary is held, without splitting or prorating it.
+
+`evidenceStatus: linked` means the supplied raw evidence and historical relationship
+passed those structural checks; `held` preserves unresolved reasons, and `empty`
+verifies no relationship. This is not live synchronization, subscription entitlement
+or trusted provenance for caller-supplied snapshots. All amounts remain null,
+`billingAuthority` and `synchronizationAttempted` remain false. There are no provider
+clients, persistence, dispatch, invoice, payment or email actions.
+
+Run the synthetic connected regression with the pinned Node runtime:
+`node --test src/zoho-catalyst/revenue-desk-release/test/noncharging-usage-reconciliation.test.js`
+from the repository root, or use `node tools/run-offline-regressions.cjs`.
+The test follows actual offline webhook ingestion into durable canonical rows,
+then checks historical linkage under the existing network/SDK/credential guard.
+The next adapter needs a verified, bounded read of existing scoped canonical rows,
+CRM relationships and Billing records, plus authoritative effective mapping
+evidence. Live identity/access, provider-wide completeness, cost validation,
+rounding/cutoff and other commercial policy decisions remain separate gates.
+No existing deployment or live release profile invokes this helper.
+
 For the narrower zero-spend preparation sprint, use the
 [local synthetic walkthrough and operator runbook](free-test-operator-runbook.md).
 It exercises the backend and report-only CRM path with fake adapters; it neither
