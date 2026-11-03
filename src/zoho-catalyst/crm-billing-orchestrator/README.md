@@ -13,6 +13,12 @@ This source contract does not qualify an installed transport or authorize paid e
 
 ## Noncharging Billing link reconciliation
 
+An additional **unwired evidence collector** performs bounded list reads and
+customer-detail hydration using injected GET-only readers. It always returns
+`readStatus: incomplete`, including when an observed sweep ends. It cannot be
+substituted for a qualified snapshot or an effective historical mapping. See
+[the collector contract and qualification gates](tools/billing-read-collector.md).
+
 `lib/billing-link-reconciliation.js` is an unwired read-only foundation. Its pure
 `reconcileBillingLink({ scope, attribution, snapshot })` returns `verified`,
 `missing`, `conflict`, or `read_unavailable` with fixed, sanitized holds. `verified`
