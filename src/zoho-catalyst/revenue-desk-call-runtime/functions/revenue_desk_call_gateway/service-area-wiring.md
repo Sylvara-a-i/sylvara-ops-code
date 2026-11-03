@@ -70,11 +70,48 @@ The committed `data/us-postal-fixture.json` is a small synthetic fixture, not re
 The default runtime loader refuses it. Explicit offline test injection exercises it. The release builder
 includes the fixture and validates its checksum, and the release manifest covers its exact bytes.
 
-For a future approved real snapshot, use already-local uncompressed GeoNames US.txt with manifest format
-`geonames_us_tsv`, packaged as `data/us-postal.txt`; record exact checksum, acquisition date, snapshot date,
-expiry, and attribution. The supported maximum is 16 MiB. The current builder accepts only tracked,
-reviewed fixed assets; accepting a larger or private external artifact needs a separately reviewed packaging
-change. No real dataset was downloaded for this change and no runtime fetch or refresh exists.
+The clean-HEAD release builder still accepts only tracked assets. Two separate offline scripts prepare
+an external candidate and compose it into a held release without changing the base or enabling the route.
+Both require absolute paths, reject symlink paths and existing/in-repository output, and publish only a
+complete new output directory. Create the output parent directory first. Neither script downloads data,
+authenticates operator approval, deploys, reads credentials, changes coverage, or refreshes at runtime.
+
+Run `scripts/build-postal-snapshot.js --raw <US.txt> --readme <readme.txt> --metadata <metadata.json>
+--output <new-private-directory>`. Metadata contains exactly `schemaVersion: 1`, `rawSha256`,
+`archiveSha256`, `readmeSha256`, the official `sourceUrl` and `sourceReadmeUrl`, canonical UTC
+`retrievedAt`, `snapshotDate` (the retrieval date), and explicit `expiresOn`. There is no default renewal
+period. The archive checksum is acquisition evidence supplied by the operator; the script validates the
+already-extracted input and README checksums, not the archive or source authenticity. Acquisition remains
+a separate controlled step. The maximum raw file is 16 MiB.
+
+Structural corruption fails the whole preparation. Unsupported city/state rows quarantine **every row
+for that ZIP**, including otherwise valid aliases, so incomplete source evidence cannot appear settled.
+The resulting manifest, candidate data, exclusion ledger, README and `snapshot-artifact.json` are private
+outputs. Valid TSV fields and leading-zero ZIPs are preserved, with deterministic LF endings. Coordinates
+remain source data only and are ignored by the index. No candidate is converted into approved coverage.
+
+Build the base with the existing `build-release.js --revision <exact-clean-HEAD> --output <base>`.
+Then run `scripts/compose-postal-snapshot.js` with `--source-revision`, `--runtime-artifact`,
+`--base-manifest-sha256`, `--snapshot-artifact`, `--snapshot-sha256`, `--snapshot-manifest-sha256`, and
+`--output`. The source must remain the exact clean HEAD. Pin both the data and loader-manifest hashes;
+changing dates or provenance is a new review even when data bytes are identical. Stale or future
+qualification windows cannot be composed. Those dates still do not establish geographic currency.
+
+The composer reconstructs expected source from Git and verifies every base file before applying only
+`contracts/postal-snapshot.json`, `data/us-postal.txt` and `contracts/postal-attribution.json` within the
+gateway. It executes the selected checkout's loader, never code from an input artifact. The original
+release manifest and candidate provenance are preserved under `provenance/`; the new
+`composition-manifest.json` records all payload hashes and has `installationAuthorized: false` and
+`routeEnabled: false`. Its own hash is returned separately. There is no misleading single-revision release
+manifest in `runtime/`. Source stamps identify the base code, while composition parity covers external data.
+Materialize existing dependencies only in the composed runtime after review so linked worker/control
+packages receive the same asset. This is not an overlay onto an arbitrary live or privately patched release.
+
+Synthetic packaging tests cover preparation, unresolved aliases, pins, stale/corrupt inputs, verified
+source, unchanged base files, output interruption and disabled routing. Private real-data or isolated
+hosted loader evidence must remain outside Git and CI; it does not qualify the complete signed gateway,
+its Data Store reads, or the Retell conversation. Restore the exact prior artifact if a separately approved
+installation fails; neither script mutates a deployment or extends a QA window.
 
 GeoNames postal data requires attribution: **GeoNames, CC BY 4.0, https://www.geonames.org/**; disclose the
 transformation into postal relations. It is not USPS authority and does not prove municipal boundaries,
