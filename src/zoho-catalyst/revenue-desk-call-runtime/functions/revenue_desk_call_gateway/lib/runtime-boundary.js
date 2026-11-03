@@ -8,6 +8,8 @@ const { verifyRetellSignature, payloadFingerprint } = require('./security');
 const { createCatalystStore } = require('./catalyst-store');
 const { CatalystJobAdapter } = require('./catalyst-jobs');
 const { createRuntimeService } = require('./runtime-service');
+const { contract: serviceAreaContract, unavailableServiceArea } = require('./service-area-tool');
+const { loadPackagedPostalSnapshot } = require('./postal-index-loader');
 
 const RETELL_SIGNATURE_HEADER = 'x-retell-signature';
 const READINESS_TOKEN_HEADER = 'x-revenue-desk-readiness-token';
@@ -140,6 +142,9 @@ function createRequestListener(options = {}) {
     artifactSourceRevision,
     monotonicNow = () => performance.now(),
     retellResponseBudgetMs = RETELL_RESPONSE_BUDGET_MS,
+    // Dependency injection is for offline tests. The exported entrypoint uses the disabled contract.
+    serviceAreaTool = serviceAreaContract,
+    postalSnapshotProvider = loadPackagedPostalSnapshot,
   } = options;
   invariant(catalystSdk && typeof catalystSdk.initialize === 'function',
     'INVALID_RUNTIME_CONFIGURATION', 'Catalyst SDK is unavailable.', { httpStatus: 503 });
@@ -163,6 +168,7 @@ function createRequestListener(options = {}) {
       const routePath = url.pathname;
       route = routePath === config.inboundPath ? 'inbound'
         : routePath === config.eventsPath ? 'events'
+          : routePath === serviceAreaContract.path && serviceAreaTool.enabled === true ? 'service_area'
           : routePath === config.readinessPath ? 'readiness' : 'unknown';
       invariant(url.search === '' && url.hash === '', 'ROUTE_NOT_FOUND',
         'Route not found.', { httpStatus: 404 });
@@ -201,7 +207,7 @@ function createRequestListener(options = {}) {
         return;
       }
 
-      invariant(route === 'inbound' || route === 'events',
+      invariant(route === 'inbound' || route === 'events' || route === 'service_area',
         'ROUTE_NOT_FOUND', 'Route not found.', { httpStatus: 404 });
       invariant(request.method === 'POST', 'METHOD_NOT_ALLOWED',
         'Route requires POST.', { httpStatus: 405 });
@@ -224,6 +230,16 @@ function createRequestListener(options = {}) {
       });
       const payload = parseJson(rawBody);
       const store = storeFactory(app, config);
+      if (route === 'service_area') {
+        const service = serviceFactory({ store, mailAdapter: null, config, now, logger });
+        const result = await withResponseDeadline(
+          () => service.resolveServiceAreaForCall(payload, postalSnapshotProvider()),
+          responseDeadlineAt, monotonicNow,
+        );
+        remainingResponseBudget(responseDeadlineAt, monotonicNow);
+        json(response, 200, result);
+        return;
+      }
       if (route === 'inbound') {
         const service = serviceFactory({
           store,
@@ -266,7 +282,8 @@ function createRequestListener(options = {}) {
         errorCode: failure.code,
         status: failure.status,
       });
-      json(response, failure.status, { ok: false, code: failure.code });
+      json(response, failure.status, route === 'service_area'
+        ? unavailableServiceArea() : { ok: false, code: failure.code });
     }
   };
 }

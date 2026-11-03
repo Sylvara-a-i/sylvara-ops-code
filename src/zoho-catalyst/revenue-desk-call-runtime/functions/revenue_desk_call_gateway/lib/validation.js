@@ -8,6 +8,7 @@ const {
 } = require('./contracts');
 const { RevenueDeskError, invariant } = require('./errors');
 const { validateReportBaseline } = require('./report-baseline');
+const { validateServiceAreaResolution } = require('./service-area-configuration');
 
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
 const E164_PATTERN = /^\+[1-9][0-9]{7,14}$/;
@@ -218,6 +219,7 @@ function validateConfiguration(input) {
     'rollbackContactMobile', 'rollbackInstructions', 'rollbackInstructionsVersion',
     'authorizedRepresentativeConfirmed', 'testScopeAccepted', 'authorityConfirmedAt',
     'setupFormSubmissionId', 'setupFormVersion', 'reportBaseline', 'notificationHandoff', 'providerTiming',
+    'serviceAreaResolution',
   ], 'configuration');
   const serviceArea = object(value.serviceArea, 'configuration.serviceArea');
   exactKeys(serviceArea, ['cities', 'zips'], 'configuration.serviceArea');
@@ -279,6 +281,9 @@ function validateConfiguration(input) {
     servicesHandled: stringArray(value.servicesHandled, 'configuration.servicesHandled', { minimum: 1, maximum: 30 }),
     unsupportedServices: stringArray(value.unsupportedServices, 'configuration.unsupportedServices', { maximum: 30 }),
     serviceArea: Object.freeze({ cities, zips }),
+    ...(value.serviceAreaResolution === undefined ? {} : {
+      serviceAreaResolution: validateServiceAreaResolution(value.serviceAreaResolution, { cities, zips }),
+    }),
     urgentConditions: stringArray(value.urgentConditions, 'configuration.urgentConditions', { minimum: 1, maximum: 25 }),
     callbackExpectation: string(value.callbackExpectation, 'configuration.callbackExpectation', { maximum: 300 }),
     notificationRecipient: Object.freeze({

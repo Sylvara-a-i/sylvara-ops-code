@@ -105,6 +105,8 @@ function isInside(root, candidate) {
 
 function isDeployable(relative) {
   if (REQUIRED_FILES.has(relative)) return true;
+  if (new Set(['functions/revenue_desk_call_gateway/data/us-postal-fixture.json',
+    'functions/revenue_desk_call_gateway/data/us-postal.txt']).has(relative)) return true;
   return /^functions\/revenue_desk_call_gateway\/lib\/[A-Za-z0-9._-]+\.js$/.test(relative)
     || /^functions\/revenue_desk_call_gateway\/contracts\/[A-Za-z0-9._-]+\.json$/
       .test(relative)
@@ -295,6 +297,13 @@ function validateTargetContract(root, directory, label, expected) {
 }
 
 function validateArtifact(root) {
+  const postalRoot = path.join(root, 'functions', 'revenue_desk_call_gateway');
+  const postalLoader = path.join(postalRoot, 'lib', 'postal-index-loader.js');
+  if (fs.existsSync(postalLoader)) {
+    // The disabled fixture is valid packaging evidence, never live geographic evidence.
+    const snapshot = require(postalLoader).loadPostalSnapshot({ packageRoot: postalRoot, allowSynthetic: true });
+    if (!snapshot.sha256 || snapshot.index.status !== 'ready') throw new Error('Postal snapshot packaging is invalid.');
+  }
   const catalyst = parseJsonFile(root, 'catalyst.json');
   const targets = catalyst?.functions?.targets;
   if (!Array.isArray(targets)

@@ -70,6 +70,12 @@ The recommended optional source is the [GeoNames US postal download](https://dow
 
 No real dataset was downloaded or committed for this prototype. Tests use synthetic records, including synthetic GeoNames-format rows. For a future local dataset, retain the exact downloaded archive and README privately with acquisition date and checksum; pin the uncompressed US.txt checksum supplied to this builder. Select an explicit freshness window with the operator. Test a candidate replacement before switching the local handle. Refresh never mutates contractor-approved coverage. This change adds no fetch script, remote lookup, paid provider, account, credential, or USPS integration.
 
+## Disabled runtime adapter
+
+The separately tested adapter is described in [service-area-wiring.md](service-area-wiring.md).
+Its checked-in route contract is disabled, and its default loader refuses the packaged synthetic
+fixture. Neither the module nor the adapter is operational call coverage.
+
 ## Verification and remaining integration
 
 Run with the repository-pinned Node.js 24.19.0 from the repository root:
@@ -80,4 +86,4 @@ node --test src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_c
 
 The gateway `test:unit` command also includes this file. It installs the existing offline guard before importing the new modules and asserts zero blocked network, provider SDK, credential-read, or subprocess attempts. The focused tests cover the city-only ZIP regression, state distinction, aliases, multi-ZIP cities, pair consistency, both mixed policies, missing evidence, municipal limits, normalization, physical-location confirmation, snapshot failure, corruption, privacy, and refresh/approval separation. These tests do not call a voice provider or verify conversation behavior.
 
-Before live wiring, obtain each client's city meaning, municipality evidence rule, mixed-list semantics, and reviewed coverage; define snapshot freshness and the human fallback. A separately reviewed integration must authenticate those decisions, load the local dataset, collect caller clarification, and translate statuses faithfully. That future work must explicitly cover the onboarding/configuration schema and Retell/runtime tool contract with private acceptance evidence. None is changed here. Containment is to leave this module unreferenced; rollback removes the isolated foundation without changing deployed behavior.
+Before activation, obtain each client's city meaning, municipality evidence rule, mixed-list semantics, and reviewed coverage; define snapshot freshness and the human fallback. The disabled adapter now provides the configuration and signed-call boundary, but deployment, real postal data, Retell tool configuration, and controlled native acceptance remain outstanding. Containment is the disabled route and the absence of an external Gateway route or configured Retell tool.
