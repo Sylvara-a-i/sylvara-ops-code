@@ -110,3 +110,63 @@ test("monotonic deadline rejects a late body even before the timer can run", asy
     }), unknownWrite);
   assert.equal(signal.aborted, true); assert.equal(cancelled, 1);
 });
+
+test("caller cancellation before dispatch performs no fetch and preserves read/write classification", async () => {
+  for (const sideEffecting of [false, true]) {
+    const caller = new AbortController(); caller.abort();
+    let calls = 0;
+    await assert.rejects(requestJson("https://synthetic.invalid", { signal: caller.signal },
+      { ...boundary, sideEffecting }, async () => { calls += 1; }), error =>
+      error instanceof HttpBoundaryError && error.ambiguous === sideEffecting);
+    assert.equal(calls, 0);
+  }
+});
+
+test("caller cancellation aborts stalled headers and cancels a late body", async () => {
+  const caller = new AbortController(); let release, signal, cancelled = 0;
+  const promise = requestJson("https://synthetic.invalid", { signal: caller.signal },
+    { ...boundary, timeoutMs: 1000 }, (_url, options) => {
+      signal = options.signal; return new Promise(resolve => { release = resolve; });
+    });
+  caller.abort();
+  await assert.rejects(promise, unknownWrite);
+  assert.equal(signal.aborted, true);
+  release({ status: 200, body: { cancel() { cancelled += 1; },
+    getReader() { assert.fail("Late cancelled headers cannot start a body read"); } } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(cancelled, 1);
+});
+
+test("caller cancellation aborts stalled body without waiting for reader cancellation", async () => {
+  const caller = new AbortController(); let reads = 0, cancels = 0, release;
+  const promise = requestJson("https://synthetic.invalid", { signal: caller.signal },
+    { ...boundary, timeoutMs: 1000, sideEffecting: false }, async () => ({
+      status: 200, headers: new Headers(), body: { getReader: () => ({
+        read() { reads += 1; return new Promise(resolve => { release = resolve; }); },
+        cancel() { cancels += 1; return new Promise(() => {}); }, releaseLock() {},
+      }) },
+    }));
+  await new Promise(resolve => setImmediate(resolve));
+  caller.abort();
+  await assert.rejects(promise, error => error instanceof HttpBoundaryError && !error.ambiguous);
+  assert.equal(cancels, 1);
+  release({ done: false, value: Buffer.from("{}") });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reads, 1);
+});
+
+test("successful request removes caller abort listener and invalid signals never dispatch", async () => {
+  const caller = new AbortController(); let adds = 0, removes = 0;
+  const add = caller.signal.addEventListener.bind(caller.signal);
+  const remove = caller.signal.removeEventListener.bind(caller.signal);
+  caller.signal.addEventListener = (...args) => { adds += 1; return add(...args); };
+  caller.signal.removeEventListener = (...args) => { removes += 1; return remove(...args); };
+  let signal;
+  await requestJson("https://synthetic.invalid", { signal: caller.signal }, boundary, async (_url, options) => {
+    signal = options.signal; return new Response("{}");
+  });
+  assert.equal(adds, 1); assert.equal(removes, 1);
+  caller.abort(); assert.equal(signal.aborted, false);
+  await assert.rejects(requestJson("https://synthetic.invalid", { signal: {} }, boundary,
+    () => assert.fail("Invalid cancellation cannot dispatch")), unknownWrite);
+});

@@ -54,7 +54,58 @@ items after parsing, not the bytes downloaded or memory used by an adapter.
   logged. The resulting identities are still private operational evidence and
   must not be published in fixtures, logs or repository artifacts.
 
-The defaults are 100 items per page, five pages **per collection**, 250 total
+## Unwired native GET adapter
+
+`lib/billing-read-adapter.js` implements the four-reader seam using the existing
+bounded JSON transport. Construct it with `createBillingReadAdapter(configuration,
+dependencies)` and pass its frozen return value as the collector's `reads`.
+Both `readAuthorizationProvider` and `fetchImpl` must be supplied explicitly;
+there is no SDK initialization, credential discovery or default network binding.
+The factory performs no I/O. Invoking a reader is a provider read and requires
+the separately qualified execution boundary before live use.
+
+Configuration accepts only `billingOrganizationId`, optional `timeoutMs` (default
+3,000; ceiling 3,000 milliseconds), and optional `maximumBytes` (default 262,144;
+ceiling 524,288). It captures these values and dependencies before any await.
+The US origin/path prefix is fixed to `https://www.zohoapis.com/billing/v1`, matching
+the existing approved US integration boundary. Reader requests cannot override
+origin, organization, headers, HTTP method or credentials. Numeric record IDs are
+validated before interpolation. No write methods or generic request method exist.
+
+Customer pages always use `filter_by=Status.All`; subscription pages always use
+`filter_by=SubscriptionStatus.All`. Internal `page`/`perPage` become the native
+`page`/`per_page`. No customer or substring filter narrows the inventory. Customer
+status-filter defaults are not documented, so omitting that filter would not
+establish inactive-record coverage. The documented default page size is 200;
+the adapter's ceiling of 200 is a local safety bound, not a claimed API maximum.
+
+Each read performs at most one authorization lookup and one GET. One monotonic
+deadline covers authorization, headers, streamed bytes and decoding. Caller abort
+propagates through `requestJson` to fetch and body cancellation; late authorization,
+headers or body results cannot start later work. Abort listeners are removed on
+completion. Cancellation remains best effort for a dependency that ignores it.
+No retry, redirect, unbounded body read or provider error text is permitted.
+
+The adapter returns the private native response body to the collector, which
+minimizes it to identity observations. Do not log or publish adapter responses or
+authorization values. HTTP error status, missing expected members, nonzero native
+code and malformed/oversized responses produce a fixed sanitized error. A native
+list response without explicit `page_context` remains rejected by the collector.
+
+Official contract references: [US API and organization header](https://www.zoho.com/billing/api/v1/introduction/),
+[customer reads and Status.All](https://www.zoho.com/billing/api/v1/customers/),
+[subscription reads and SubscriptionStatus.All](https://www.zoho.com/billing/api/v1/subscription/),
+and [pagination](https://www.zoho.com/billing/api/v1/pagination/). These describe
+capability, not the installed connection's identity, effective scopes or behavior.
+The read scopes documented are `ZohoSubscriptions.customers.READ` and
+`ZohoSubscriptions.subscriptions.READ`; no grant is created or expanded here.
+
+End-to-end synthetic adapter/collector tests intentionally still return
+`held_evidence_only`, `readStatus: incomplete`, null historical mapping and false
+billing authority. Configured organization, successful GETs and current IDs do
+not satisfy the remaining execution, consistency, CRM-join or historical gates.
+
+The collector defaults are 100 items per page, five pages **per collection**, 250 total
 customer-plus-subscription items, 300 read calls and a three-second total deadline.
 Explicit limits may lower or raise these up to the immutable ceilings of 200,
 25, 1,000, 1,100 and 3,000 milliseconds respectively. Reads are sequential. A single

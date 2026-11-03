@@ -18,6 +18,10 @@ customer-detail hydration using injected GET-only readers. It always returns
 `readStatus: incomplete`, including when an observed sweep ends. It cannot be
 substituted for a qualified snapshot or an effective historical mapping. See
 [the collector contract and qualification gates](tools/billing-read-collector.md).
+The accompanying `lib/billing-read-adapter.js` supplies four narrow, fixed-US-origin
+GET readers with explicit all-status filters and bounded body/cancellation handling.
+It is also unwired; its configured organization is a destination, not evidence of
+caller identity, Billing mode, snapshot consistency or historical ownership.
 
 `lib/billing-link-reconciliation.js` is an unwired read-only foundation. Its pure
 `reconcileBillingLink({ scope, attribution, snapshot })` returns `verified`,

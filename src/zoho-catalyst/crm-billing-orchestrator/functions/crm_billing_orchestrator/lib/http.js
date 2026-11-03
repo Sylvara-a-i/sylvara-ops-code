@@ -27,6 +27,16 @@ async function requestJson(url, options, boundary, fetchImpl = globalThis.fetch)
     try { Promise.resolve(reader?.cancel()).catch(() => {}); } catch (_) {}
   };
   const deadline = new Promise((_, reject) => { rejectDeadline = reject; });
+  const callerSignal = options.signal;
+  const callerAbort = () => {
+    cancel();
+    rejectDeadline(failed("Dependency request did not complete"));
+  };
+  if (callerSignal !== undefined && !(callerSignal instanceof AbortSignal)) {
+    throw failed("Dependency cancellation signal is invalid");
+  }
+  if (callerSignal?.aborted) callerAbort();
+  else callerSignal?.addEventListener("abort", callerAbort, { once: true });
   const timer = setTimeout(() => {
     cancel();
     rejectDeadline(failed("Dependency request did not complete"));
@@ -95,6 +105,7 @@ async function requestJson(url, options, boundary, fetchImpl = globalThis.fetch)
     throw failed("Dependency request did not complete");
   } finally {
     clearTimeout(timer);
+    callerSignal?.removeEventListener("abort", callerAbort);
     if (!completed) cancel();
     try { reader?.releaseLock(); } catch (_) {}
   }
