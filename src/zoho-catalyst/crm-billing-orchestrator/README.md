@@ -63,6 +63,70 @@ Billing writes require a separately verified provider contract and explicit auth
 one-time add-ons do not establish a usage-submission contract. Revert these unwired
 helpers/tests/docs to contain this source-only change.
 
+### Verified GET contract and remaining producer gates
+
+Official documentation reviewed **2026-11-03** establishes the following read
+operations. It does not establish the installed identity, effective permissions,
+organization mode, CRM synchronization model or actual response from any account.
+This assessment adds no executable producer or provider access.
+
+| Operation | Documented read contract | Permitted evidence |
+| --- | --- | --- |
+| `GET /billing/v1/subscriptions` | `ZohoSubscriptions.subscriptions.READ`; `filter_by=SubscriptionStatus.All`, explicit `page` / `per_page`; optional `reference_contains` is a contains search | Observed subscription identities and exact-reference candidates; never entitlement or historical ownership |
+| `GET /billing/v1/subscriptions/{subscription_id}` | Same read scope; independently retrieve an existing subscription | Compare the selected subscription, reference and customer identity with the list observation |
+| `GET /billing/v1/customers/{customer_id}` | `ZohoSubscriptions.customers.READ`; native `zcrm_account_id`, `zcrm_contact_id`, `is_linked_with_zohocrm` fields | Current customer-to-CRM evidence only; an account link and a contact link are different relationships |
+
+Sources: [subscriptions](https://www.zoho.com/billing/api/v1/subscription/),
+[customers](https://www.zoho.com/billing/api/v1/customers/).
+The customer documentation describes the linkage flag as true for a linked
+customer, but its example combines populated CRM identifiers with a false flag.
+Do not turn that example into an exception: ambiguous, missing or contradictory
+observations remain held until the actual read contract is qualified. No examples,
+identifiers, credentials or customer payloads from those pages are copied here.
+
+A collector must bind its API origin/data center and organization header to an
+independently verified read identity and expected test/live mode. It must expose
+only bounded GET operations, use read authorization only, minimize returned fields,
+redact dependency errors, and construct no paid/provisioning configuration or write
+provider. The existing mixed lifecycle clients are not that interface.
+
+For a sweep, request explicit pages, validate each response and page context,
+reject repeated pages/duplicate identities or reference conflicts, and stop at the
+existing reconciliation ceiling of 25 pages. Missing final pagination evidence or
+reaching the ceiling with more pages outstanding is incomplete. A final
+`has_more_page: false` establishes only that the observed sweep ended. The
+[pagination documentation](https://www.zoho.com/billing/api/v1/pagination/)
+provides no atomic-snapshot guarantee; recording start/end times or doing two
+matching sweeps does not create one. Keep concurrency/point-in-time completeness
+unproven. A single customer detail read must not be repackaged as a complete
+`customerPages` inventory or proof that no other customer has the same CRM reference.
+
+The joined producer remains blocked on four explicit contracts:
+
+1. A trusted, read-only execution boundary binding the caller, Catalyst project,
+   environment and immutable tenant/deployment/configuration to the CRM and Billing
+   identities. Neither copied request IDs nor token-shaped strings are attestation.
+2. A complete, bounded canonical-row read with explicit truncation/pagination
+   evidence. The current unpaginated `query` and capped `queryBounded` interfaces
+   do not provide that general snapshot contract. Preserve raw `durationMs` and
+   provider-wide completeness as unproven.
+3. Qualified current CRM/Billing relationship responses and customer-reference
+   inventory semantics. Preserve account/deal checks, independent detail readback,
+   duplicate handling and the existing normalized snapshot validator.
+4. Authoritative effective mapping evidence covering each whole historical call.
+   Current native CRM identifiers, subscription dates or a completed sweep cannot
+   supply it. [Events](https://www.zoho.com/billing/api/v1/events/) are accessible
+   only for the preceding 180 days and omit actions before the current date for
+   backdated subscriptions; recent subscription activities are not documented as
+   an exhaustive mapping history. Missing history remains `historical_link_unresolved`.
+
+Once those contracts exist, implement the trusted producer behind the existing
+`readSnapshot` seam and exercise pagination changes, ownership conflicts, missing
+history and transport failures with synthetic responses. Do not add a parallel
+inventory result that pretends to satisfy the joined contract. No scopes/grants,
+security changes, live reads, provisioning, financial amounts or billing rules are
+authorized by this documentation; billable amounts remain null and authority false.
+
 ## Public Contract
 
 | Action | Required authoritative CRM state | Bounded outcome |
