@@ -168,6 +168,13 @@ test('release builder exports only a clean exact Git revision and stamps only it
   assert.equal(manifest.files.some(({ path: relative }) => relative.includes('/test/')), false);
   assert.equal(manifest.files.some(({ path: relative }) => relative.includes('.env')), false);
   assert.equal(manifest.files.some(({ path: relative }) => relative.startsWith('scripts/')), false);
+  const packagedGateway = path.join(output, 'functions', 'revenue_desk_call_gateway');
+  assert.ok(manifest.files.some(({ path: relative }) => relative ===
+    'functions/revenue_desk_call_gateway/data/us-postal-fixture.json'));
+  assert.equal(require(path.join(packagedGateway, 'contracts/service-area-tool-contract.json')).enabled, false);
+  const packagedPostal = require(path.join(packagedGateway, 'lib/postal-index-loader.js'));
+  assert.equal(packagedPostal.loadPostalSnapshot({ packageRoot: packagedGateway }).sha256, null);
+  assert.equal(packagedPostal.loadPostalSnapshot({ packageRoot: packagedGateway, allowSynthetic: true }).index.status, 'ready');
   for (const entry of manifest.files) {
     const bytes = fs.readFileSync(path.join(output, entry.path));
     assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'), entry.sha256);

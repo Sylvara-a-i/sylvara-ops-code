@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "enabled": false,
+  "path": "/retell/service-area/resolve",
+  "name": "resolve_service_area",
+  "method": "POST",
+  "argsOnly": false,
+  "activationRequiresDeploymentReview": true
+}

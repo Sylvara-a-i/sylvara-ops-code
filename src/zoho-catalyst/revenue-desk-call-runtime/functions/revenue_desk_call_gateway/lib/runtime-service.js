@@ -9,6 +9,7 @@ const {
 } = require('./contracts');
 const { validateConfigurationVersionRow } = require('./configuration-version');
 const { RevenueDeskError, invariant } = require('./errors');
+const { OWNERSHIP_METADATA_FIELDS, validateServiceAreaCall, serviceAreaDecision } = require('./service-area-tool');
 const {
   validateInboundPayload, validateEventEnvelope, validateConfiguration, e164, isPlainObject,
   MAX_RETELL_CALL_DURATION_MS, E164_PATTERN, assertExecutionTimingSupported, assertNotificationHandoffReady,
@@ -72,12 +73,6 @@ const CONTAINED_NOTIFICATION_STATES = new Set([
 const RETRYABLE_NOTIFICATION_STATES = new Set(['Pending', 'RetryRequired']);
 const NOTIFICATION_FAILURE_RESULT_STATES = new Set([
   ...CONTAINED_NOTIFICATION_STATES, 'RetryRequired',
-]);
-const OWNERSHIP_METADATA_FIELDS = Object.freeze([
-  'resolver_status', 'client_id', 'deployment_id', 'configuration_version_id',
-  'configuration_version', 'engagement_type',
-  'capability_profile', 'coverage_mode', 'number_binding_id', 'number_binding_version',
-  'correlation_id', 'resolved_at', 'ownership_token',
 ]);
 const APPROVAL_EVENT_PATTERN = /^approval_[a-f0-9]{64}$/;
 const ACTIVATION_EVENT_PATTERN = /^activation_[a-f0-9]{64}$/;
@@ -678,7 +673,8 @@ function validateMetadataBinding(metadata, deployment, config) {
     deployment.bindingId, deployment.bindingVersion, deployment.numberLookupHash,
     metadata.correlation_id, metadata.resolved_at,
   ]);
-  invariant(expected === metadata.ownership_token,
+  invariant(HASH_PATTERN.test(metadata.ownership_token)
+    && crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(metadata.ownership_token, 'hex')),
     'CALL_OWNERSHIP_UNRESOLVED', 'Ownership token is invalid.');
 }
 
@@ -1170,6 +1166,38 @@ function createRuntimeService({
       deployment,
       correlationId: publicCorrelationId(config.eventSecret, ['post-call-number-fallback', callKey, deployment.bindingId]),
     };
+  }
+
+  async function resolveServiceAreaForCall(payload, snapshot) {
+    const call = validateServiceAreaCall(payload);
+    invariant(call.agentId === config.sharedAgentId && call.agentVersion === config.sharedAgentVersion,
+      'CALL_OWNERSHIP_UNRESOLVED', 'Service-area call agent is not approved.', { httpStatus: 403 });
+    const metadata = parseOwnershipMetadata(call.metadata, config);
+    const row = await store.unique(deploymentTable, 'DEPLOYMENT_ID', metadata.deployment_id);
+    const deployment = await loadDeployment(store, row, config);
+    validateMetadataBinding(metadata, deployment, config);
+    invariant(numberLookupKey(config.numberSecret, call.toNumber) === deployment.numberLookupHash,
+      'CALL_OWNERSHIP_UNRESOLVED', 'Service-area called number conflicts with ownership.', { httpStatus: 403 });
+    const timestamp = now();
+    const resolvedAt = Date.parse(metadata.resolved_at);
+    // This is an admitted call, not a new admission or a terminal-event fallback.
+    // Do not count it, reserve capacity, or infer ownership from a number alone.
+    assertExecutionTimingSupported(deployment.configuration);
+    invariant(deployment.testStatus === CONTRACT.active_test_status
+      && deployment.approvalStatus === CONTRACT.approved_go_live_status
+      && deployment.approvalEvidenceValidated && deployment.activationEvidenceValidated
+      && !deployment.rollbackClaimActive && deployment.stopReason === null && deployment.stoppedAt === null
+      && call.startTimestamp >= Date.parse(deployment.actualStartAt)
+      && timestamp < Date.parse(deployment.expiresAt)
+      && call.startTimestamp <= timestamp + config.maxSignatureAgeMs
+      && timestamp - call.startTimestamp <= MAX_RETELL_CALL_DURATION_MS
+      && Math.abs(resolvedAt - call.startTimestamp) <= config.maxSignatureAgeMs,
+    'CALL_OWNERSHIP_UNRESOLVED', 'Service-area call context is no longer available.', { httpStatus: 403 });
+    const confirmation = deployment.configuration.serviceAreaResolution?.confirmation;
+    invariant(!confirmation || Date.parse(confirmation.confirmedAt) <= resolvedAt,
+      'CALL_OWNERSHIP_UNRESOLVED', 'Service-area confirmation postdates call admission.', { httpStatus: 403 });
+    return serviceAreaDecision(deployment.configuration, call.caller, snapshot,
+      new Date(timestamp).toISOString().slice(0, 10));
   }
 
   async function upsertCall(eventData, callKey, owner, analysis, at) {
@@ -2556,6 +2584,7 @@ function createRuntimeService({
 
   return Object.freeze({
     resolveInbound,
+    resolveServiceAreaForCall,
     acceptEvent,
     processEventReceipt,
     retryDueEvents,

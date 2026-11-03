@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "format": "synthetic_json",
+  "sha256": "6079c719abb23a9e32f977ef8f1834ea4da4e3cdb150e99df04bf0951dde5016",
+  "snapshotDate": "2026-08-01",
+  "expiresOn": "2026-11-30",
+  "attribution": "Synthetic test relations; not a geographic reference dataset.",
+  "geonamesSourceForFutureApprovedSnapshot": "https://download.geonames.org/export/zip/",
+  "geonamesAttributionRequired": "GeoNames, CC BY 4.0, https://www.geonames.org/; transformed postal relations."
+}

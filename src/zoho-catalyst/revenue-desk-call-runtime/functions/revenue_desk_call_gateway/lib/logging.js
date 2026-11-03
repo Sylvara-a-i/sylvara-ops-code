@@ -4,7 +4,7 @@ const TEXT_FIELDS = Object.freeze({
   event: /^[a-z][a-z0-9_]{0,63}$/,
   correlationId: /^corr_[a-f0-9]{32}$/,
   errorCode: /^[A-Z][A-Z0-9_]{0,63}$/,
-  route: /^(?:inbound|events|readiness|unknown)$/,
+  route: /^(?:inbound|events|readiness|service_area|unknown)$/,
   eventType: /^(?:call_ended|call_analyzed)$/,
   state: /^[A-Za-z][A-Za-z0-9]{0,39}$/,
 });

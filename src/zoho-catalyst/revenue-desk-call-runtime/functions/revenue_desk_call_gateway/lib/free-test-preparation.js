@@ -287,7 +287,7 @@ function prepareFreeTestConfiguration(input, {
     const services = reviewedList(account.Services_Handled, 30, 'SERVICES_REVIEW_REQUIRED');
     requireValue(services.length > 0 && !services.includes('Other'), 'SERVICES_REVIEW_REQUIRED');
     requireValue(review.serviceAreaSourceText
-      === text(account.Primary_Service_Area, 500, 'SERVICE_AREA_SOURCE_REQUIRED'),
+      === text(account.Primary_Service_Area, 2000, 'SERVICE_AREA_SOURCE_REQUIRED'),
     'SERVICE_AREA_SOURCE_MISMATCH');
     requireValue(review.urgentHandlingSourceText
       === text(deal.Urgent_Call_Handling, 500, 'URGENCY_SOURCE_REQUIRED'),
@@ -320,6 +320,9 @@ function prepareFreeTestConfiguration(input, {
       servicesHandled: services,
       unsupportedServices: reviewedList(review.unsupportedServices, 30, 'EXCLUSIONS_REVIEW_REQUIRED'),
       serviceArea: review.serviceArea,
+      ...(review.serviceAreaResolution === undefined ? {} : {
+        serviceAreaResolution: review.serviceAreaResolution,
+      }),
       urgentConditions: reviewedList(review.urgentConditions, 25, 'URGENCY_REVIEW_REQUIRED'),
       callbackExpectation: text(review.callbackExpectation, 300, 'CALLBACK_REVIEW_REQUIRED'),
       notificationRecipient: {
@@ -343,6 +346,9 @@ function prepareFreeTestConfiguration(input, {
       setupFormSubmissionId: deal.Setup_Form_Submission_ID, setupFormVersion: deal.Setup_Form_Version,
       ...(reportBaseline === undefined ? {} : { reportBaseline }),
     });
+    requireValue(!candidate.serviceAreaResolution
+      || Date.parse(candidate.serviceAreaResolution.confirmation.confirmedAt) <= now,
+    'SERVICE_AREA_CONFIRMATION_REVIEW_REQUIRED');
     // The baseline shares the existing immutable encrypted text column. Check
     // its complete UTF-8 size here, not after an operator tries to persist it.
     requireValue(Buffer.byteLength(JSON.stringify(candidate), 'utf8') <= MAX_CATALYST_TEXT_BYTES,
