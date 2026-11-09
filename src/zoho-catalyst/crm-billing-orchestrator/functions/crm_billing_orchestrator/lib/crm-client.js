@@ -164,11 +164,12 @@ function createCrmClient(config, {
     "Billing_Automation_Status",
     "Billing_Last_Sync_At",
     "Billing_Automation_Error",
+    "Contact_Name", "Intake_Submission_ID", "QA_Passed", "Go_Live_Approval_Status",
   ]);
   const accountFields = Object.freeze(["Modified_Time", "Account_Name"]);
 
-  async function authorizedRequest(url, options, { write, sideEffecting }) {
-    const maximumAttempts = sideEffecting ? 1 : 2;
+  async function authorizedRequest(url, options, { write, sideEffecting, singleAttempt = false }) {
+    const maximumAttempts = sideEffecting || singleAttempt ? 1 : 2;
     for (let attempt = 1; attempt <= maximumAttempts; attempt += 1) {
       let token;
       try {
@@ -204,14 +205,14 @@ function createCrmClient(config, {
     fail("CRM read retry boundary was exhausted", { publicCode: "crm_dependency_failed" });
   }
 
-  async function getRecord(module, id, fields) {
+  async function getRecord(module, id, fields, singleAttempt = false) {
     recordId(id);
     const url = new URL(`${config.crmApiBaseUrl}/${module}/${id}`);
     url.searchParams.set("fields", fields.join(","));
     const response = await authorizedRequest(url.toString(), {
       method: "GET",
       headers: { Accept: "application/json" },
-    }, { write: false, sideEffecting: false });
+    }, { write: false, sideEffecting: false, singleAttempt });
     if (response.status !== 200) fail("CRM rejected the record read", classifyStatus(response.status, false));
     return parseRecord(response.json, id);
   }
@@ -229,6 +230,27 @@ function createCrmClient(config, {
     }
     const account = await getAccount(recordId(lookup.id, "CRM Account identifier"));
     return Object.freeze({ deal, account });
+  }
+
+  async function getExpiryClosureContext(dealId) {
+    const deal = await getRecord("Deals", dealId, dealFields, true);
+    const account = await getRecord("Accounts", recordId(deal.Account_Name?.id), accountFields, true);
+    return Object.freeze({ deal, account });
+  }
+
+  async function updateDealExpiryClosure(deal, patch) {
+    require("./expiry-closure").validatePatch(patch);
+    recordId(deal?.id); modifiedTime(deal?.Modified_Time);
+    const response = await authorizedRequest(`${config.crmApiBaseUrl}/Deals/${deal.id}`, {
+      method: "PUT",
+      headers: { Accept: "application/json", "Content-Type": "application/json", "If-Unmodified-Since": deal.Modified_Time },
+      body: JSON.stringify({ data: [{ id: deal.id, ...patch }], trigger: [],
+        skip_feature_execution: [{ name: "cadences" }] }),
+    }, { write: true, sideEffecting: true });
+    if (response.status !== 200) fail("CRM rejected expiry closure", classifyStatus(response.status, true));
+    parseUpdate(response.json, deal.id);
+    // The private lifecycle owns the single exact readback and immutable outcome.
+    // This adapter never retries or infers report/Blueprint completion.
   }
 
   async function updateDealIntegration(deal, patch) {
@@ -356,6 +378,7 @@ function createCrmClient(config, {
 
   return Object.freeze({
     getAccount, getContext, getDeal, updateDealIntegration, updateDealReportSummary,
+    getExpiryClosureContext, updateDealExpiryClosure,
   });
 }
 

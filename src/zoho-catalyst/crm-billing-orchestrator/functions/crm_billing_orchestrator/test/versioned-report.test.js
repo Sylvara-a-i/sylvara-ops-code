@@ -4,6 +4,8 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { syncVersionedReport, PROTECTED_FIELDS } = require("../lib/versioned-report");
 const { reportSummaryIdentity, reportSummaryPatch } = require("../lib/report-summary");
+const { fixture: expiryFixture } = require("./expiry-closure-fixture");
+const { digest: expiryDigest, keys: expiryKeys } = require("../lib/expiry-closure");
 
 const config = {
   deploymentEnvironment: "development", analyticsPartitionSecret: "synthetic-only".repeat(3),
@@ -105,6 +107,37 @@ function harness() {
     },
   };
 }
+
+test("first legitimate report after expiry-only closure requires the exact authenticated predecessor", async t => {
+  for (const mode of ["valid", "missing", "tampered", "disabled"]) await t.test(mode, async () => {
+    const closure = expiryFixture();
+    closure.config.reportMutableStageValue = "Value Proposition";
+    closure.policy.expectedStageApiValue = "Value Proposition";
+    closure.deal.Stage = "Value Proposition"; closure.policy.beforeDealSha256 = expiryDigest(closure.deal);
+    await closure.service().run();
+    const h = harness(); h.state.deal = structuredClone(closure.deal);
+    for (const [key, row] of closure.rows) h.rows.set(key, structuredClone(row));
+    const proofKey = expiryKeys(config, closure.binding).outcome;
+    if (mode === "missing") h.rows.delete(proofKey);
+    if (mode === "tampered") h.rows.get(proofKey).OPERATION_FINGERPRINT = "0".repeat(64);
+    const beforeProof = JSON.stringify([...h.rows]);
+    const selected = summary(1, { testStartAt: closure.retired.ACTUAL_START_AT, testEndAt: closure.retired.EXPIRES_AT });
+    const enabled = { ...closure.config, expiryClosureCompatibility: { enabled: mode !== "disabled", bindingSha256: expiryDigest(closure.binding) } };
+    if (mode === "valid") {
+      const result = await h.run(selected, { config: enabled });
+      assert.equal(result.outcome, "report_summary_readback_confirmed"); assert.equal(h.writes, 1);
+      for (const [key, row] of JSON.parse(beforeProof)) assert.deepEqual(h.rows.get(key), row);
+      assert.equal(h.state.deal.Stage, "Value Proposition");
+      assert.equal(h.state.deal.Call_Totals_Reconciled, true);
+    } else {
+      await assert.rejects(h.run(selected, { config: enabled })); assert.equal(h.writes, 0);
+      assert.equal(h.state.deal.Call_Totals_Reconciled, false);
+    }
+    assert.equal(h.state.deal.Stage, "Value Proposition");
+    assert.equal(h.state.deal.QA_Passed, false);
+    for (const field of PROTECTED_FIELDS) assert.equal(h.state.deal[field], null);
+  });
+});
 
 test("same-call late analysis revises Completed; old/latest replay preserve history and the terminal clock", async () => {
   const h = harness();
