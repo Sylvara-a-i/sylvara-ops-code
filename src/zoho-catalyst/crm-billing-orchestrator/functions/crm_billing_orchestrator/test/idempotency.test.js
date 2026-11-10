@@ -448,3 +448,29 @@ test("direct TEST customer claim is stable across Deals and lifecycle actions fo
   });
   assert.equal(configurationConflict.outcome, "duplicate-conflict");
 });
+
+test("expiry inserts require exact append-only shape and never infer success from an uncertain insert", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const app = memoryApp(config.operationTable);
+  const store = createOperationStore(app, config);
+  const row = {
+    OPERATION_KEY: "a".repeat(64), OPERATION_FINGERPRINT: "b".repeat(64), ACTION: "record_test_expiry",
+    CRM_DEAL_ID: "100000000000001", STATUS: "processing", LAST_OUTCOME: "expiry_only_attempt_consumed",
+    SOURCE_REVISION: config.sourceRevision, SOURCE_ENVIRONMENT: "development", OPERATION_PAYLOAD_JSON: "{}",
+    OPERATION_VERSION: 1, CREATED_AT: "2026-09-08T00:05:00.246Z", UPDATED_AT: "2026-09-08T00:05:00.246Z",
+  };
+  assert.equal(store.expiryClosureTransportQualified, false, "ordinary SDK has no no-retry qualification");
+  for (const changed of [
+    { ACTION: "sync_report_summary" }, { STATUS: "completed" }, { SOURCE_REVISION: "0".repeat(40) },
+    { CREATED_AT: "invalid" }, { UPDATED_AT: "2026-09-08T00:06:00.246Z" }, { EXTRA: "not permitted" },
+  ]) await assert.rejects(store.insertExpiryClosure({ ...row, ...changed }), /Expiry closure operation is invalid/);
+  assert.equal(app.rows.length, 0);
+  assert.deepEqual(await store.insertExpiryClosure(row), { inserted: true });
+  assert.deepEqual(await store.insertExpiryClosure(row), { inserted: false });
+  assert.equal(app.rows.length, 1);
+  const table = app.datastore().table(); const insert = table.insertRow;
+  table.insertRow = async input => { await insert(input); throw new Error("lost acknowledgement"); };
+  assert.deepEqual(await store.insertExpiryClosure({ ...row, OPERATION_KEY: "c".repeat(64) }), { inserted: false });
+  assert.equal(app.rows.length, 2, "uncertain effect retained without authorizing CRM");
+  assert.equal(app.rows.every(value => value.STATUS === "processing" && value.OPERATION_VERSION === 1), true);
+});

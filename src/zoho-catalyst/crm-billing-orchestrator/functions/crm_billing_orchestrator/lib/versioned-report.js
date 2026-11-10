@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("node:crypto");
+const { isExpiryClosurePredecessor } = require("./expiry-closure");
 const { isReportSummaryPreWrite } = require("./idempotency");
 const {
   ReportSummaryError, isNewerReport, reportSummaryPatch, validateReportOperation,
@@ -120,9 +121,11 @@ async function syncVersionedReport({
     await finish(operation);
     return success(true);
   }
-  const eligible = (current, currentHead) => {
+  const eligible = async (current, currentHead) => {
     if (protectedState(current.deal)) return "report_revision_protected";
     if (!currentHead && (rolledBack || current.deal.Test_Status === "Live")) return null;
+    if (!currentHead && current.deal.Test_Status === config.testCompletedStatusValue
+      && await isExpiryClosurePredecessor(config, operationStore, current, summary)) return null;
     if (current.deal.Test_Status !== (rolledBack ? "Rolled Back" : config.testCompletedStatusValue)) {
       return "report_test_status_conflict";
     }
@@ -130,7 +133,7 @@ async function syncVersionedReport({
       || !isNewerReport(currentHead.summary, summary)) return "report_summary_readback_required";
     return null;
   };
-  const initialFailure = eligible(state, previous);
+  const initialFailure = await eligible(state, previous);
   if (initialFailure) await contain(operation, initialFailure);
   const reservation = await operationStore.claimReportGuard(
     binding, key, guard?.confirmedOperationKey ?? null, nowIso(),
@@ -146,7 +149,7 @@ async function syncVersionedReport({
   const latestGuard = await operationStore.readReportGuard(binding);
   if (latestGuard?.inflightOperationKey !== key
     || latestGuard.confirmedOperationKey !== guard.confirmedOperationKey) fail();
-  const refreshedFailure = eligible(refreshed, await head(latestGuard));
+  const refreshedFailure = await eligible(refreshed, await head(latestGuard));
   if (refreshedFailure) await contain(claim.row, refreshedFailure);
   // Some raw analysis changes round to an identical CRM projection. They still
   // advance verified source history, but do not need a redundant CRM mutation.
