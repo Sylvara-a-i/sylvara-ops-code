@@ -97,6 +97,47 @@ Duplicate, conflicting, unknown-duration, incomplete-snapshot and cross-period
 observations retain the existing conservative handling. V1 exports and output
 semantics remain available unchanged. Neither path is imported by a runtime route.
 
+## Invoice corrections and late usage qualification
+
+Official vendor behavior reviewed on 2026-11-10 remains **Reference**, not verified
+account access or an executable API contract. Zoho's [March 2026 update](https://help.zoho.com/portal/en/community/topic/whats-new-in-zoho-billing-march-2026)
+says voiding an invoice returns its linked usage records to Pending and permits
+late usage dates back to subscription activation. Its [May 2026 update](https://help.zoho.com/portal/en/community/topic/whats-new-in-zoho-billing-may-2026)
+describes an early-access API for regenerating a current-term invoice after usage
+correction. Neither announcement proves entitlement, payload semantics, payment
+or notification effects in a particular organization.
+
+The existing preview accepts source-call evidence, not provider usage records or
+invoice state. It has no durable submission ledger, write adapter, invoice action
+or correction executor. Synthetic tests verify that provider lifecycle metadata
+is rejected, repeated identical calls still count once within each supplied
+snapshot, and late prior-period calls are not moved into the observation-time
+period. All results stay held and noncharging. A changed snapshot/preview revision
+is an observation identity, not a new usage identity or submission authorization.
+These tests do not prove deduplication across provider writes or persistence.
+
+Before any future submission or correction executor is allowed:
+
+- Preserve a durable scoped identity for the original source usage and its exact
+  provider usage linkage. Do not derive a new submission identity from invoice
+  status, replacement invoice ID, snapshot revision or preview revision.
+- Treat Invoiced-to-Pending after a void as reconciliation of the existing usage,
+  never proof that it was not submitted. Missing, stale, conflicting or uncertain
+  linkage must hold; provider status alone must never release a second submit.
+- Qualify complete authoritative readback, concurrent/replayed observations,
+  ambiguous writes, invoice replacement and correction history. Preserve prior
+  submission evidence when invoices are voided or regenerated.
+- Separately approve late-event cutoffs, historical period/rate/allowance mapping
+  and correction handling. Native acceptance of an old date does not authorize
+  billing it now or changing a closed period.
+- Verify the exact organization's entitlement and supported API contract, including
+  activation-date bounds, current-term limits, payment collection, credits/refunds,
+  customer notifications and Billing/Books ownership. Do not invoke regeneration
+  or submit usage as a capability probe.
+
+No endpoint, status mapping, settlement policy or paid authority is introduced by
+this qualification note. Existing native and commercial holds remain unchanged.
+
 ## Verification and next integration gate
 
 Run the commercial-v2, usage-preview-v2 and existing usage-preview tests, then
