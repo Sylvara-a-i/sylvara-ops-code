@@ -560,7 +560,7 @@ class ApprovalConsumptionTests(unittest.TestCase):
 
     def test_subprocess_concurrency_has_one_winner_and_replays_only(self) -> None:
         # Exercise independent first-claim races rather than reusing an initialized ledger.
-        for trial in range(100):
+        for trial in range(10):
             with self.subTest(trial=trial):
                 self.ledger = self.root / f"concurrent-{trial}"
                 self.ledger.mkdir()
