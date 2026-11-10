@@ -26,6 +26,33 @@ Every result retains `provider_access_verified`, `live_coverage_qualified`,
 source with no observed busy interval is inconclusive rather than a pass. That
 prevents an empty dataset from appearing to prove all-calendar coverage.
 
+## Current integration requirements (2026-11-10)
+
+Native integration is preferred when it meets the complete requirement. No
+operational calendar bridge has been selected. Apple Calendar may remain the
+primary operator client, but displaying accounts together is not synchronization
+or proof that Bookings checks every designated conflict source.
+
+Every designated source must be covered. A designated strict-blocking calendar
+must block appointments even for events marked Free. This policy requires a
+qualified collector/normalizer; this checker only sees supplied intervals and
+cannot infer or enforce the provider's Free/Busy policy.
+
+Host-initiated movement or cancellation must produce a neutral host-side apology
+and ask the prospect to choose or accept a replacement time before a new time is
+confirmed. Do not automatically confirm the host's proposed time, misattribute the
+change to the customer, or disclose private conflict details. Qualify pending
+change state, original-slot treatment, prospect acceptance, duplicate notice
+prevention, template fields, sender identity, and time zones separately.
+
+A bounded self-only native test observed Bookings-originated updates reaching a
+connected calendar and email. External calendar movement/deletion did not update
+the authoritative appointment within the observed windows; Apple-client behavior
+remains untested. This does not establish universal provider behavior. Qualify
+both directions and each lifecycle transition before selecting an integration.
+Native notice behavior still needs host attribution, acceptance, time-zone, and
+template-field corrections. See the [current delivery checkpoint](../../../docs/runbooks/revenue-desk-current-state.md#calendar-decisions-and-acceptance-gates).
+
 ## Run
 
 Python 3.12 or newer; standard library only. No installation is needed.
@@ -130,7 +157,8 @@ qualified independently before this tool is used to review live observations.
 2. Verify the complete source-to-conflict-destination mapping and effective
    access. A fresh destination or a healthy Google connection does not prove a
    fresh upstream iCloud feed. Read source busy time from the source itself.
-3. Normalize only provider-confirmed busy intervals. Qualify free events,
+3. Normalize provider-confirmed intervals under the approved per-source blocking
+   policy, including Free events on designated strict-blocking sources. Qualify
    recurring exceptions, deleted/moved events, RSVP behavior, and all-day/DST
    semantics rather than inferring them. Expand recurrence over the complete
    covered window. Never silently treat a read failure as an empty calendar.

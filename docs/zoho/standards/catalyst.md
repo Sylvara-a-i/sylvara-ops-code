@@ -30,6 +30,12 @@ Every externally reachable workflow must:
 
 Development and Production must use separate configuration, credentials, routes, storage, and approval paths. Environment variables belong in the approved Catalyst secret/configuration surface, not GitHub.
 
+## Native Atomicity Qualification
+
+A conditional ZCQL `UPDATE`, an affected-row count, or a read-then-write sequence is not proof of an atomic compare-and-set or exclusive claim. Provider-support guidance reviewed on 2026-11-10 does not guarantee atomic conditional ZCQL updates under concurrency. Keep affected live execution held until the selected native primitive is qualified.
+
+Provider-recommended NoSQL conditional updates remain a candidate, not an adopted storage migration. Verify the exact operation, winner/loser semantics, durable identity, replay, concurrent contenders, ambiguous outcomes, persistence, access controls, limits, and cost before use. Do not substitute application retries for provider-enforced exclusivity or assume available free capacity. Public source tests and in-memory fakes do not prove native atomicity. See the [current qualification status](../../runbooks/revenue-desk-current-state.md#native-concurrency-qualification).
+
 ## Release Controls
 
 - Build and test from a reviewed immutable source revision.
