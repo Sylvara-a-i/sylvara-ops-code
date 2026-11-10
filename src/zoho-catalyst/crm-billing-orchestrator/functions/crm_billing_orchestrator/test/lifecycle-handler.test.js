@@ -165,6 +165,9 @@ function unreviewedReportDeal(overrides = {}) {
 }
 
 function harness(config, initialContext, options = {}) {
+  // Synthetic test-only original-owner pin; never derived from later reads.
+  config = {...config, reportOwnerBindings:[{dealId:initialContext.deal.id, accountId:initialContext.account.id,
+    deploymentId:initialContext.deal.Deployment_Record_ID, configurationVersion:initialContext.deal.Configuration_Version}]};
   let current = structuredClone(initialContext);
   let contextReads = 0;
   const calls = [];
@@ -1741,4 +1744,15 @@ test("an uncertain completion mark is never followed by a second terminal write"
     uncertain.calls.filter(([kind]) => kind === "mark").map(([, , status]) => status),
     ["completed"],
   );
+});
+
+test("original report owner reassignment fails before claim or CRM write", async () => {
+  const config=loadConfig(baseEnvironment(),{artifactRevision:REVISION});
+  const summary=terminalSummary(); const operation=reportOperation(config,summary);
+  const selected=harness(config,context(config,unreviewedReportDeal({Test_Status:"Live"})),{
+    readOperation:async()=>structuredClone(operation),
+    onGetContext:(current)=>{current.account.id="100000000000009"; current.deal.Account_Name.id=current.account.id; return current;}
+  });
+  await assert.rejects(selected.lifecycle.handle({action:"sync_report_summary",dealId:summary.dealId,operationKey:operation.OPERATION_KEY}), e=>e.publicCode==="record_stale");
+  assert.equal(selected.calls.filter(([kind])=>["claim_report","crm_report_update"].includes(kind)).length,0);
 });

@@ -401,6 +401,18 @@ function createLifecycleHandler(
     }
     const operation = await operationStore.readByKey(operationKey);
     const { summary } = validateReportOperation(config, operation, state.deal.id);
+    // A Deal can be reassigned before its first summary guard exists. Bind to
+    // original setup ownership, never whichever Account the Deal now selects.
+    // This applies to legacy and reconciliation paths without rewriting receipts.
+    const owners = Array.isArray(config.reportOwnerBindings) ? config.reportOwnerBindings.filter((owner) => (
+      owner.dealId === summary.dealId && owner.deploymentId === summary.deploymentId
+      && owner.configurationVersion === summary.configurationVersion
+    )) : [];
+    if (owners.length !== 1 || owners[0].accountId !== state.accountId) {
+      fail("Terminal report original ownership is unverified", {
+        publicCode: "record_stale", status: 409,
+      });
+    }
     if (summary.deploymentId !== deploymentId
       || summary.configurationVersion !== selectedConfigurationVersion) {
       fail("Terminal report does not match the authoritative Deal deployment", {
