@@ -559,6 +559,15 @@ class ApprovalConsumptionTests(unittest.TestCase):
         self.assertEqual(2, len(self.rows()))
 
     def test_subprocess_concurrency_has_one_winner_and_replays_only(self) -> None:
+        # Exercise independent first-claim races rather than reusing an initialized ledger.
+        for trial in range(100):
+            with self.subTest(trial=trial):
+                self.ledger = self.root / f"concurrent-{trial}"
+                self.ledger.mkdir()
+                _secure_directory(self.ledger)
+                self._assert_concurrent_claim_outcomes()
+
+    def _assert_concurrent_claim_outcomes(self) -> None:
         workers = 10
         commands = [
             [
@@ -586,10 +595,13 @@ class ApprovalConsumptionTests(unittest.TestCase):
             stdout, stderr = process.communicate(timeout=60)
             results.append((process.returncode, stdout, stderr))
 
-        self.assertEqual(1, sum(code == ledger_tool.EXIT_CLAIMED for code, _, _ in results))
+        outcomes = [code for code, _, _ in results]
+        diagnostic = f"synthetic worker exit codes: {outcomes}"
+        self.assertEqual(1, outcomes.count(ledger_tool.EXIT_CLAIMED), diagnostic)
         self.assertEqual(
             workers - 1,
-            sum(code == ledger_tool.EXIT_ALREADY_CONSUMED for code, _, _ in results),
+            outcomes.count(ledger_tool.EXIT_ALREADY_CONSUMED),
+            diagnostic,
         )
         self.assertFalse(any(code == ledger_tool.EXIT_ERROR for code, _, _ in results))
         self.assertEqual(1, len(self.rows()))
