@@ -3,6 +3,7 @@
 // Offline evidence arithmetic only. Nothing imports this from an executable route.
 const crypto = require("node:crypto");
 const { parsePaidCommercialTerms } = require("../functions/crm_billing_orchestrator/lib/commercial-terms");
+const { parseCommercialTermsV2, selectCommercialTermsV2 } = require("../functions/crm_billing_orchestrator/lib/commercial-terms-v2");
 
 const POLICY_KEYS = Object.freeze([
   "connectedTimeDefinition", "rounding", "exclusions", "periodAttribution",
@@ -24,19 +25,38 @@ function scopeTuple(scope) {
   return SCOPE_KEYS.map(key => scope[key]);
 }
 
-/** A review identity is not proof of acceptance, implementation or billing authority. */
-function deriveUsagePolicyReviewContract(commercialTermsJson, policy) {
-  const terms = parsePaidCommercialTerms(commercialTermsJson);
+function policyRules(policy) {
   if (!exact(policy, POLICY_KEYS) || POLICY_KEYS.some(key => policy[key] !== null
     && (typeof policy[key] !== "string" || policy[key].trim() !== policy[key]
       || policy[key].length < 1 || policy[key].length > 1000
       || /[\u0000-\u001f\u007f]/.test(policy[key])))) fail();
-  const rules = POLICY_KEYS.map(key => [key, policy[key]]);
+  return POLICY_KEYS.map(key => [key, policy[key]]);
+}
+
+/** A review identity is not proof of acceptance, implementation or billing authority. */
+function deriveUsagePolicyReviewContract(commercialTermsJson, policy) {
+  const terms = parsePaidCommercialTerms(commercialTermsJson);
+  const rules = policyRules(policy);
   return Object.freeze({
     reviewVersion: `usage-policy-review-v1:${hash([terms.acceptanceVersion, rules])}`,
     commercialAcceptanceVersion: terms.acceptanceVersion,
     currency: terms.currency,
     connectedMinuteRateMinor: terms.commonUsageRateMinor,
+    unresolvedPolicyChoices: Object.freeze(POLICY_KEYS.filter(key => policy[key] === null)),
+    policyImplemented: false,
+    billingAuthority: false,
+  });
+}
+
+/** Candidate terms and policy prose remain non-executable, including annual plans. */
+function deriveUsagePolicyReviewContractV2(commercialTermsJson, plan, frequency, policy) {
+  const selected = selectCommercialTermsV2(parseCommercialTermsV2(commercialTermsJson), plan, frequency);
+  const rules = policyRules(policy);
+  return Object.freeze({
+    reviewVersion: `usage-policy-review-v2:${hash([selected.termsVersion, plan, frequency, rules])}`,
+    commercialTermsVersion: selected.termsVersion,
+    commercialTermsPreview: selected,
+    currency: selected.currency,
     unresolvedPolicyChoices: Object.freeze(POLICY_KEYS.filter(key => policy[key] === null)),
     policyImplemented: false,
     billingAuthority: false,
@@ -50,14 +70,29 @@ function deriveUsagePolicyReviewContract(commercialTermsJson, policy) {
  */
 function previewUsagePeriod(input) {
   if (!exact(input, ["scope", "period", "snapshot", "commercialTermsJson", "policy", "records"])) fail();
+  const policy = deriveUsagePolicyReviewContract(input.commercialTermsJson, input.policy);
+  return previewUsageEvidence(input, policy, false);
+}
+
+/** Monthly allowances are quoted separately; raw duration never consumes them. */
+function previewUsagePeriodV2(input) {
+  if (!exact(input, ["scope", "period", "snapshot", "commercialTermsJson", "plan", "frequency", "policy", "records"])) fail();
+  const policy = deriveUsagePolicyReviewContractV2(input.commercialTermsJson, input.plan, input.frequency, input.policy);
+  return previewUsageEvidence(input, policy, true);
+}
+
+function previewUsageEvidence(input, policy, version2) {
   const scope = scopeTuple(input.scope), { period, snapshot, records } = input;
   if (!exact(period, ["startMs", "endMs"]) || !integer(period.startMs)
     || !integer(period.endMs) || period.startMs >= period.endMs
     || !exact(snapshot, ["revision", "complete"]) || typeof snapshot.revision !== "string"
     || !HASH.test(snapshot.revision)
     || typeof snapshot.complete !== "boolean" || !Array.isArray(records) || records.length > 10000) fail();
-  const policy = deriveUsagePolicyReviewContract(input.commercialTermsJson, input.policy);
   const rows = [], byKey = new Map(), holds = new Set(["usage_policy_not_implemented"]);
+  if (version2) {
+    policy.commercialTermsPreview.holds.forEach(hold => holds.add(hold));
+    if (policy.commercialTermsPreview.missingPolicyReferences.length) holds.add("commercial_policy_references_missing");
+  }
   if (!snapshot.complete) holds.add("source_incomplete");
   if (policy.unresolvedPolicyChoices.length) holds.add("usage_policy_choices_unresolved");
   for (const record of records) {
@@ -99,12 +134,15 @@ function previewUsagePeriod(input) {
   if (duration > BigInt(Number.MAX_SAFE_INTEGER)) fail();
   return Object.freeze({
     status: "held_evidence_only",
-    previewRevision: `usage-preview-v1:${hash([scope, [period.startMs, period.endMs],
+    previewRevision: `usage-preview-${version2 ? "v2" : "v1"}:${hash([scope, [period.startMs, period.endMs],
       snapshot.revision, snapshot.complete, policy.reviewVersion, sorted, records.length - sorted.length])}`,
     policyReviewVersion: policy.reviewVersion,
-    commercialAcceptanceVersion: policy.commercialAcceptanceVersion,
+    ...(version2 ? { schemaVersion: 2,
+      commercialTermsVersion: policy.commercialTermsVersion,
+      commercialTermsPreview: policy.commercialTermsPreview,
+    } : { commercialAcceptanceVersion: policy.commercialAcceptanceVersion }),
     currency: policy.currency,
-    connectedMinuteRateMinor: policy.connectedMinuteRateMinor,
+    ...(version2 ? {} : { connectedMinuteRateMinor: policy.connectedMinuteRateMinor }),
     sourceComplete: snapshot.complete,
     uniqueCallKeys: byKey.size,
     exactDuplicatesObserved: records.length - sorted.length,
@@ -123,4 +161,5 @@ function previewUsagePeriod(input) {
   });
 }
 
-module.exports = { POLICY_KEYS, deriveUsagePolicyReviewContract, previewUsagePeriod };
+module.exports = { POLICY_KEYS, deriveUsagePolicyReviewContract, previewUsagePeriod,
+  deriveUsagePolicyReviewContractV2, previewUsagePeriodV2 };
