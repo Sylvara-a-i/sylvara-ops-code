@@ -2,14 +2,20 @@
 
 ## Status
 
-- Classification: **Approved operating strategy and public commercial source of truth**
-- Decision state: **Accepted for validation and commercial execution**
-- Effective: **2026-08-24T13:39:38-05:00 (America/Chicago)**
+- Classification: **Operating strategy with a historical public commercial baseline**
+- Baseline decision: **2026-08-24T13:39:38-05:00 (America/Chicago)**
 - Decision record: [ADR 0007](../adr/0007-revenue-desk-commercial-strategy.md)
+- Commercial status reviewed: **2026-11-10**
+- Current commercial publication state: **Replacement specification not published here**
 - Technical deployment state: **Separate evidence required**
-- Customer-facing publication state: Approved only for claims and prices stated in this document; do not imply that an unverified capability is live
 
-This document controls Sylvara's current ICP, offer structure, pricing, differentiation, expansion path, and commercial kill criteria. It supersedes conflicting earlier descriptions that treated Launch as a one-call-gap product, bundled minutes into the plans, withheld basic booking from Launch, discounted annual service by two free months, or left the current price architecture unresolved.
+This document retains the plumbing-first product direction and the public commercial baseline adopted on 2026-08-24. Later owner decisions supersede parts of that commercial baseline. The historical prices, pricing rules, paid-plan scope tables, and calibration example below are **not current offer authority** and are not a complete current offer specification.
+
+### Commercial Reconciliation Boundary
+
+Replacement commercial terms are not published here. Do not use this historical snapshot for a customer quote or publish it as the current offer. A reconciled specification requires explicit owner approval for public terms, cost and terms validation, and the applicable technical and customer-delivery gates. Private candidate terms and synthetic examples do not supply that authority.
+
+This status correction does not amend existing customer agreements, change runtime contracts, enable billing, or authorize a deployment. The [v2 commercial preparation](../../src/zoho-catalyst/crm-billing-orchestrator/tools/commercial-terms-v2.md) remains offline and noncharging; the existing paid runtime source remains on its v1 contract. Neither source format establishes current customer terms.
 
 > Strategy approval is not deployment evidence. A capability may be commercially approved while still requiring an authoritative platform contract, implementation, acceptance testing, legal or compliance review, customer-specific configuration, and live readback before it can be sold as active or routed to real callers.
 
@@ -109,7 +115,7 @@ The results review should show:
 
 Use the contractor's own average ticket or known job values when discussing potential recovered value. Do not present a generic revenue guarantee or imply that an answered call became collected revenue.
 
-## Approved Commercial Model
+## Historical Commercial Model (2026-08-24)
 
 | Plan | Monthly Management Fee | Connected AI Usage | Implementation |
 | --- | ---: | ---: | ---: |
@@ -118,7 +124,7 @@ Use the contractor's own average ticket or known job values when discussing pote
 | Scale | $1,299 | $0.40 per connected AI minute | $2,500 |
 | Enterprise | From $2,500 | Negotiated after volume and workflow review | From $5,000 |
 
-### Pricing Rules
+### Historical Pricing Rules
 
 1. **Coverage volume is not the primary feature gate.** More eligible coverage primarily creates more metered usage.
 2. **Management fees pay for operational ownership.** They fund workflow design, configuration, monitoring, QA, reporting, supported integrations, approved changes, and accountability; they are not a markup on minutes alone.
@@ -129,6 +135,8 @@ Use the contractor's own average ticket or known job values when discussing pote
 7. **Do not publish unlimited locations, integrations, support, or bespoke workflows at a fixed price.** Complex scope moves to Enterprise or a separately priced change order.
 
 ## Plan Architecture
+
+The following paid-plan prices and scope tables retain the 2026-08-24 commercial baseline. They are historical reference, not a current quote or order specification.
 
 ### Launch — Managed AI Receptionist
 
@@ -206,6 +214,8 @@ Enterprise absorbs materially different workflows across locations, more than th
 Do not promise unlimited locations or integrations. Enterprise is a reviewed operating scope, not a loophole for unbounded consulting.
 
 ## No-Surprise Calibration Month
+
+This calibration policy and worked price example belong to the historical 2026-08-24 baseline. They do not establish a current customer cap or commitment.
 
 Ordinary Launch and Growth prospects should not be required to produce two months of phone logs before they can buy.
 
@@ -321,6 +331,6 @@ No repository merge by itself authorizes a live call route, customer communicati
 
 ## Change Control
 
-[ADR 0007](../adr/0007-revenue-desk-commercial-strategy.md) is the current decision record. [ADR 0002](../adr/0002-managed-home-service-receptionist-product-boundary.md) remains useful historical rationale for the plumbing-first, managed, workflow-completion boundary, but ADR 0007 controls the final ICP, free-test positioning, hybrid pricing, paid-plan coverage model, booking decision, annual discount, differentiation, margin gates, and expansion ladder.
+[ADR 0007](../adr/0007-revenue-desk-commercial-strategy.md) preserves the dated 2026-08-24 decision and its historical commercial rationale. [ADR 0002](../adr/0002-managed-home-service-receptionist-product-boundary.md) remains historical rationale for the plumbing-first, managed, workflow-completion boundary. Read both with the commercial reconciliation boundary above; neither overrides later owner decisions.
 
-Any future change to the primary ICP, the $349 / $749 / $1,299 management fees, the $0.40 connected-minute rate, the implementation fees, Growth as the recommended plan, or the free Revenue Leak Test requires an explicit owner-approved strategy decision with an effective date.
+A replacement public commercial specification must state its owner approval, effective date, exact scope, and which historical terms it supersedes. Until that specification is approved for publication, keep candidate commercial details private and do not infer current prices or commitments from this snapshot, runtime defaults, or test fixtures. Changes to the primary ICP, Growth as the recommended plan, or the free Revenue Leak Test still require an explicit owner-approved strategy decision.
