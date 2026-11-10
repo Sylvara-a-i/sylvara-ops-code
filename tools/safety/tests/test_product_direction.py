@@ -101,7 +101,7 @@ class ProductDirectionTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.product_text)
 
-    def test_approved_public_pricing_is_exact(self):
+    def test_historical_public_prices_remain_available_for_reference(self):
         for marker in (
             "$349",
             "$749",
@@ -115,8 +115,34 @@ class ProductDirectionTests(unittest.TestCase):
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.product_text + "\n" + self.current_adr_text)
 
-        self.assertIn("$349 / $749 / $1,299", self.strategy_pointer_text)
-        self.assertIn("$0.40 connected-minute rate", self.strategy_pointer_text)
+        self.assertNotIn("$349 / $749 / $1,299", self.strategy_pointer_text)
+        self.assertNotIn("$0.40 connected-minute rate", self.strategy_pointer_text)
+
+    def test_public_entry_points_do_not_present_history_as_current_offer_authority(self):
+        root_readme = (REPOSITORY_ROOT / "README.md").read_text(encoding="utf-8")
+        for text in (
+            self.product_text,
+            self.current_adr_text,
+            self.strategy_pointer_text,
+            root_readme,
+        ):
+            self.assertIn("not current offer authority", text)
+            self.assertIn("Replacement commercial terms are not published here", text)
+            self.assertIn("commercial reconciliation boundary", text.lower())
+        self.assertIn("## Historical Commercial Model (2026-08-24)", self.product_text)
+        self.assertIn("### Historical Pricing Rules", self.product_text)
+        self.assertIn("cost and terms validation", self.product_text)
+        self.assertIn("does not amend existing customer agreements", self.product_text)
+        self.assertIn("existing paid runtime source remains on its v1 contract", self.product_text)
+        self.assertIn("remains offline and noncharging", self.product_text)
+        self.assertNotIn("Approved Commercial Model", self.product_text)
+        self.assertNotIn("public commercial source of truth", self.product_text)
+        self.assertNotIn("bundled minutes into the plans", self.product_text)
+        agent_policy = (REPOSITORY_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        self.assertIn(
+            "historical or private terms are not authority",
+            agent_policy,
+        )
 
     def test_current_adr_records_supersession_and_no_live_authority(self):
         for marker in (

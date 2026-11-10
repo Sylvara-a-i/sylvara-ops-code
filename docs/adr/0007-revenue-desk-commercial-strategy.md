@@ -1,11 +1,17 @@
 # ADR 0007: Revenue Desk Commercial Strategy
 
-- Status: Accepted
+- Status: Accepted historical decision; commercial terms superseded in part
 - Effective: 2026-08-24T13:39:38-05:00 (America/Chicago)
 - Decision owner: Sylvara founder/operator
 - Canonical operating document: [Sylvara Revenue Desk Official Product And Commercial Strategy](../product/README.md)
 - Supersedes in part: [ADR 0002](0002-managed-home-service-receptionist-product-boundary.md)
 - Deployment authorization: Not granted by this decision
+
+## Current Reading Boundary
+
+Reviewed 2026-11-10. This ADR preserves the 2026-08-24 decision, including its pricing, plan-scope, calibration, and rejected-alternative rationale. Later owner decisions supersede parts of that commercial baseline. Those historical commercial conclusions are **not current offer authority**. Replacement commercial terms are not published here; follow the [product document's commercial reconciliation boundary](../product/README.md#commercial-reconciliation-boundary) before quoting or publishing a current offer.
+
+The historical rejection of bundled minute allowances below must not be used to override later owner decisions. This notice does not publish replacement terms, amend existing customer agreements, change runtime contracts, or grant deployment authority.
 
 ## Context
 
@@ -105,7 +111,7 @@ Do not revive a generic AI receptionist, broad custom-automation agency, simulta
 
 ## Technical And Publication Boundary
 
-This ADR approves strategy and public commercial terms only. It does not establish that every listed capability is implemented, supported by a specific provider, legally approved for every customer, deployed, or available for immediate activation.
+This ADR records the strategy and public commercial terms approved on 2026-08-24, subject to the current reading boundary above. It does not establish that every listed capability is implemented, supported by a specific provider, legally approved for every customer, deployed, or available for immediate activation.
 
 No raw research report, competitor dossier, vendor-cost worksheet, private projection, account list, customer record, credential, production identifier, or private implementation detail is committed by this decision. The public derivative records only the approved Sylvara strategy.
 
