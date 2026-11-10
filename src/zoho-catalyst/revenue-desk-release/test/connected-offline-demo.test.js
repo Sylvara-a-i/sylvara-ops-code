@@ -57,6 +57,7 @@ test('report-only listener executes the actual lifecycle handler without financi
       ANALYTICS_PARTITION_HMAC_SECRET: h.runtime.config.analyticsPartitionSecret,
       FREE_TEST_ENTRY_OFFER_VALUE: h.crm.config.freeTestEntryOfferValue,
       REPORT_MUTABLE_STAGE_VALUE: 'Test Live',
+      CRM_REPORT_OWNER_BINDINGS_JSON: JSON.stringify(h.crm.config.reportOwnerBindings),
     });
     if (!paidEnabled) {
       for (const key of Object.keys(environment)) {
@@ -109,6 +110,27 @@ test('report-only listener executes the actual lifecycle handler without financi
     assert.equal(response.body.duplicate, true);
     assert.equal(writes, 1);
   }
+}));
+
+test('offline report ownership stays pinned to setup before any claim or CRM write', () => guarded(async (guard) => {
+  const h = await settledOneCall();
+  const operation = h.runtime.store.rows.get('CRMBillingOperations')[0];
+  const binding = h.crm.config.reportOwnerBindings.find((owner) => owner.dealId === operation.CRM_DEAL_ID);
+  assert.ok(Object.isFrozen(h.crm.config.reportOwnerBindings));
+  assert.ok(Object.isFrozen(binding));
+  const originalBinding = structuredClone(binding);
+  const beforeOperations = structuredClone(h.runtime.store.rows.get('CRMBillingOperations'));
+  const context = h.crm.contexts.get(operation.CRM_DEAL_ID);
+  context.account.id = '400000099';
+  context.deal.Account_Name.id = context.account.id;
+  await assert.rejects(h.crm.lifecycle.handle({ action: 'sync_report_summary',
+    dealId: operation.CRM_DEAL_ID, operationKey: operation.OPERATION_KEY }),
+  { publicCode: 'record_stale' });
+  assert.deepEqual(binding, originalBinding);
+  assert.equal(h.crm.effects.writes, 0);
+  assert.deepEqual(h.runtime.store.rows.get('CRMBillingOperations'), beforeOperations);
+  assert.equal(await h.crm.operations.readReportGuard(originalBinding), null);
+  assert.deepEqual(guard.blocked, []);
 }));
 
 test('repeatable prepared setup to gateway, worker, report and actual CRM summary handler', async () => {

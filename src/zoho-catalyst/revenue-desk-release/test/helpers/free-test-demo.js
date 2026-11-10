@@ -110,6 +110,14 @@ function crmBridge(runtime, configurations, inputs, options = {}) {
     initialSaleTypeValue: 'Initial Sale', testCompletedStatusValue: 'Completed',
     reportMutableStageValue: 'Test Live',
     enablePaidSubscriptionPreparation: false,
+    // Capture fictional setup ownership once, before mutable CRM readbacks.
+    // Reassignment must not manufacture a new owner for an existing report.
+    reportOwnerBindings: Object.freeze(configurations.map((configuration, index) => Object.freeze({
+      dealId: configuration.crmDealId,
+      accountId: inputs[index].crm.account.id,
+      deploymentId: configuration.deploymentId,
+      configurationVersion: configuration.configurationVersion,
+    }))),
   };
   const operations = reportOperationStore(runtime);
   const lifecycle = createLifecycleHandler(config, {

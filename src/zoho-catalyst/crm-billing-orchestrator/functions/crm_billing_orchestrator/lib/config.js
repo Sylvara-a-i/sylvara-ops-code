@@ -67,6 +67,36 @@ function requiredBoolean(environment, name) {
   return result === "true";
 }
 
+function reportOwnerBindings(environment) {
+  const raw = value(environment, "CRM_REPORT_OWNER_BINDINGS_JSON");
+  if (!raw) return Object.freeze([]);
+  const invalid = () => { throw new ConfigurationError("CRM_REPORT_OWNER_BINDINGS_JSON is invalid"); };
+  if (Buffer.byteLength(raw, "utf8") > 4096) invalid();
+  let entries;
+  try { entries = JSON.parse(raw); } catch { invalid(); }
+  if (!Array.isArray(entries) || entries.length > 100) invalid();
+  // JSON.parse discards repeated members. This contract is a flat array of
+  // four-string tuples: count original key tokens (including escaped names),
+  // so no ambiguous member can silently select a different original owner.
+  const memberCount = [...raw.matchAll(/"(?:\\.|[^"\\])*"/g)].filter((match) => (
+    raw.slice(match.index + match[0].length).trimStart().startsWith(":")
+  )).length;
+  if (memberCount !== entries.length * 4) invalid();
+  const seen = new Set();
+  return Object.freeze(entries.map((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)
+      || Object.keys(entry).sort().join(",") !== "accountId,configurationVersion,dealId,deploymentId"
+      || !["accountId", "dealId"].every((key) => typeof entry[key] === "string"
+        && /^[1-9][0-9]{7,29}$/.test(entry[key]))
+      || !["deploymentId", "configurationVersion"].every((key) => typeof entry[key] === "string"
+        && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/.test(entry[key]))) invalid();
+    const scope = JSON.stringify([entry.dealId, entry.deploymentId, entry.configurationVersion]);
+    if (seen.has(scope)) invalid();
+    seen.add(scope);
+    return Object.freeze({ ...entry });
+  }));
+}
+
 function customerProvisioningMode(environment) {
   const result = required(environment, "CUSTOMER_PROVISIONING_MODE");
   if (!CUSTOMER_PROVISIONING_MODES.has(result)) {
@@ -353,6 +383,9 @@ function loadConfig(environment = process.env, {
     // stored pre-review stage value. Historical exact readback remains available.
     reportMutableStageValue: environment.REPORT_MUTABLE_STAGE_VALUE
       ? boundedText(environment, "REPORT_MUTABLE_STAGE_VALUE") : null,
+    // Authenticated original setup identity, installed as private server configuration.
+    // Missing ownership holds report writes; current Deal links cannot create it.
+    reportOwnerBindings: reportOwnerBindings(environment),
     testCompletedStatusValue: boundedText(environment, "TEST_COMPLETED_STATUS_VALUE"),
     maxBodyBytes: integer(environment, "MAX_BODY_BYTES", 2048, 256, 8192),
     outboundTimeoutMs: integer(environment, "OUTBOUND_TIMEOUT_MS", 5000, 250, 10000),

@@ -8,6 +8,35 @@ const { REVISION, baseEnvironment, jsonResponse } = require("./helpers");
 
 const token = `Zoho-oauthtoken ${"t".repeat(24)}`;
 
+test("expiry closure transport permits only the three-field conditional PUT and suppresses automation", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  const seen = [];
+  const client = createCrmClient(config, { readAuthorizationProvider: async () => token, writeAuthorizationProvider: async () => token,
+    fetchImpl: async (_url, options) => { seen.push(options); return jsonResponse(200, { data: [{ status: "success", code: "SUCCESS", details: { id: "10000001" } }] }); } });
+  const deal = { id: "10000001", Modified_Time: "2026-09-08T00:01:00+00:00" };
+  const patch = { Test_Status: "Completed", Test_End_At: "2026-09-08T00:00:00+00:00", Test_End_Reason: "Seven-Day Limit Reached" };
+  await client.updateDealExpiryClosure(deal, patch);
+  assert.equal(seen.length, 1); assert.equal(seen[0].redirect, "error");
+  assert.equal(seen[0].headers["If-Unmodified-Since"], deal.Modified_Time);
+  assert.deepEqual(JSON.parse(seen[0].body), { data: [{ id: deal.id, ...patch }], trigger: [], skip_feature_execution: [{ name: "cadences" }] });
+  for (const extra of [{ Stage: "Results Review" }, { Call_Totals_Reconciled: true }, { QA_Passed: true }])
+    await assert.rejects(client.updateDealExpiryClosure(deal, { ...patch, ...extra }));
+  assert.equal(seen.length, 1);
+});
+
+test("expiry read and write transport never automatically retries access, throttle or socket failures", async () => {
+  const config = loadConfig(baseEnvironment(), { artifactRevision: REVISION });
+  for (const status of [403, 429, 503, null]) {
+    let calls = 0;
+    const client = createCrmClient(config, { readAuthorizationProvider: async () => token, writeAuthorizationProvider: async () => token,
+      fetchImpl: async () => { calls += 1; if (status === null) throw Error("synthetic socket failure"); return jsonResponse(status, { code: "synthetic" }); } });
+    await assert.rejects(client.getExpiryClosureContext("10000001")); assert.equal(calls, 1);
+    await assert.rejects(client.updateDealExpiryClosure({ id: "10000001", Modified_Time: "2026-09-08T00:01:00+00:00" },
+      { Test_Status: "Completed", Test_End_At: "2026-09-08T00:00:00+00:00", Test_End_Reason: "Seven-Day Limit Reached" }));
+    assert.equal(calls, 2);
+  }
+});
+
 test("CRM stalled read body retries once and accepts only the next complete readback", async () => {
   const config = loadConfig(baseEnvironment({ OUTBOUND_TIMEOUT_MS: "250" }), { artifactRevision: REVISION });
   const deal = { id: "100000000000001", Modified_Time: "2026-08-21T10:00:00-05:00" };

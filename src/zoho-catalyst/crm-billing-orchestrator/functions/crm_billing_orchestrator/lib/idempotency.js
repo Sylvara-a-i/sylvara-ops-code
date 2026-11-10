@@ -172,6 +172,35 @@ function createOperationStore(app, config) {
     );
   }
 
+  async function insertExpiryClosure(row) {
+    const fields = ["OPERATION_KEY", "OPERATION_FINGERPRINT", "ACTION", "CRM_DEAL_ID", "STATUS", "LAST_OUTCOME",
+      "SOURCE_REVISION", "SOURCE_ENVIRONMENT", "OPERATION_PAYLOAD_JSON", "OPERATION_VERSION", "CREATED_AT", "UPDATED_AT"];
+    const outcome = row?.STATUS === "processing" ? "expiry_only_attempt_consumed" : "expiry_only_crm_readback_confirmed";
+    if (!row || Object.keys(row).sort().join() !== fields.sort().join()
+      || row.ACTION !== "record_test_expiry" || !HASH.test(row.OPERATION_KEY)
+      || !HASH.test(row.OPERATION_FINGERPRINT) || !RECORD_ID.test(row.CRM_DEAL_ID)
+      || row.SOURCE_ENVIRONMENT !== "development" || config.deploymentEnvironment !== "development"
+      || row.SOURCE_REVISION !== config.sourceRevision || row.OPERATION_VERSION !== 1
+      || !["processing", "completed"].includes(row.STATUS)
+      || row.LAST_OUTCOME !== outcome
+      || typeof row.CREATED_AT !== "string" || !Number.isFinite(Date.parse(row.CREATED_AT))
+      || new Date(row.CREATED_AT).toISOString() !== row.CREATED_AT || row.UPDATED_AT !== row.CREATED_AT
+      || typeof row.OPERATION_PAYLOAD_JSON !== "string" || Buffer.byteLength(row.OPERATION_PAYLOAD_JSON) > 9000) {
+      throw new IdempotencyError("Expiry closure operation is invalid");
+    }
+    // No update/reclaim/delete API exists for these append-only records. An
+    // unknown insert acknowledgement must never grant the subsequent CRM write.
+    let inserted;
+    try { inserted = await withOperationTimeout(() => table.insertRow(row), config.platformOperationTimeoutMs); }
+    catch { return Object.freeze({ inserted: false }); }
+    const observed = await readByKey(row.OPERATION_KEY);
+    const exact = observed && String(observed.ROWID) === String(inserted?.ROWID)
+      && Object.entries(row).every(([key, value]) => key === "OPERATION_VERSION"
+        ? String(observed[key]) === String(value) : observed[key] === value);
+    if (!exact) throw new IdempotencyError("Expiry closure insert requires reconciliation", "reconciliation_required");
+    return Object.freeze({ inserted: true });
+  }
+
   async function readByRowId(selectedRowId) {
     const normalized = rowId(selectedRowId);
     return query(
@@ -395,11 +424,15 @@ function createOperationStore(app, config) {
 
   return Object.freeze({
     ...createReportGuardStore(app, config, readByKey),
+    // Ordinary SDK construction is not proof of socket-retry suppression or
+    // settled transport. A separately qualified private adapter is mandatory.
+    expiryClosureTransportQualified: false,
     beginReportSummaryWrite,
     claim,
     claimReportSummary,
     mark,
     readByKey,
+    insertExpiryClosure,
     readByRowId,
     transitionReportSummary,
   });

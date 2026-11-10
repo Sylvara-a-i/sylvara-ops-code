@@ -67,6 +67,14 @@
     "human_only_field": "Results_Review_At",
     "migration_gate": "Add the four nullable columns without modifying legacy rows; read back exact types, privacy, encrypted-text audit consent, and multiple legacy null behavior before enabling either producer or consumer."
   },
+  "expiry_closure": {
+    "status": "offline-disabled-private-composition-only",
+    "action": "record_test_expiry",
+    "schema_changes": false,
+    "identity_domain": "sylvara.crm-expiry-closure.v1 with distinct attempt, outcome and payload purposes",
+    "records": "Two immutable version-one rows: processing/expiry_only_attempt_consumed and completed/expiry_only_crm_readback_confirmed. No update, reclaim, reset or delete. Existing encrypted payload holds only the private binding, original precise clocks, reviewed evidence hashes and false settlement/delivery flags; no raw CRM names, report metrics or call data.",
+    "native_gate": "Verify all actual mandatory/default fields, unique OPERATION_KEY, used field types/lengths/privacy, and actual no-retry settled transport before a private composition can enable. This desired schema is not hosted evidence. Ordinary SDK store remains unqualified."
+  },
   "shared_tables": [
     {
       "table": "AnalyticsSyncOutbox",
