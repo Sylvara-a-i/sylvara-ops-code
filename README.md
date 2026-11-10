@@ -12,7 +12,7 @@ The direct strategy pointer is [`STRATEGY.md`](STRATEGY.md). The canonical opera
 
 The strategy records the plumbing-first product direction and a dated public commercial baseline. The historical prices and paid-plan scope are **not current offer authority**; follow the [commercial reconciliation boundary](docs/product/README.md#commercial-reconciliation-boundary) before quoting or publishing current terms. Replacement commercial terms are not published here. Product strategy does not establish a live service, customer deployment, telephone route, customer-specific legal approval, or production readiness.
 
-Current free-test classification is **READY FOR DEVELOPMENT DEPLOYMENT**. It is **NOT READY** for a controlled internal phone test until the deployed Catalyst and Retell paths are independently read back with two synthetic numbers on the same shared agent version, provider fallback is proved safe, one controlled Development email is delivered exactly once and read back, and the notification mode is restored to `dry_run`.
+The [current delivery checkpoint](docs/runbooks/revenue-desk-current-state.md) reconciles the 2026-11-10 source work, decisions, and remaining gates. **v0.5 completion and native acceptance remain open.** Closure stays disabled/unqualified, calendar integration is not yet selected, and Billing preparation remains noncharging. Earlier Development classifications and dated readbacks are historical evidence, not current deployment or phone-test readiness. Controlled tests, customer delivery, and launch retain their separate evidence and approval requirements.
 
 ## Repository Boundary
 

@@ -1,5 +1,7 @@
 # Free Revenue Leak Test E2E Reconciliation
 
+**Historical checkpoint:** this record preserves the 2026-08-29 reconciliation and its earlier evidence. Use the [current delivery checkpoint](revenue-desk-current-state.md) for later source milestones, decisions, and qualification holds. References to current state below are relative to the recorded observation, not a fresh native inventory. No historical approval or consumed attempt is renewed.
+
 - **Status:** NOT READY FOR RETELL AGENT TESTING
 - **Evidence environment:** Catalyst Development and Zoho Billing TEST only
 - **Required final environments:** Development and dark Production

@@ -9,6 +9,8 @@
 - Current commercial publication state: **Replacement specification not published here**
 - Technical deployment state: **Separate evidence required**
 
+Current delivery decisions, merged source milestones, native qualification holds, and deferred work are maintained in the [Revenue Desk delivery checkpoint](../runbooks/revenue-desk-current-state.md). This operating strategy is not a current deployment status page.
+
 This document retains the plumbing-first product direction and the public commercial baseline adopted on 2026-08-24. Later owner decisions supersede parts of that commercial baseline. The historical prices, pricing rules, paid-plan scope tables, and calibration example below are **not current offer authority** and are not a complete current offer specification.
 
 ### Commercial Reconciliation Boundary
