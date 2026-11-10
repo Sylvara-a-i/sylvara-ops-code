@@ -139,6 +139,14 @@ authorized by this documentation; billable amounts remain null and authority fal
 
 ## Public Contract
 
+The existing paid runtime remains on its exact monthly terms-v1 contract.
+[Commercial terms v2 preparation](tools/commercial-terms-v2.md) adds an offline
+candidate parser and extends the noncharging usage preview for annual base fees,
+monthly voice/SMS allowances, separate rates and versioned policy/scope references.
+It is not accepted by paid runtime configuration. Both v2 previews remain held,
+with null billable minutes/charges and no billing authority. No working prices
+or native customer evidence are published by these synthetic tests.
+
 | Action | Required authoritative CRM state | Bounded outcome |
 | --- | --- | --- |
 | `sync_report_summary` | Exact revision-specific `CRMBillingOperations` row and matching Deal deployment/configuration; no conflicting reviewed or accepted state | Atomically claim once, write only verified terminal summary fields, and complete only after exact Deal readback; never write Stage or Results Review |
