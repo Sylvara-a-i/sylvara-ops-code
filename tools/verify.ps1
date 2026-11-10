@@ -65,6 +65,9 @@ $RevenueDeskReleaseRoot = Join-PathSegments $RepoRoot @(
 $CrmFreeRevenueLeakTestRoot = Join-PathSegments $RepoRoot @(
     "src", "zoho-crm", "free-revenue-leak-test"
 )
+$BookingsCalendarConflictsRoot = Join-PathSegments $RepoRoot @(
+    "src", "zoho-bookings", "calendar-conflicts"
+)
 $RevenueDeskInventoryPath = Join-PathSegments $RepoRoot @(
     "src", "zoho-catalyst", "development-function-inventory.json"
 )
@@ -643,6 +646,12 @@ try {
                 "-p", "test_*.py", "-v"
             )
 
+        Invoke-Native -Label "Bookings offline calendar conflict checks" -Executable $python `
+            -Arguments @(
+                "-m", "unittest", "discover", "-s",
+                (Join-Path $BookingsCalendarConflictsRoot "tests"),
+                "-p", "test_*.py"
+            )
         Invoke-Native -Label "Creator Operations native saved-source preservation" -Executable $python `
             -Arguments @("src/zoho-creator/client-portal/operations-overview/native-counts/verify-packet.py")
         Invoke-Native -Label "Creator Operations native preservation regression tests" -Executable $python `
