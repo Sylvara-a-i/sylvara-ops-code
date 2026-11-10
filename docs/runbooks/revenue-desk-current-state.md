@@ -82,13 +82,22 @@ Cross-write idempotency, ambiguous submissions, late usage, invoice void/regener
 
 Historical public prices remain historical. Replacement working prices, margins, vendor-cost assumptions, and private commercial evidence are deliberately not published. Follow the [commercial reconciliation boundary](../product/README.md#commercial-reconciliation-boundary) before any quote or public offer update.
 
-## Deferred Scope
+## v1.0 And Deferred Scope
 
 Direct-paid onboarding remains a separate eligible path, not a fabricated trial
 completion. Full subscription transitions and refund automation remain v1.0
-follow-on work. A custom client portal is deferred until after v1.0. These roadmap
-boundaries do not authorize implementation, financial actions, or customer launch.
-No new site or legal-compliance change is claimed by this reconciliation.
+follow-on work.
+
+The approved v1.0 scope includes shared backend workflows, client-specific
+configuration, Retell agents using those shared tools, an internal operations
+view, and a small read-only client portal built on the verified core workflow.
+The portal covers bookings, pending work, outcomes, usage, and connection health,
+with tested separation between clients. Broader client self-service remains
+deferred. v0.5 remains the immediate priority.
+
+Scope inclusion is not proof of native acceptance, deployment, or authority for
+financial actions or customer launch. No new site or legal-compliance change is
+claimed by this reconciliation.
 
 ## Remaining Completion Gates
 
