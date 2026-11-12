@@ -17,6 +17,7 @@ function row(changes = {}) {
     configurationVersionId: 'synthetic_configuration', configurationVersion: 'v1',
     correlationId: 'synthetic_correlation', bindingId: 'synthetic_binding', bindingVersion: 1,
     engagementType: 'free_test', capabilityProfile: 'call_gap_monitor_v1',
+    numberLookupHash: `num_${'e'.repeat(64)}`, coverageMode: 'AfterHoursOnly',
     startedAt: '2026-08-31T23:59:45.000Z', endedAt: '2026-09-01T00:00:15.000Z',
     durationMs: 29001, callStatus: 'ended', disconnectionReason: 'user_hangup', ...changes };
   return { CALL_KEY: call.callKey, CLIENT_ID: call.clientId, DEPLOYMENT_ID: call.deploymentId,
@@ -145,6 +146,19 @@ test('analysis-only snapshot revisions keep one raw duration and historical link
   assert.equal(output.calls[0].evidenceFingerprint,
     reconcileRawUsageWithBilling(fixture([original])).calls[0].evidenceFingerprint);
   noncharging(output);
+});
+
+test('malformed immutable routing cannot acquire a historical Billing relationship', () => {
+  for (const changes of [{ numberLookupHash: undefined }, { coverageMode: 'nonsense' }]) {
+    const output = reconcileRawUsageWithBilling(fixture([row(changes)]));
+    assert.equal(output.evidenceStatus, 'held');
+    assert.equal(output.calls.length, 1);
+    assert.equal(output.calls[0].durationMs, null);
+    assert.equal(output.calls[0].billingLinkStatus, 'not_checked');
+    assert.equal(output.calls[0].billingLink, null);
+    assert.ok(output.holds.includes('canonical_binding_conflict'));
+    noncharging(output);
+  }
 });
 
 for (const [name, changes, expectedSeconds] of [

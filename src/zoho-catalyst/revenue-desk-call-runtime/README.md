@@ -16,6 +16,14 @@ The canonical source profile is `free_test/call_gap_monitor_v1`. Registered paid
 
 ## Noncharging raw usage evidence
 
+Evidence fingerprints include the validated immutable route/correlation binding
+without exposing those fields. Compare fingerprints only for the same `CALL_KEY`:
+a changed binding is evidence to reconcile, never another call or charge. This
+fingerprint format replaces the earlier fact-only digest, so recompute earlier
+projections from their original rows before comparing across source revisions.
+Schema-v2 rows with missing or malformed number hashes or coverage modes are held;
+historical schema-v1 rows still cannot supply duration or billing authority.
+
 `lib/raw-usage-evidence.js` in the gateway exports the pure
 `projectRawUsageEvidence({ scope, rows, complete })` helper. Supply durable
 `RevenueDeskCalls` rows and an explicit `environment`, `clientId`, `deploymentId`,
