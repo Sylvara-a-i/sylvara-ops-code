@@ -2,10 +2,11 @@
 
 const { createHash } = require('node:crypto');
 const { isPlainObject, MAX_RETELL_CALL_DURATION_MS } = require('./validation');
-const { ENGAGEMENT_TYPES } = require('./contracts');
+const { ENGAGEMENT_TYPES, COVERAGE_MODES } = require('./contracts');
 
 const ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
 const CALL_KEY = /^call_[a-f0-9]{64}$/;
+const NUMBER_KEY = /^num_[a-f0-9]{64}$/;
 const SCOPE_COLUMNS = Object.freeze({
   environment: 'SOURCE_ENVIRONMENT', clientId: 'CLIENT_ID', deploymentId: 'DEPLOYMENT_ID',
   configurationVersionId: 'CONFIGURATION_VERSION_ID', configurationVersion: 'CONFIGURATION_VERSION',
@@ -40,6 +41,13 @@ function projectRow(row) {
   }
   const schemaVersion = [1, 2].includes(canonical.schemaVersion) ? canonical.schemaVersion : null;
   if (schemaVersion === null) holds.push('schema_unsupported');
+  // These routing facts have no duplicate row columns. Validate them before
+  // including them in the immutable binding, without projecting private routing.
+  if (typeof canonical.numberLookupHash !== 'string' || !NUMBER_KEY.test(canonical.numberLookupHash)
+    || !(COVERAGE_MODES.has(canonical.coverageMode)
+      || (schemaVersion === 1 && canonical.coverageMode === undefined))) {
+    holds.push('canonical_binding_conflict');
+  }
   const durationValid = schemaVersion === 2 && Number.isSafeInteger(canonical.durationMs)
     && canonical.durationMs >= 0 && canonical.durationMs <= MAX_RETELL_CALL_DURATION_MS;
   if (!durationValid) holds.push(schemaVersion === 1 ? 'historical_duration_unsupported' : 'duration_invalid');
@@ -65,8 +73,9 @@ function projectRow(row) {
     canonicalSchemaVersion: schemaVersion, startedAt, endedAt,
     durationMs: durationValid ? canonical.durationMs : null,
     callStatus, disconnectionReason, engagementType,
-  }, binding: Object.values(BINDINGS).map((column) => row[column])
-    .concat(Number(row.BINDING_VERSION), canonical.numberLookupHash, canonical.coverageMode) };
+  }, binding: holds.includes('canonical_binding_conflict') ? null
+    : Object.values(BINDINGS).map((column) => row[column])
+      .concat(Number(row.BINDING_VERSION), canonical.numberLookupHash, canonical.coverageMode ?? null) };
 }
 
 /** Pure projection of a complete-or-explicitly-incomplete scoped RevenueDeskCalls read.
@@ -111,7 +120,8 @@ function projectRawUsageEvidence({ scope, rows, complete = false } = {}) {
       facts[key] = comparable.length === 1 ? comparable[0] : null;
     }
     // Correlation/route binding is checked, but never copied into the projection.
-    if (new Set(candidates.map((candidate) => JSON.stringify(candidate.binding))).size > 1) {
+    const bindings = new Set(candidates.map((candidate) => JSON.stringify(candidate.binding ?? null)));
+    if (bindings.size > 1) {
       callHolds.push('immutable_evidence_conflict');
     }
     if (facts.endedAt) {
@@ -131,7 +141,11 @@ function projectRawUsageEvidence({ scope, rows, complete = false } = {}) {
       sourceRevisions: Object.freeze(unique(candidates.map((candidate) => candidate.sourceRevision).filter(Boolean))),
       // Analysis, event receipts, mutation versions and current source revisions
       // are not usage identities and cannot create another unit of duration.
-      evidenceFingerprint: createHash('sha256').update(JSON.stringify(evidence)).digest('hex'),
+      // Bind separately read snapshots to the same immutable routing evidence.
+      // CALL_KEY remains the usage identity; a changed fingerprint is a conflict
+      // to reconcile, never another call. Conflicts cannot select a binding by order.
+      evidenceFingerprint: createHash('sha256').update(JSON.stringify({ evidence,
+        binding: bindings.size === 1 ? candidates[0].binding ?? null : null })).digest('hex'),
       holds: Object.freeze(unique(callHolds)),
       rawEvidenceComplete: callHolds.length === 0,
       ...noncharging(),

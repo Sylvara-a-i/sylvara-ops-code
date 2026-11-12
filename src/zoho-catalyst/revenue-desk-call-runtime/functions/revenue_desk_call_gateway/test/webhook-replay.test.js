@@ -76,6 +76,7 @@ function usageRow(overrides = {}, columns = {}) {
     configurationVersionId: 'configuration_synthetic', configurationVersion: 'v1',
     correlationId: 'correlation_synthetic', bindingId: 'binding_synthetic', bindingVersion: 1,
     engagementType: 'free_test', capabilityProfile: 'call_gap_monitor_v1',
+    numberLookupHash: `num_${'e'.repeat(64)}`, coverageMode: 'AfterHoursOnly',
     startedAt: '2026-08-31T23:59:45.000Z', endedAt: '2026-09-01T00:00:15.000Z',
     durationMs: 29001, callStatus: 'ended', disconnectionReason: 'user_hangup', ...overrides };
   return { CALL_KEY: body.callKey, CLIENT_ID: body.clientId, DEPLOYMENT_ID: body.deploymentId,
@@ -112,6 +113,61 @@ test('usage projection deduplicates durable snapshots by CALL_KEY across analysi
   assertNoncharging(forward);
 });
 
+for (const changes of [{ bindingId: 'synthetic_other_binding' }, { bindingVersion: 2 },
+  { correlationId: 'synthetic_other_correlation' }, { numberLookupHash: `num_${'d'.repeat(64)}` },
+  { coverageMode: 'NoAnswerOverflowOnly' }]) {
+  test(`separate snapshots fingerprint immutable ${Object.keys(changes)[0]} without creating usage`, () => {
+    const original = usageRow();
+    const changed = usageRow(changes);
+    const first = project([original]).calls[0];
+    const second = project([changed]).calls[0];
+    assert.deepEqual(first.holds, []);
+    assert.deepEqual(second.holds, []);
+    assert.equal(first.callKey, second.callKey, 'stable call identity is not a fingerprint');
+    assert.notEqual(first.evidenceFingerprint, second.evidenceFingerprint);
+    assert.equal(first.durationMs, second.durationMs);
+    const combined = project([original, changed]);
+    assert.deepEqual(combined, project([changed, original]));
+    assert.equal(combined.calls.length, 1);
+    assert.equal(combined.calls[0].durationMs, null);
+    assert.ok(combined.calls[0].holds.includes('immutable_evidence_conflict'));
+    assertNoncharging(first);
+    assertNoncharging(second);
+    for (const field of ['bindingId', 'bindingVersion', 'correlationId', 'numberLookupHash', 'coverageMode']) {
+      assert.equal(Object.hasOwn(second, field), false, 'private binding fields stay unprojected');
+    }
+  });
+}
+
+for (const changes of [
+  { numberLookupHash: undefined }, { numberLookupHash: null }, { numberLookupHash: 42 },
+  { numberLookupHash: 'num_not_a_hash' }, { numberLookupHash: `num_${'A'.repeat(64)}` },
+  { coverageMode: undefined }, { coverageMode: null }, { coverageMode: 42 },
+  { coverageMode: 'nonsense' }, { coverageMode: 'After-hours only' },
+]) {
+  test(`malformed route binding is held: ${Object.keys(changes)[0]}=${changes[Object.keys(changes)[0]]}`, () => {
+    const malformed = usageRow(changes);
+    const output = project([malformed]).calls[0];
+    assert.ok(output.holds.includes('canonical_binding_conflict'));
+    assert.equal(output.rawEvidenceComplete, false);
+    assert.equal(output.durationMs, null);
+    const combined = project([usageRow(), malformed]);
+    assert.deepEqual(combined, project([malformed, usageRow()]));
+    assert.equal(combined.calls[0].durationMs, null, 'valid peer cannot hide malformed binding');
+    assertNoncharging(output);
+  });
+}
+
+test('historical schema without coverage remains explicitly unsupported, not a binding rewrite', () => {
+  const row = usageRow({ schemaVersion: 1, coverageMode: undefined });
+  const before = structuredClone(row);
+  const output = project([row]).calls[0];
+  assert.deepEqual(output.holds, ['historical_duration_unsupported']);
+  assert.equal(output.durationMs, null);
+  assert.equal(output.rawEvidenceComplete, false);
+  assert.deepEqual(row, before);
+});
+
 for (const [name, change, duration, hold] of [
   ['zero', { durationMs: 0 }, 0, null],
   ['maximum', { durationMs: 86400000 }, 86400000, null],
@@ -141,7 +197,7 @@ for (const change of [{ durationMs: 4 }, { startedAt: '2026-08-31T23:59:44.000Z'
   { endedAt: '2026-09-01T00:00:16.000Z' }, { engagementType: 'paid_service' },
   { callStatus: 'error' }, { disconnectionReason: 'error_synthetic' },
   { bindingId: 'other_binding' }, { numberLookupHash: `num_${'d'.repeat(64)}` },
-  { coverageMode: 'OverflowOnly' }]) {
+  { coverageMode: 'NoAnswerOverflowOnly' }]) {
   test(`conflicting immutable usage evidence is held: ${Object.keys(change)[0]}`, () => {
     const rows = [usageRow(), usageRow(change)];
     const output = project(rows);
