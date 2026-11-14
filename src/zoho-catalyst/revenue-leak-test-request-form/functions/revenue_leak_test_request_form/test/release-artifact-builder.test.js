@@ -235,6 +235,20 @@ artifactTest("builds one immutable Catalyst project from the tested lock state",
   assert.doesNotMatch(builderSources, /catalyst\s+deploy|spawnSync\(["']catalyst["']/i);
 });
 
+artifactTest("rejects dot-prefixed repository output before revision checks", (testContext) => {
+  const fixture = createFixture(testContext, ({ repository }) => {
+    fs.mkdirSync(path.join(repository, "..cache"));
+    fs.writeFileSync(path.join(repository, "..cache", "fixture.txt"), "synthetic\n");
+  });
+  for (const relative of ["..release-output", path.join("..cache", "release-output")]) {
+    const output = path.join(fixture.repository, relative);
+    const result = runBuilder(fixture, { output, revision: "0".repeat(40) });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /output must be outside the repository/);
+    assert.equal(fs.existsSync(output), false);
+  }
+});
+
 artifactTest("fails closed for dirty, wrong-revision, unsafe-output, and dependency drift", (testContext) => {
   const dirty = createFixture(testContext);
   fs.appendFileSync(path.join(dirty.copiedController, "README.md"), "\nsynthetic dirty state\n");

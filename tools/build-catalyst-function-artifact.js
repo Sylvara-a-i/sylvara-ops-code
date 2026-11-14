@@ -35,7 +35,8 @@ function samePath(left, right) {
 
 function isInside(parent, candidate) {
   const relative = path.relative(parent, candidate);
-  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
+  return relative !== "" && relative !== ".."
+    && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
 }
 
 function count(source, needle) {
