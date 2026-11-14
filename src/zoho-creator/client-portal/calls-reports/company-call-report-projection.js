@@ -3,6 +3,14 @@
 const { createHash } = require("node:crypto");
 const { assertCompanyIdentity } = require("../company-settings-requests/service-area-request-contract");
 const continuations = new WeakMap();
+const reportReads = new WeakMap();
+// Same maximum as the existing immutable report-delivery storage reader.
+const MAX_REPORT_BYTES = 2 * 1024 * 1024;
+const typedArrayPrototype = Object.getPrototypeOf(Uint8Array.prototype);
+const byteLength = Object.getOwnPropertyDescriptor(typedArrayPrototype, "byteLength").get;
+const byteOffset = Object.getOwnPropertyDescriptor(typedArrayPrototype, "byteOffset").get;
+const backingBuffer = Object.getOwnPropertyDescriptor(typedArrayPrototype, "buffer").get;
+const arrayBufferLength = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, "byteLength").get;
 const OUTCOMES = Object.freeze(["potential_job", "existing_customer", "urgent_potential_job", "spam",
   "unsupported_service", "out_of_area", "other_general_inquiry", "sensitive_data_ended",
   "configuration_failure", "caller_abandoned", "unresolved"]);
@@ -235,7 +243,7 @@ function project(resource, input, trusted, evidence, policy, mode = "list") {
       // A list hint or key never authorizes this read. Unknown, hidden and absent
       // targets all deny identically, after every source row has validated.
       if (!target || !viewable(target) || !permitted(target, request.operation)) deny();
-      return freeze({ method: "GET", resource: "released-report-artifact", operation: request.operation,
+      const plan = freeze({ method: "GET", resource: "released-report-artifact", operation: request.operation,
         environment: p.expectedEnvironment, organizationId: p.expectedOrganizationId,
         principalId: t.company.principalId, creatorAccountId: accountId, crmAccountId,
         clientId: binding.clientId, deploymentId: binding.deploymentId,
@@ -243,6 +251,15 @@ function project(resource, input, trusted, evidence, policy, mode = "list") {
         snapshotId: source.snapshotId, reportKey: target.reportKey, releaseRevision: target.releaseRevision,
         artifact: { version: target.artifact.version, sha256: target.artifact.sha256 }, checkedAt: p.asOf,
         observedAt: new Date(Math.min(instant(authorityObservedAt), instant(source.observedAt))).toISOString() });
+      // Keep the full authorization identity private, including fields omitted
+      // from the transport descriptor. A new snapshot may advance without
+      // changing this selected artifact, but a changed authority requires restart.
+      const { observedAt: entitlementObservation, ...stableEntitlement } = entitlement;
+      const targetGrants = reportGrants.filter(g => g.reportKey === target.reportKey &&
+        (g.operation === "reports.view" || g.operation === request.operation));
+      reportReads.set(plan, digest([p.expectedEnvironment, p.expectedOrganizationId, p.maxAgeMs,
+        p.reportEntitlementPolicyRevision, identity, binding, target, targetGrants, stableEntitlement]));
+      return plan;
     }
     const bindingDigest = digest([resource, request.limit, p.expectedEnvironment, p.expectedOrganizationId,
       p.maxAgeMs, identity, binding, reportGrants, preference, entitlement, filters]);
@@ -307,5 +324,31 @@ function prepareReleasedReportRead(input, trusted, evidence, policy) {
   return project("reports", input, trusted, evidence, policy, "read");
 }
 
+// Offline completion consistency only. The protected adapter must obtain the
+// current envelopes AFTER its read and supply an honest current clock. This
+// synchronous check cannot establish that ordering or authenticate any receipt.
+function verifyReleasedReportReadBytes(plan, bytes, input, trusted, evidence, policy) {
+  try {
+    const initialBinding = reportReads.get(plan);
+    if (!initialBinding) deny();
+    const current = prepareReleasedReportRead(input, trusted, evidence, policy);
+    if (reportReads.get(current) !== initialBinding || current.operation !== plan.operation ||
+        instant(current.checkedAt) < instant(plan.checkedAt) ||
+        instant(current.observedAt) < instant(plan.checkedAt)) deny();
+    if (!Buffer.isBuffer(bytes) || Object.getPrototypeOf(bytes) !== Buffer.prototype) deny();
+    // Native accessors avoid invoking caller-owned length/buffer properties.
+    // Reject shared backing memory; copy before hashing so the returned bytes
+    // cannot subsequently change through the provider's original buffer.
+    const length = byteLength.call(bytes), buffer = backingBuffer.call(bytes);
+    if (length < 1 || length > MAX_REPORT_BYTES) deny();
+    arrayBufferLength.call(buffer); // Rejects SharedArrayBuffer without consulting its prototype.
+    const copy = Buffer.allocUnsafeSlow(length);
+    Uint8Array.prototype.set.call(copy, new Uint8Array(buffer, byteOffset.call(bytes), length));
+    if (createHash("sha256").update(copy).digest("hex") !== current.artifact.sha256) deny();
+    return copy;
+  } catch { deny(); }
+}
+
 module.exports = { prepareCompanyCallsPage, prepareFilteredCompanyCallsPage,
-  prepareReleasedReportsPage, preparePreferredReleasedReportsPage, prepareReleasedReportRead };
+  prepareReleasedReportsPage, preparePreferredReleasedReportsPage, prepareReleasedReportRead,
+  verifyReleasedReportReadBytes };
