@@ -110,7 +110,9 @@ node --test "src/zoho-creator/client-portal/calls-reports/test/*.test.js"
 
 The existing service-area portal test entrypoint imports both calls/reports test
 files. The repository verifier and Repo Checks workflow run that entrypoint; no
-second dedicated suite invocation is needed. Passing these source checks does
+second dedicated suite invocation is needed. Outcome-filter coverage reads the
+owning gateway's canonical outcome contract instead of duplicating its values, so
+an added canonical outcome cannot silently become unsupported by the portal. Passing these source checks does
 not close the native integration gates below.
 
 ### Released reports
