@@ -182,7 +182,7 @@ function structuredReportFields(call) {
 }
 
 async function queryClientReportSnapshot(store, config, clientId, deploymentId, asOfMs,
-  includePrivateCallDetails = false) {
+  includePrivateCallDetails = false, includePortalCallCandidates = false) {
   invariant(Number.isSafeInteger(asOfMs) && asOfMs >= 0,
     'REPORT_DATA_INVALID', 'Report as-of timestamp is invalid.');
   const deploymentRow = await store.unique(config.tables.DEPLOYMENT_TABLE, 'DEPLOYMENT_ID', deploymentId);
@@ -195,6 +195,8 @@ async function queryClientReportSnapshot(store, config, clientId, deploymentId, 
   const callRows = structuredClone(await store.query(
     config.tables.CANONICAL_CALL_TABLE, 'DEPLOYMENT_ID', deploymentId,
   ));
+  if (includePortalCallCandidates) invariant(Array.isArray(callRows) && callRows.length <= 1000,
+    'REPORT_DATA_INVALID', 'Portal call candidate population exceeds its bound.');
   const notificationRows = structuredClone(await store.query(
     config.tables.NOTIFICATION_TABLE, 'DEPLOYMENT_ID', deploymentId,
   ));
@@ -246,6 +248,7 @@ async function queryClientReportSnapshot(store, config, clientId, deploymentId, 
   let structuredAnalysisEvidenceComplete = true;
   let workflowFailureEvidenceComplete = true;
   const detailRows = [];
+  const portalRows = [];
   const calls = callRows.map((row) => {
     invariant(!callsByKey.has(row.CALL_KEY), 'REPORT_RECONCILIATION_REQUIRED',
       'Report contains duplicate call ownership.');
@@ -281,6 +284,24 @@ async function queryClientReportSnapshot(store, config, clientId, deploymentId, 
         workflowFailureEvidenceComplete = false;
       }
       if (structured.workflowFailureCode) reportCounts.observedWorkflowFailures += 1;
+    }
+    if (includePortalCallCandidates) {
+      invariant(typeof config.sourceRevision === 'string'
+        && /^[a-f0-9]{40}$/.test(config.sourceRevision)
+        && row.SOURCE_REVISION === config.sourceRevision,
+      'REPORT_OWNERSHIP_CONFLICT', 'Portal call candidates cross the reviewed source revision.');
+      validateSourceVersions([versionEntry(row)]);
+      const fact = callFact(config, row, call);
+      portalRows.push(Object.freeze({
+        callKey: fact.CALL_KEY,
+        clientId: deployment.clientId,
+        deploymentId: deployment.deploymentId,
+        // The portal partition uses the immutable version ID, not its display label.
+        configurationVersion: deployment.configurationVersionId,
+        startedAt: call.startedAt,
+        endedAt: call.endedAt,
+        outcome: call.outcome,
+      }));
     }
     if (includePrivateCallDetails) {
       invariant(typeof config.sourceRevision === 'string'
@@ -493,7 +514,27 @@ async function queryClientReportSnapshot(store, config, clientId, deploymentId, 
     // has completed against the same copied canonical row snapshot.
     clientCallDetailSnapshots.add(callDetails);
   }
-  return Object.freeze({ report, callDetails });
+  let portalCallCandidates = null;
+  if (includePortalCallCandidates) {
+    invariant(['development', 'production'].includes(config.environment)
+      && typeof config.sourceRevision === 'string' && /^[a-f0-9]{40}$/.test(config.sourceRevision)
+      && Date.parse(sourceModifiedAt) <= asOfMs,
+    'REPORT_DATA_INVALID', 'Portal call candidate source metadata is invalid.');
+    portalCallCandidates = Object.freeze({
+      schemaVersion: 1,
+      environment: config.environment,
+      observedAt: new Date(asOfMs).toISOString(),
+      watermark: sourceModifiedAt,
+      sourceRevision: config.sourceRevision,
+      clientId: deployment.clientId,
+      deploymentId: deployment.deploymentId,
+      configurationVersion: deployment.configurationVersionId,
+      items: Object.freeze(portalRows.sort((left, right) =>
+        left.startedAt < right.startedAt ? 1 : left.startedAt > right.startedAt ? -1
+          : left.callKey < right.callKey ? -1 : left.callKey > right.callKey ? 1 : 0)),
+    });
+  }
+  return Object.freeze({ report, callDetails, portalCallCandidates });
 }
 
 async function queryClientReport(store, config, clientId, deploymentId, asOfMs = Date.now()) {
@@ -508,6 +549,17 @@ async function queryClientCallDetails(store, config, clientId, deploymentId, asO
   return (await queryClientReportSnapshot(
     store, config, clientId, deploymentId, asOfMs, true,
   )).callDetails;
+}
+
+/** Server-only minimized candidates, NOT a complete portal evidence receipt.
+ * The existing trusted store can return truncated or changing reads. This path
+ * cannot certify terminal pages, snapshot consistency, identity or authorization.
+ * Never add complete=true to this result merely because this read succeeded.
+ */
+async function queryClientPortalCallCandidates(store, config, clientId, deploymentId, asOfMs) {
+  return (await queryClientReportSnapshot(
+    store, config, clientId, deploymentId, asOfMs, false, true,
+  )).portalCallCandidates;
 }
 
 function isClientCallDetails(snapshot) {
@@ -597,4 +649,4 @@ function reportToCsv(report) {
     .join('\r\n');
 }
 
-module.exports = { queryClientReport, queryClientCallDetails, isClientCallDetails, reportToCsv, csvCell };
+module.exports = { queryClientPortalCallCandidates, queryClientReport, queryClientCallDetails, isClientCallDetails, reportToCsv, csvCell };

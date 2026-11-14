@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { installOfflineGuard } = require('../../../../revenue-desk-release/test/helpers/offline-guard');
 const guard = installOfflineGuard();
-const { queryClientReport, queryClientCallDetails, isClientCallDetails, reportToCsv } = require('../lib/reporting');
+const { queryClientPortalCallCandidates, queryClientReport, queryClientCallDetails, isClientCallDetails, reportToCsv } = require('../lib/reporting');
 const { callFact, opaqueKeys, normalizeFactTimestamps } = require('../lib/analytics-outbox');
 const { runtimeFixture, invoke, payloadInbound, eventPayload } = require('./runtime-fixture');
 
@@ -184,4 +184,118 @@ test('explicit request intent preserves every original report field and accepted
     'client_A', 'deployment_A', fixture.clock.value);
   assert.equal(JSON.stringify(after), JSON.stringify(report));
   assert.equal(reportToCsv(after), reportToCsv(report));
+});
+
+const readPortalCandidates = (fixture) => queryClientPortalCallCandidates(
+  fixture.store, fixture.config, 'client_A', 'deployment_A', fixture.clock.value + 10,
+);
+
+test('portal candidates contain only bounded minimized rows with immutable configuration IDs', async () => {
+  const fixture = await fixtureWithCall();
+  const candidates = await readPortalCandidates(fixture);
+  const row = fixture.store.rows.get('RevenueDeskCalls')[0];
+  const call = JSON.parse(row.CANONICAL_CALL_JSON);
+  assert.deepEqual(Object.keys(candidates), ['schemaVersion', 'environment', 'observedAt',
+    'watermark', 'sourceRevision', 'clientId', 'deploymentId', 'configurationVersion', 'items']);
+  assert.equal(candidates.configurationVersion, row.CONFIGURATION_VERSION_ID);
+  assert.equal(candidates.environment, fixture.config.environment);
+  assert.deepEqual(candidates.items, [{
+    callKey: callFact(fixture.config, row, call).CALL_KEY,
+    clientId: 'client_A', deploymentId: 'deployment_A',
+    configurationVersion: row.CONFIGURATION_VERSION_ID,
+    startedAt: call.startedAt, endedAt: call.endedAt, outcome: call.outcome,
+  }]);
+  for (const field of ['complete', 'snapshotId', 'organizationId', 'readGrant', 'company']) {
+    assert.equal(Object.hasOwn(candidates, field), false);
+  }
+  assert.doesNotMatch(JSON.stringify(candidates),
+    /callerName|callbackNumber|cityOrZip|correlationId|callerIntent|issueSummary|transcript|recording|Caller A|Lenexa|service_request|Leaking/);
+  for (const value of [candidates, candidates.items, candidates.items[0]]) {
+    assert.equal(Object.isFrozen(value), true);
+  }
+  assert.equal(isClientCallDetails(candidates), false);
+});
+
+test('portal candidates preserve unhandled attempts, null ends and deterministic ordering', async () => {
+  const fixture = await fixtureWithCall();
+  const existing = fixture.store.rows.get('RevenueDeskCalls')[0];
+  const unhandled = { ...structuredClone(existing), ROWID: '999',
+    CALL_KEY: `call_${'f'.repeat(64)}`, CORRELATION_ID: `corr_${'f'.repeat(32)}`,
+    CALL_VERSION: '2', HANDLED_RECORDED: false, OUTCOME: 'unresolved', NOTIFICATION_STATE: null };
+  unhandled.CANONICAL_CALL_JSON = JSON.stringify({ ...JSON.parse(existing.CANONICAL_CALL_JSON),
+    callKey: unhandled.CALL_KEY, correlationId: unhandled.CORRELATION_ID, outcome: 'unresolved',
+    endedAt: null, callerIntent: null, issueSummary: null, coverageTrigger: 'Unknown',
+    urgency: 'unknown', bookableOpportunity: null, officeFollowUpRequired: null });
+  fixture.store.rows.get('RevenueDeskCalls').push(unhandled);
+  const before = await readPortalCandidates(fixture);
+  assert.equal(before.items.length, 2);
+  assert.equal(before.items.find((item) => item.callKey === 'f'.repeat(64)).endedAt, null);
+  fixture.store.rows.get('RevenueDeskCalls').reverse();
+  assert.deepEqual(await readPortalCandidates(fixture), before);
+  unhandled.CALL_VERSION = '02';
+  await assert.rejects(readPortalCandidates(fixture), { code: 'REPORT_DATA_INVALID' });
+});
+
+test('portal candidate reading cannot certify even an empty or truncated source as complete', async () => {
+  const fixture = runtimeFixture();
+  const result = await readPortalCandidates(fixture);
+  assert.deepEqual(result.items, []);
+  assert.equal(Object.hasOwn(result, 'complete'), false);
+  assert.equal(Object.hasOwn(result, 'snapshotId'), false);
+  await assert.rejects(queryClientPortalCallCandidates(fixture.store, fixture.config,
+    'client_A', 'deployment_A'), { code: 'REPORT_DATA_INVALID' });
+});
+
+test('portal candidates reject source drift, future watermarks and malformed empty metadata', async () => {
+  for (const mutate of [
+    (f) => { f.store.rows.get('RevenueDeskCalls')[0].CLIENT_ID = 'client_B'; },
+    (f) => { f.store.rows.get('RevenueDeskCalls')[0].SOURCE_REVISION = 'e'.repeat(40); },
+    (f) => { f.store.rows.get('RevenueDeskCalls')[0].OUTCOME = 'spam'; },
+    (f) => { f.store.rows.get('RevenueDeskCalls')[0].UPDATED_AT = new Date(f.clock.value + 11).toISOString(); },
+    (f) => { f.store.rows.get('RevenueDeskNotifications')[0].STATUS = 'RetryRequired'; },
+    (f) => { f.store.rows.get('RevenueDeskCalls').push(structuredClone(f.store.rows.get('RevenueDeskCalls')[0])); },
+  ]) {
+    const fixture = await fixtureWithCall();
+    mutate(fixture);
+    await assert.rejects(readPortalCandidates(fixture));
+  }
+  for (const config of [{ sourceRevision: '' }, { environment: 'stage' }]) {
+    const fixture = runtimeFixture();
+    fixture.config = { ...fixture.config, ...config };
+    await assert.rejects(readPortalCandidates(fixture));
+  }
+});
+
+test('portal candidates bound the returned source population before notification reads', async () => {
+  const fixture = await fixtureWithCall();
+  const query = fixture.store.query.bind(fixture.store);
+  let notificationReads = 0;
+  fixture.store.query = async (table, ...args) => {
+    if (table === fixture.config.tables.CANONICAL_CALL_TABLE) {
+      return Array(1001).fill(fixture.store.rows.get('RevenueDeskCalls')[0]);
+    }
+    if (table === fixture.config.tables.NOTIFICATION_TABLE) notificationReads += 1;
+    return query(table, ...args);
+  };
+  await assert.rejects(readPortalCandidates(fixture), { code: 'REPORT_DATA_INVALID' });
+  assert.equal(notificationReads, 0);
+});
+
+test('portal candidates validate one copied cohort without rereading private descriptions', async () => {
+  const fixture = await fixtureWithCall();
+  const row = fixture.store.rows.get('RevenueDeskCalls')[0];
+  const original = JSON.parse(row.CANONICAL_CALL_JSON).outcome;
+  const query = fixture.store.query.bind(fixture.store);
+  let callReads = 0;
+  fixture.store.query = async (table, ...args) => {
+    if (table === fixture.config.tables.CANONICAL_CALL_TABLE) { callReads += 1; return [row]; }
+    if (table === fixture.config.tables.NOTIFICATION_TABLE) {
+      row.OUTCOME = 'spam';
+      row.CANONICAL_CALL_JSON = JSON.stringify({ ...JSON.parse(row.CANONICAL_CALL_JSON), outcome: 'spam' });
+    }
+    return query(table, ...args);
+  };
+  const result = await readPortalCandidates(fixture);
+  assert.equal(callReads, 1);
+  assert.equal(result.items[0].outcome, original);
 });

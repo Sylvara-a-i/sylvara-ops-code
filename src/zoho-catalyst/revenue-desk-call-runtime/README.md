@@ -14,6 +14,49 @@ This shared Zoho Catalyst package contains exactly three deployable functions:
 
 The canonical source profile is `free_test/call_gap_monitor_v1`. Registered paid-service profiles `launch_v1`, `growth_v1`, and `scale_v1` remain disabled drafts and fail closed. The Development definition deployment and subsequent reconciliation do not authorize route invocation or further route mutation, a customer test, paid offer, Production traffic, migration, mail send, binding, Retell test, or Retell change.
 
+## Minimized portal call candidates (offline, opt-in)
+
+`queryClientPortalCallCandidates(store, config, clientId, deploymentId, asOfMs)`
+in the gateway's `lib/reporting.js` reuses the existing canonical reporting
+snapshot validation. It is a server-only preparation seam, not a portal endpoint
+or a complete source receipt. The trusted store and server-supplied explicit
+clock remain upstream responsibilities. No native adapter or deployment changes.
+
+It checks the same deployment/configuration ownership, canonical integrity,
+outcome, handled identities and notification reconciliation as the current report.
+Every call, including unhandled attempts, must match the reviewed source revision
+and have a valid source version. It bounds the returned population to 1,000 calls,
+rejects a future source watermark, and emits frozen minimized rows only:
+`callKey`, `clientId`, `deploymentId`, `configurationVersion`, `startedAt`,
+`endedAt`, and `outcome`. The key reuses the canonical `callFact` transformation.
+`configurationVersion` here means the **immutable configuration-version ID**, not
+its display label. A future protected company-to-source binding must use that same
+meaning. Null end times remain null. Rows sort by UTC start descending and key
+ascending, independently of source order. Caller descriptions, identities,
+transcripts, recordings, raw provider IDs and private report details are excluded.
+
+The envelope contains schemaVersion, environment, observedAt, watermark,
+sourceRevision, clientId, deploymentId, configurationVersion and items. It has
+**no complete, snapshotId, organizationId or authorization fields** and cannot be
+passed directly as Calls & Reports projection evidence. An empty result is not
+proof of a complete empty source. The current store performs independent reads
+without a terminal-page or consistent-snapshot protocol. A successful read, short
+page, reconciled handled count or frozen output cannot prove completeness of
+unhandled attempts or stability across reads. The array bound is post-read and
+does not bound provider transport memory or latency.
+
+Before producing an actual portal receipt, qualify bounded terminal reads and a
+consistent source snapshot/watermark for the exact server-derived partition,
+including configuration/deployment and notification dependencies. Independently
+establish current company identity, operation grants and company-to-source binding.
+Do not attach `complete: true` or invent snapshot identity to bypass those gates.
+The candidate reader does not reauthorize after awaits and must never be exposed
+directly to a client. Existing report/CSV and private draft APIs are unchanged.
+
+Synthetic cases are retained in `test/client-call-details.test.js`, already part
+of the gateway unit-test entrypoint. Rollback removes this opt-in export, its
+candidate-only branch and tests; no records, permissions or live resources change.
+
 ## Noncharging raw usage evidence
 
 Evidence fingerprints include the validated immutable route/correlation binding
