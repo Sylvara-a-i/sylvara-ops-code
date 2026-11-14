@@ -79,9 +79,14 @@ test("filtered calls: opt-in preserves the existing API and sanitized output", (
 });
 
 test("filtered calls: each canonical outcome is selected without inferring a booking", () => {
-  const outcomes = ["potential_job", "existing_customer", "urgent_potential_job", "spam",
-    "unsupported_service", "out_of_area", "other_general_inquiry", "sensitive_data_ended",
-    "configuration_failure", "caller_abandoned", "unresolved"];
+  // Read the owning runtime contract, not a second copy of the portal enum.
+  // A new canonical outcome must fail here until the portal supports it.
+  const contract = JSON.parse(fs.readFileSync(path.resolve(__dirname,
+    "../../../../zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway/contracts/revenue-desk-call-contract.json"), "utf8"));
+  assert.ok(Array.isArray(contract.outcomes) && contract.outcomes.length > 0);
+  const outcomes = contract.outcomes.map(row => row.value);
+  assert.equal(new Set(outcomes).size, outcomes.length);
+  assert.ok(outcomes.every(value => typeof value === "string" && value !== "all"));
   for (const outcome of outcomes) {
     const f = filteredFixture();
     f.evidence.items[0].outcome = outcome;
