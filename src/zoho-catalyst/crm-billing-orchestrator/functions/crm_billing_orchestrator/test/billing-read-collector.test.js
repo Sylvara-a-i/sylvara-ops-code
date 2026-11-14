@@ -24,8 +24,11 @@ function fixture() {
   const page = (key, items, request, more = false) => ({ code: 0, [key]: items,
     page_context: { page: request.page, per_page: request.perPage, has_more_page: more } });
   const input = {
-    target: { crmAccountId: 'synthetic_account', subscriptionReference: 'synthetic_reference' },
+    target: { crmAccountId: 'synthetic_account', subscriptionReference: 'synthetic_reference',
+      billingOrganizationId: 'synthetic_organization', billingMode: 'test' },
     reads: {
+      readOrganization: async (request) => { calls.push(['organization', request]);
+        return { code: 0, organization: { organization_id: 'synthetic_organization', mode: 'test' } }; },
       readCustomerPage: async (request) => {
         calls.push(['customers', request]);
         return page('customers', Object.keys(details).map((customer_id) => ({ customer_id })), request);
@@ -71,15 +74,116 @@ test('hydrates every customer; separates Account, Contact and explicitly unlinke
   assert.equal(result.observation.selectedCustomer.customerId, 'synthetic_customer');
   assert.equal(result.observation.customers[1].crmAccountId, null);
   assert.equal(result.observation.customers[2].crmContactId, 'synthetic_account');
-  assert.equal(result.counts.reads, 7);
-  assert.deepEqual(f.calls.map(([name]) => name), ['customers', 'customer', 'customer', 'customer',
-    'subscriptions', 'subscription', 'customer']);
-  assert.equal(f.calls[4][1].filterBy, 'SubscriptionStatus.All');
+  assert.equal(result.counts.reads, 9);
+  assert.deepEqual(f.calls.map(([name]) => name), ['organization', 'customers', 'customer', 'customer', 'customer',
+    'subscriptions', 'subscription', 'customer', 'organization']);
+  assert.equal(f.calls[5][1].filterBy, 'SubscriptionStatus.All');
   assert.equal(f.calls.every(([, request]) => Object.isFrozen(request)), true);
   assert.equal(f.calls.every(([, request]) => request.signal === f.calls[0][1].signal), true);
   assert.equal(f.calls[0][1].signal.aborted, true);
   assert.ok(Object.isFrozen(result.observation.customers[0]));
   assert.doesNotMatch(JSON.stringify(result), /private@|DO_NOT_RETURN|amount|active|plan/);
+  assert.deepEqual(result.observation.organization, { organizationId: 'synthetic_organization', mode: 'test' });
+  assert.equal(result.counts.organizations, 2);
+});
+
+for (const [name, body, hold, status] of [
+  ['wrong organization', { organization_id: 'foreign', mode: 'test' }, 'organization_identity_conflict', 'conflict'],
+  ['wrong mode', { organization_id: 'synthetic_organization', mode: 'live' }, 'organization_identity_conflict', 'conflict'],
+  ['missing organization', undefined, 'organization_identity_unread'],
+  ['missing mode', { organization_id: 'synthetic_organization' }, 'organization_identity_unread'],
+  ['missing identity', { mode: 'test' }, 'organization_identity_unread'],
+  ['coerced identity', { organization_id: 80000001, mode: 'test' }, 'organization_identity_unread'],
+  ['unknown mode', { organization_id: 'synthetic_organization', mode: 'sandbox' }, 'organization_identity_unread'],
+]) {
+  test(`${name} stops before reading relationships`, async () => {
+    const f = fixture(); let attempts = 0;
+    f.input.reads.readOrganization = async () => { attempts += 1;
+      return { code: 0, organization: body, secret: 'DO_NOT_RETURN' }; };
+    const result = await expectHold(f, hold, status);
+    assert.equal(attempts, 1);
+    assert.equal(result.counts.reads, 1);
+    assert.deepEqual(f.calls, []);
+    assert.doesNotMatch(JSON.stringify(result), /DO_NOT_RETURN/);
+  });
+}
+
+for (const field of ['billingOrganizationId', 'billingMode', 'readOrganization']) {
+  test(`missing ${field} rejects the old unqualified input before I/O`, async () => {
+    const f = fixture();
+    if (field === 'readOrganization') delete f.input.reads[field];
+    else delete f.input.target[field];
+    const result = await collectBillingReadEvidence(f.input);
+    noncharging(result);
+    assert.equal(result.observation, null);
+    assert.equal(result.counts.reads, 0);
+    assert.deepEqual(f.calls, []);
+  });
+}
+
+for (const missing of [false, true]) {
+  test(`closing organization read holds changed mode, missing inventory=${missing}`, async () => {
+    const f = fixture(); let count = 0;
+    f.input.reads.readOrganization = async () => ({ code: 0, organization: {
+      organization_id: 'synthetic_organization', mode: ++count === 1 ? 'test' : 'live' } });
+    if (missing) f.input.reads.readSubscriptionPage = async r => f.page('subscriptions', [], r);
+    await expectHold(f, 'organization_identity_conflict', 'conflict');
+    assert.equal(count, 2);
+  });
+}
+
+for (const missing of [false, true]) {
+  for (const failure of ['transport', 'malformed']) {
+    test(`closing organization ${failure} failure discards observations, missing inventory=${missing}`, async () => {
+      const f = fixture(); let attempts = 0;
+      f.input.reads.readOrganization = async () => {
+        attempts += 1;
+        if (attempts === 1) return { code: 0,
+          organization: { organization_id: 'synthetic_organization', mode: 'test' } };
+        if (failure === 'transport') throw new Error('DO_NOT_RETURN private@example.invalid');
+        return { code: 0, organization: { mode: 'test', email: 'DO_NOT_RETURN' } };
+      };
+      if (missing) f.input.reads.readSubscriptionPage = async r => f.page('subscriptions', [], r);
+      const result = await expectHold(f, failure === 'transport' ? 'provider_read_failed' : 'organization_identity_unread');
+      assert.equal(attempts, 2, 'closing failure is never retried');
+      assert.doesNotMatch(JSON.stringify(result), /DO_NOT_RETURN|private@/);
+    });
+  }
+}
+
+test('closing organization read consumes the same bounded read budget', async () => {
+  const f = fixture(); f.input.limits = { maxReads: 8 };
+  const result = await expectHold(f, 'read_budget_exceeded');
+  assert.equal(result.counts.reads, 8);
+  assert.equal(result.counts.organizations, 1);
+});
+
+test('organization preflight timeout aborts and late success cannot start relationship reads', async () => {
+  const f = fixture(); f.input.limits = { timeoutMs: 5 }; let release, request;
+  f.input.reads.readOrganization = r => { request = r; return new Promise(resolve => { release = resolve; }); };
+  const result = await expectHold(f, 'read_deadline_exceeded');
+  assert.equal(request.signal.aborted, true);
+  release({ code: 0, organization: { organization_id: 'synthetic_organization', mode: 'test' } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(f.calls, []);
+  assert.equal(result.counts.reads, 1);
+});
+
+test('organization target and response are captured before later awaits and private metadata is omitted', async () => {
+  const f = fixture(); let count = 0;
+  const body = { organization_id: 'synthetic_organization', mode: 'test', email: 'DO_NOT_RETURN' };
+  f.input.reads.readOrganization = async () => {
+    count += 1;
+    f.input.target.billingOrganizationId = 'foreign'; f.input.target.billingMode = 'live';
+    return { code: 0, organization: count === 1 ? body : { organization_id: 'synthetic_organization', mode: 'test' } };
+  };
+  const readPage = f.input.reads.readCustomerPage;
+  f.input.reads.readCustomerPage = async r => { body.organization_id = 'foreign'; return readPage(r); };
+  const result = await collectBillingReadEvidence(f.input);
+  assert.equal(result.status, 'held_evidence_only');
+  assert.deepEqual(result.observation.organization, { organizationId: 'synthetic_organization', mode: 'test' });
+  assert.ok(Object.isFrozen(result.observation.organization));
+  assert.doesNotMatch(JSON.stringify(result), /DO_NOT_RETURN|foreign/);
 });
 
 test('exact reference match ignores substrings and explicit unrelated empty references', async () => {
@@ -131,7 +235,7 @@ for (const [name, patch] of [
     const f = fixture(); const original = f.input.reads.readCustomerPage;
     f.input.reads.readCustomerPage = async (args) => { const response = await original(args); patch(response); return response; };
     await expectHold(f, 'page_unqualified');
-    assert.equal(f.calls.length, 1);
+    assert.equal(f.calls.length, 2);
   });
 }
 
@@ -240,8 +344,8 @@ test('deadline aborts shared signal and late resolution never launches subsequen
   assert.equal(request.signal.aborted, true);
   release(f.page('customers', [{ customer_id: 'synthetic_customer' }], request));
   await new Promise((resolve) => setTimeout(resolve, 10));
-  assert.deepEqual(f.calls, []);
-  assert.equal(result.counts.reads, 1);
+  assert.deepEqual(f.calls.map(([name]) => name), ['organization']);
+  assert.equal(result.counts.reads, 2);
 });
 
 test('caller mutation cannot retarget reads, change limits or replace captured methods', async () => {
@@ -267,8 +371,8 @@ test('an immediate but slow reader cannot outrun the timer through microtask sch
   const result = await collectBillingReadEvidence(f.input);
   noncharging(result);
   assert.ok(result.holds.includes('read_deadline_exceeded'));
-  assert.equal(result.counts.reads, 1);
-  assert.equal(f.calls.length, 0);
+  assert.equal(result.counts.reads, 2);
+  assert.equal(f.calls.length, 1);
 });
 
 test('historical inputs, unqualified scope and mixed write clients cannot extend the seam', async () => {

@@ -32,7 +32,8 @@ function fixture() {
     fetchImpl: async (raw, options) => {
       calls.push({ raw, options });
       const url = new URL(raw); let body;
-      if (url.pathname.endsWith('/customers')) body = { customers: [{ customer_id: CUSTOMER }] };
+      if (url.pathname.endsWith(`/organizations/${ORGANIZATION}`)) body = { organization: { organization_id: ORGANIZATION, mode: 'test', email: 'private@example.invalid' } };
+      else if (url.pathname.endsWith('/customers')) body = { customers: [{ customer_id: CUSTOMER }] };
       else if (url.pathname.endsWith(`/customers/${CUSTOMER}`)) body = { customer };
       else if (url.pathname.endsWith('/subscriptions')) body = { subscriptions: [subscription] };
       else if (url.pathname.endsWith(`/subscriptions/${SUBSCRIPTION}`)) body = { subscription };
@@ -46,15 +47,17 @@ function fixture() {
     create: () => createBillingReadAdapter(configuration, dependencies) };
 }
 
-test('exactly four fixed GET readers translate native query/header names and all-status filters', async () => {
+test('exactly five fixed GET readers translate native query/header names and all-status filters', async () => {
   const f = fixture(); const reads = f.create();
-  assert.deepEqual(Object.keys(reads), ['readCustomerPage', 'readCustomer', 'readSubscriptionPage', 'readSubscription']);
+  assert.deepEqual(Object.keys(reads), ['readOrganization', 'readCustomerPage', 'readCustomer', 'readSubscriptionPage', 'readSubscription']);
   assert.equal(Object.isFrozen(reads), true);
+  await reads.readOrganization({ signal: signal() });
   await reads.readCustomerPage({ page: 1, perPage: 100, signal: signal() });
   await reads.readCustomer({ customerId: CUSTOMER, signal: signal() });
   await reads.readSubscriptionPage({ page: 2, perPage: 200, filterBy: 'SubscriptionStatus.All', signal: signal() });
   await reads.readSubscription({ subscriptionId: SUBSCRIPTION, signal: signal() });
   assert.deepEqual(f.calls.map(call => call.raw), [
+    `https://www.zohoapis.com/billing/v1/organizations/${ORGANIZATION}`,
     'https://www.zohoapis.com/billing/v1/customers?filter_by=Status.All&page=1&per_page=100',
     `https://www.zohoapis.com/billing/v1/customers/${CUSTOMER}`,
     'https://www.zohoapis.com/billing/v1/subscriptions?filter_by=SubscriptionStatus.All&page=2&per_page=200',
@@ -66,14 +69,15 @@ test('exactly four fixed GET readers translate native query/header names and all
     assert.deepEqual(options.headers, { Accept: 'application/json', Authorization: TOKEN,
       'X-com-zoho-subscriptions-organizationid': ORGANIZATION });
   }
-  assert.equal(f.authorizations.length, 4);
+  assert.equal(f.authorizations.length, 5);
   assert.ok(f.authorizations.every(request => request.signal instanceof AbortSignal && request.signal.aborted));
 });
 
 test('adapter feeds collector end-to-end without resolving any execution or historical holds', async () => {
   const f = fixture();
   const output = await collectBillingReadEvidence({ reads: f.create(),
-    target: { crmAccountId: ACCOUNT, subscriptionReference: 'synthetic_reference' } });
+    target: { crmAccountId: ACCOUNT, subscriptionReference: 'synthetic_reference',
+      billingOrganizationId: ORGANIZATION, billingMode: 'test' } });
   assert.equal(output.status, 'held_evidence_only');
   assert.equal(output.readStatus, 'incomplete'); assert.equal(output.historicalMapping, null);
   assert.equal(output.billingAuthority, false); assert.equal(output.billableMinutes, null);
@@ -81,8 +85,36 @@ test('adapter feeds collector end-to-end without resolving any execution or hist
   assert.equal(output.observation.selectedCustomer.customerId, CUSTOMER);
   assert.deepEqual(output.holds, ['execution_boundary_unqualified', 'snapshot_consistency_unqualified',
     'historical_mapping_not_established']);
-  assert.equal(f.calls.length, 5);
+  assert.equal(f.calls.length, 7);
   assert.doesNotMatch(JSON.stringify(output), /private@|amount|Authorization|oauthtoken/);
+});
+
+test('organization request cannot override the captured fixed destination', () => {
+  const f = fixture(); const reads = f.create();
+  for (const extra of [{ organizationId: '80000009' }, { billingOrganizationId: '80000009' },
+    { path: '/customers' }, { method: 'POST' }]) {
+    assert.throws(() => reads.readOrganization({ signal: signal(), ...extra }),
+      error => error.publicCode === 'billing_read_request_invalid');
+  }
+  assert.deepEqual(f.calls, []);
+  assert.deepEqual(f.authorizations, []);
+});
+
+test('native wrong-mode organization stops adapter/collector before customer or subscription reads', async () => {
+  const f = fixture();
+  f.dependencies.fetchImpl = async (raw, options) => {
+    f.calls.push({ raw, options });
+    assert.equal(new URL(raw).pathname, `/billing/v1/organizations/${ORGANIZATION}`);
+    return Response.json({ code: 0, organization: { organization_id: ORGANIZATION, mode: 'live' } });
+  };
+  const result = await collectBillingReadEvidence({ reads: f.create(),
+    target: { crmAccountId: ACCOUNT, subscriptionReference: 'synthetic_reference',
+      billingOrganizationId: ORGANIZATION, billingMode: 'test' } });
+  assert.equal(result.status, 'conflict');
+  assert.ok(result.holds.includes('organization_identity_conflict'));
+  assert.equal(result.observation, null);
+  assert.equal(result.billingAuthority, false);
+  assert.equal(f.calls.length, 1);
 });
 
 for (const [name, change] of [
@@ -171,7 +203,8 @@ test('collector cancellation reaches an adapter-stalled body, with no following 
     }) } };
   };
   const output = await collectBillingReadEvidence({ reads: f.create(), limits: { timeoutMs: 20 },
-    target: { crmAccountId: ACCOUNT, subscriptionReference: 'synthetic_reference' } });
+    target: { crmAccountId: ACCOUNT, subscriptionReference: 'synthetic_reference',
+      billingOrganizationId: ORGANIZATION, billingMode: 'test' } });
   assert.equal(output.readStatus, 'incomplete'); assert.equal(output.observation, null);
   assert.ok(output.holds.includes('read_deadline_exceeded'));
   assert.equal(transportSignal.aborted, true); assert.equal(cancelled, 1);

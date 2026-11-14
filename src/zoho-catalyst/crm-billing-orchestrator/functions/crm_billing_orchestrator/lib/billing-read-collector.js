@@ -6,7 +6,7 @@ const { performance } = require('node:perf_hooks');
 // reviewed, fixed-origin/organization GET-only adapters. Their names alone do
 // not establish their permission, caller identity, scope or cancellation.
 const ID = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/;
-const METHODS = ['readCustomerPage', 'readCustomer', 'readSubscriptionPage', 'readSubscription'];
+const METHODS = ['readOrganization', 'readCustomerPage', 'readCustomer', 'readSubscriptionPage', 'readSubscription'];
 const DEFAULTS = Object.freeze({ perPage: 100, maxPages: 5, maxItems: 250, maxReads: 300, timeoutMs: 3000 });
 const CEILINGS = Object.freeze({ perPage: 200, maxPages: 25, maxItems: 1000, maxReads: 1100, timeoutMs: 3000 });
 const BASE_HOLDS = ['execution_boundary_unqualified', 'snapshot_consistency_unqualified',
@@ -54,7 +54,7 @@ function same(left, right) { return Object.keys(left).every((key) => left[key] =
  * production wiring or historical inference exists in this module.
  */
 async function collectBillingReadEvidence(input) {
-  const counts = { reads: 0, customerPages: 0, subscriptionPages: 0, customers: 0, subscriptions: 0 };
+  const counts = { reads: 0, organizations: 0, customerPages: 0, subscriptionPages: 0, customers: 0, subscriptions: 0 };
   const finish = (status, hold, observation = null) => freeze({ schemaVersion: 1, status,
     readStatus: 'incomplete', holds: [...BASE_HOLDS, ...(hold ? [hold] : [])],
     observation, historicalMapping: null, billableMinutes: null, chargeMinor: null,
@@ -64,7 +64,7 @@ async function collectBillingReadEvidence(input) {
   const controller = new AbortController();
   try {
     if (!exactKeys(input, ['target', 'reads', 'limits'])
-      || !exactKeys(input.target, ['crmAccountId', 'subscriptionReference'])
+      || !exactKeys(input.target, ['crmAccountId', 'subscriptionReference', 'billingOrganizationId', 'billingMode'])
       || !exactKeys(input.reads, METHODS)
       || METHODS.some((method) => typeof input.reads[method] !== 'function')
       || (input.limits !== undefined && !exactKeys(input.limits, Object.keys(DEFAULTS)))) {
@@ -73,7 +73,9 @@ async function collectBillingReadEvidence(input) {
     // Capture all caller-owned inputs before the first await. No input field is
     // interpreted as attestation of an execution identity or historical owner.
     const target = Object.freeze({ crmAccountId: id(input.target.crmAccountId),
-      subscriptionReference: id(input.target.subscriptionReference) });
+      subscriptionReference: id(input.target.subscriptionReference),
+      billingOrganizationId: id(input.target.billingOrganizationId), billingMode: input.target.billingMode });
+    if (!['test', 'live'].includes(target.billingMode)) fail('invalid_collector_input');
     const readers = Object.freeze(Object.fromEntries(METHODS.map((name) => [name, input.reads[name]])));
     const limits = Object.freeze({ ...DEFAULTS, ...input.limits });
     if (Object.entries(limits).some(([key, value]) => !Number.isSafeInteger(value)
@@ -100,6 +102,21 @@ async function collectBillingReadEvidence(input) {
       const detail = customer(response.customer);
       if (detail.customerId !== customerId) fail('customer_detail_conflict', 'conflict');
       return detail;
+    };
+    const organizationDetail = async () => {
+      const response = await read('readOrganization', {});
+      counts.organizations += 1;
+      const native = response.organization;
+      if (!plain(native) || typeof native.organization_id !== 'string'
+        || !ID.test(native.organization_id) || !['test', 'live'].includes(native.mode)) {
+        fail('organization_identity_unread');
+      }
+      if (native.organization_id !== target.billingOrganizationId || native.mode !== target.billingMode) {
+        fail('organization_identity_conflict', 'conflict');
+      }
+      // Only the provider-observed destination and mode are retained. This is
+      // not caller authentication, a consistent snapshot or usage entitlement.
+      return { organizationId: native.organization_id, mode: native.mode };
     };
     const collect = async (kind) => {
       const customers = kind === 'customers';
@@ -147,6 +164,7 @@ async function collectBillingReadEvidence(input) {
       fail('page_budget_exceeded');
     };
     const work = async () => {
+      const organization = await organizationDetail();
       const customers = await collect('customers');
       const subscriptions = await collect('subscriptions');
       const matchingCustomers = customers.filter((item) => item.crmAccountId === target.crmAccountId);
@@ -155,9 +173,10 @@ async function collectBillingReadEvidence(input) {
         fail('ambiguous_current_relationship', 'conflict');
       }
       const observation = { kind: 'current_only', requestedTarget: target,
-        sweepEnded: true, atomicSnapshotEstablished: false, customers, subscriptions,
+        sweepEnded: true, atomicSnapshotEstablished: false, organization, customers, subscriptions,
         selectedCustomer: null, selectedSubscription: null };
       if (!matchingCustomers.length || !matchingSubscriptions.length) {
+        await organizationDetail();
         checkpoint();
         return finish('missing', 'current_relationship_missing', observation);
       }
@@ -175,6 +194,7 @@ async function collectBillingReadEvidence(input) {
       }
       observation.selectedCustomer = custDetail;
       observation.selectedSubscription = subDetail;
+      await organizationDetail();
       checkpoint();
       return finish('held_evidence_only', null, observation);
     };

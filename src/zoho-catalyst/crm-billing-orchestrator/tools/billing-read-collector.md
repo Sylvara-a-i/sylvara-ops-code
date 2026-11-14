@@ -9,12 +9,14 @@ module itself, and the tests require no credentials, SDK, network or paid action
 ## Input seam
 
 Call `collectBillingReadEvidence({ target, reads, limits })` using trusted code.
-`target` contains only `crmAccountId` and `subscriptionReference`; these are search
-criteria, never attestation of caller, tenant, organization or deployment identity.
+`target` requires `crmAccountId`, `subscriptionReference`, `billingOrganizationId`
+and `billingMode` (`test` or `live`). These are expected search/destination values,
+never attestation of caller, tenant or deployment identity.
 Historical attribution and scope overrides are not supported inputs.
 
-`reads` must contain exactly four injected functions:
+`reads` must contain exactly five injected functions:
 
+- `readOrganization({ signal })`
 - `readCustomerPage({ page, perPage, signal })`
 - `readCustomer({ customerId, signal })`
 - `readSubscriptionPage({ page, perPage, filterBy, signal })`
@@ -27,13 +29,22 @@ the implementation or authority of injected functions. It does not authenticate
 the caller or supply an organization, token, URL or credential.
 
 Readers return parsed **native response bodies**, not MCP/connector transport
-envelopes: `code: 0`, the appropriate `customers`, `customer`, `subscriptions` or
+envelopes: `code: 0`, the appropriate `organization`, `customers`, `customer`, `subscriptions` or
 `subscription` member, and explicit native `page_context` for lists. The adapter
 must independently enforce byte/decode bounds and cancellation. This module bounds
 items after parsing, not the bytes downloaded or memory used by an adapter.
 
 ## Current observation rules
 
+- Before any customer or subscription read, the native organization detail must
+  explicitly return the expected string `organization_id` and exact `mode`.
+  Missing, malformed or conflicting evidence stops the collection. The same
+  fixed organization is reread before returning either an observed relationship
+  or a missing result. Both reads use the existing total deadline and read budget.
+  Failure of the closing read discards all observations, without a retry.
+- Only organization ID and mode leave this preflight. Agreement does not prove
+  runtime identity, effective permissions, snapshot consistency, feature/edition
+  entitlement, notification isolation or historical mapping. All prior holds remain.
 - Every listed customer is independently hydrated. Customer lists alone cannot
   establish CRM linkage. Native detail must explicitly supply `customer_id`,
   `zcrm_account_id`, `zcrm_contact_id` and boolean `is_linked_with_zohocrm`.
@@ -56,7 +67,7 @@ items after parsing, not the bytes downloaded or memory used by an adapter.
 
 ## Unwired native GET adapter
 
-`lib/billing-read-adapter.js` implements the four-reader seam using the existing
+`lib/billing-read-adapter.js` implements the five-reader seam using the existing
 bounded JSON transport. Construct it with `createBillingReadAdapter(configuration,
 dependencies)` and pass its frozen return value as the collector's `reads`.
 Both `readAuthorizationProvider` and `fetchImpl` must be supplied explicitly;
@@ -71,6 +82,17 @@ The US origin/path prefix is fixed to `https://www.zohoapis.com/billing/v1`, mat
 the existing approved US integration boundary. Reader requests cannot override
 origin, organization, headers, HTTP method or credentials. Numeric record IDs are
 validated before interpolation. No write methods or generic request method exist.
+The organization endpoint uses only the captured configuration ID; its request
+accepts no identity/path override. Direct individual readers are not a qualified
+collector and must not be presented as having performed organization preflight.
+The eventual read credential must also have effective organization-detail access.
+An unavailable permission remains a hold; do not substitute a write credential or
+expand scopes automatically. Connector access is not runtime-credential proof.
+
+This tightens the earlier unwired four-reader input contract. Callers must supply
+the expected organization ID/mode and the fifth reader together. Legacy inputs
+fail before I/O rather than bypassing preflight. No deployed lifecycle handler or
+free-test report path is wired to this preparation seam.
 
 Customer pages always use `filter_by=Status.All`; subscription pages always use
 `filter_by=SubscriptionStatus.All`. Internal `page`/`perPage` become the native
