@@ -74,6 +74,47 @@ the existing free-test metric-contract taxonomy without reclassification.
 Output contains only callKey, startedAt, endedAt and outcome. A call key is not
 permission to retrieve details; no detail/recording action is implemented.
 
+### Read-only call filters (offline opt-in)
+
+`prepareFilteredCompanyCallsPage(input, trusted, evidence, policy)` uses the same
+authority, source and output contracts, with an additional required input field:
+`filters: { outcome, dateRange }`. Outcome is `all` or one existing canonical call
+outcome. Date range is null or `{ start, end }` with canonical `YYYY-MM-DD` dates
+and start no later than end. Both bounds include the whole **UTC call-start date**;
+they are not client-local dates, call-end dates or reporting periods. The two
+filters intersect. `all` with a null range returns the unfiltered selection.
+
+Every source row validates before filtering, including rows outside the selected
+dates or outcome. Selection precedes pagination, so a page cannot hide later
+matching calls. Stable ordering and terminal-page behavior remain unchanged. A
+complete nonempty source with no matching calls returns `state: no_matches`,
+`sourceState: available`, `items: []` and no continuation. This is distinct from
+certified empty and unknown source states. Filters never turn an unknown source
+into an empty result or relax current company, grant, partition or freshness
+checks.
+
+The continuation binds the exact validated filter values. Changing either filter
+requires a fresh request with cursor null, even if the new filter happens to
+select the same rows. Filtered and original API cursors cannot be interchanged.
+The existing `prepareCompanyCallsPage` envelope is unchanged and rejects a
+filters field. Filters are presentation choices only: no saved preferences,
+provider queries, native UI, transcript access, booking confirmation, metering,
+financial outcome or additional permission is introduced. In particular,
+`potential_job` and `urgent_potential_job` are not confirmed bookings or revenue.
+
+Run the complete offline calls/reports suite with:
+
+```sh
+node --test "src/zoho-creator/client-portal/calls-reports/test/*.test.js"
+```
+
+The existing service-area portal test entrypoint imports both calls/reports test
+files. The repository verifier and Repo Checks workflow run that entrypoint; no
+second dedicated suite invocation is needed. Passing these source checks does
+not close the native integration gates below.
+
+### Released reports
+
 Report rows are `{ reportKey, clientId, deploymentId, configurationVersion,
 periodStart, periodEnd, releaseState, releaseRevision, releasedAt, artifact }`.
 Periods are canonical calendar dates. Release state is draft, released or
@@ -95,9 +136,52 @@ hide that report. `canDownload` separately requires the matching active
 reports.download grant. Download permission cannot substitute for view permission.
 Output contains only reportKey, periodStart, periodEnd, releasedAt and canDownload.
 No raw artifact path, version, hash, URL, grant or private report content leaves
-the projection. An empty visible list does not disclose hidden reports' existence.
+the client-visible list projection. An empty visible list does not disclose hidden reports' existence.
 The resolver must reauthorize current release/grants and immutable bytes at the
 actual view/download action; this Boolean is not an execution capability.
+
+### Released-report read plan (offline, server-only)
+
+`prepareReleasedReportRead(input, trusted, evidence, policy)` prepares a logical
+GET descriptor for one current released report. It does not retrieve bytes, invoke
+a provider, authenticate a caller or authorize delivery. Its input is exactly
+`{ Account, reportKey, operation }`, with operation `reports.view` or
+`reports.download`. Account and reportKey are selectors, not authority. List
+results, `canDownload`, copied read plans, cursors, preference envelopes and
+browser-supplied artifact identity are not accepted inputs.
+
+The trusted and policy envelopes use the **mandatory current entitlement** fields
+from the preference-aware report contract below, even though no preference is
+accepted. The full reporting period must fit inside that current entitlement.
+The action independently validates current reports.read permission, company and
+source binding, every source row, release state, accepted artifact identity and
+the exact current reports.view grant. Download also needs its own matching
+reports.download grant. A download grant cannot substitute for view permission.
+A saved display range has no effect on action authority. Missing, unaccepted,
+unreleased, withdrawn, ungranted, unentitled, absent and unknown targets all reject
+with the same value-free error. No failure falls back to a legacy list export.
+
+Unlike client-visible list output, the frozen descriptor contains server-only
+resolution fields: logical method/resource/operation; pinned environment and
+organization; current principal, Creator/CRM company and canonical source
+partition; source revision/snapshot; report key, release revision and immutable
+artifact version/SHA-256. `checkedAt` records the supplied policy time and
+`observedAt` the oldest source/authority/entitlement observation. It includes no
+URL, storage path, report bytes or signed access token. The logical resource
+`released-report-artifact` is not a qualified native provider route. Do not return
+or log this descriptor in a client widget, public response or public CI evidence.
+
+The plan is not a bearer capability, durable grant or proof of provenance. A
+protected adapter must independently authenticate the current caller, collect
+fresh complete authority and source facts, and run this preparation at the actual
+action. After asynchronous resolution, recheck current authority/release/artifact
+identity, freshness and expiry before any delivery, and verify the exact fetched
+bytes against the accepted immutable identity. A cached plan, prior list hint or
+old successful read cannot establish those facts. Deadline/cancellation handling,
+live revocation, immutable storage resolution, actual byte hashing, client-safe
+response headers, audit policy and real-session acceptance remain unimplemented
+native gates. No download, grant, invitation, customer delivery or native access
+is enabled by this source increment.
 
 ## Stable pagination
 
@@ -204,6 +288,13 @@ Saved-preference coverage adds serialized restoration, ownership boundaries,
 invalid dates/shapes, inclusive full-period containment, current entitlement
 revocation/expiry/downgrade, filtered hidden foreign rows, no-match states, and
 preference/entitlement-bound pagination. Both suites use the canonical entrypoint.
+Read-plan coverage adds current action grants/entitlement, withdrawal or artifact
+replacement after listing, uniform denial, exact server-only resolution scope,
+hidden invalid rows, the complete 1,000-row bound and immutable output.
+The retained 768-case read-permission matrix crosses release state, accepted
+artifact, current/revoked/absent/stale-artifact view and download grants, action
+and entitlement. Only five combinations permit a descriptor; the remaining 763
+must fail closed. This is synthetic source coverage, not native access evidence.
 
 Before native wiring, qualify real caller identity and lifecycle, current
 operation grants, exact CRM-to-canonical source binding, a complete sanitized
@@ -218,3 +309,5 @@ validation/filtering, its test and its canonical-entrypoint import. The original
 calls/released-reports API remains. Rollback of the entire projection removes
 the module, original test and its canonical-entrypoint import.
 There are no live resources or records to undo.
+Rollback of the read-plan increment removes its opt-in export and tests; the
+original listing, saved preferences and call filters remain unchanged.

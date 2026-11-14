@@ -2,7 +2,8 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { prepareReleasedReportsPage, preparePreferredReleasedReportsPage } = require("../company-call-report-projection");
+const { prepareReleasedReportsPage, preparePreferredReleasedReportsPage,
+  prepareReleasedReportRead } = require("../company-call-report-projection");
 
 function fixture(suffix = "a") {
   const observedAt = "2026-10-12T12:00:00.000Z";
@@ -48,6 +49,240 @@ function denied(f) {
   assert.throws(() => run(f), error => error instanceof TypeError && error.message === "Invalid company call/report projection evidence");
 }
 function keys(result) { return result.items.map(r => r.reportKey.replace("synthetic-report-", "")); }
+
+function readFixture(suffix = "a") {
+  const f = fixture(suffix);
+  f.input = { Account: f.input.Account, reportKey: "synthetic-report-first", operation: "reports.view" };
+  return f;
+}
+function read(f) { return prepareReleasedReportRead(f.input, f.trusted, f.evidence, f.policy); }
+function readDenied(f) {
+  assert.throws(() => read(f), error => error instanceof TypeError && error.message === "Invalid company call/report projection evidence");
+}
+
+test("report read: produces only an immutable server-side GET plan for the exact current released artifact", () => {
+  for (const operation of ["reports.view", "reports.download"]) {
+    const f = readFixture(); f.input.operation = operation;
+    const before = structuredClone(f), result = read(f);
+    assert.deepEqual(result, {
+      method: "GET", resource: "released-report-artifact", operation,
+      environment: "development", organizationId: "synthetic-org", principalId: "synthetic-principal-a",
+      creatorAccountId: "synthetic-company-a", crmAccountId: "synthetic-crm-a", clientId: "synthetic-client-a",
+      deploymentId: "synthetic-deployment-a", configurationVersion: "synthetic-config-v1",
+      sourceRevision: "synthetic-source-v1", snapshotId: "synthetic-snapshot-v1", reportKey: "synthetic-report-first",
+      releaseRevision: "synthetic-release-v1", artifact: { version: "synthetic-artifact-v1", sha256: "a".repeat(64) },
+      checkedAt: f.policy.asOf, observedAt: f.evidence.observedAt,
+    });
+    assert.deepEqual(f, before);
+    assert.ok(Object.isFrozen(result) && Object.isFrozen(result.artifact));
+    assert.deepEqual(Object.keys(result.artifact), ["version", "sha256"]);
+    assert.equal(Object.hasOwn(result, "url"), false);
+    f.evidence.items[1].artifact.version = "synthetic-artifact-v2";
+    assert.equal(result.artifact.version, "synthetic-artifact-v1");
+  }
+});
+
+test("report read: view and download both need current view authority; download additionally needs its own grant", () => {
+  const viewOnly = readFixture();
+  viewOnly.trusted.reportGrants = viewOnly.trusted.reportGrants.filter(g => g.operation !== "reports.download");
+  assert.equal(read(viewOnly).operation, "reports.view");
+  viewOnly.input.operation = "reports.download";
+  readDenied(viewOnly);
+  for (const operation of ["reports.view", "reports.download"]) {
+    const downloadOnly = readFixture(); downloadOnly.input.operation = operation;
+    downloadOnly.trusted.reportGrants = downloadOnly.trusted.reportGrants.filter(g => g.operation !== "reports.view");
+    readDenied(downloadOnly);
+  }
+});
+
+test("report read: a previously visible download hint cannot survive withdrawal, replacement or revocation", () => {
+  const mutations = [
+    f => { f.evidence.items[1].releaseState = "withdrawn"; },
+    f => { f.evidence.items[1].artifact.version = "synthetic-artifact-v2"; },
+    f => { f.evidence.items[1].artifact.sha256 = "b".repeat(64); },
+    f => { f.evidence.items[1].releaseRevision = "synthetic-release-v2"; },
+    f => { f.trusted.readGrant.active = false; },
+    f => { f.trusted.reportGrants.find(g => g.reportKey === f.input.reportKey && g.operation === "reports.view").active = false; },
+    f => { f.trusted.reportGrants.find(g => g.operation === "reports.download").active = false; },
+    f => { f.trusted.reportEntitlement.decision = "ineligible"; },
+    f => { f.trusted.reportEntitlement.validUntil = f.policy.asOf; },
+    f => { f.trusted.reportEntitlement.periodStart = "2026-10-02"; },
+    f => { f.trusted.reportEntitlement.periodEnd = "2026-10-06"; },
+  ];
+  for (const mutate of mutations) {
+    const f = fixture(); f.input.limit = 100;
+    const listed = run(f).items.find(r => r.reportKey === "synthetic-report-first");
+    assert.equal(listed.canDownload, true);
+    f.input = { Account: f.input.Account, reportKey: listed.reportKey, operation: "reports.download" };
+    mutate(f); readDenied(f);
+  }
+});
+
+test("report read: current re-release selects only the replacement bytes with matching fresh grants", () => {
+  const f = readFixture(); f.input.operation = "reports.download";
+  f.evidence.items[1].releaseRevision = "synthetic-release-v2";
+  f.evidence.items[1].artifact = { version: "synthetic-artifact-v2", sha256: "b".repeat(64), accepted: true };
+  f.evidence.snapshotId = "synthetic-snapshot-v2";
+  for (const g of f.trusted.reportGrants.filter(g => g.reportKey === f.input.reportKey)) {
+    g.releaseRevision = "synthetic-release-v2";
+    g.artifactVersion = "synthetic-artifact-v2";
+    g.artifactSha256 = "b".repeat(64);
+    g.revision = "synthetic-grant-v2";
+  }
+  const result = read(f);
+  assert.deepEqual(result.artifact, { version: "synthetic-artifact-v2", sha256: "b".repeat(64) });
+  assert.equal(result.releaseRevision, "synthetic-release-v2");
+  assert.equal(result.snapshotId, "synthetic-snapshot-v2");
+});
+
+test("report read: release, artifact, action grants and entitlement form a fail-closed permission matrix", () => {
+  const grantStates = ["current", "revoked", "absent", "stale-artifact"];
+  const entitlementStates = ["eligible", "ineligible", "expired", "out-of-period"];
+  let checked = 0, allowed = 0;
+  for (const release of ["draft", "released", "withdrawn"]) {
+    for (const accepted of [false, true]) {
+      for (const view of grantStates) {
+        for (const download of grantStates) {
+          for (const operation of ["reports.view", "reports.download"]) {
+            for (const entitlement of entitlementStates) {
+              const f = readFixture();
+              f.input.operation = operation;
+              f.evidence.items[1].releaseState = release;
+              f.evidence.items[1].artifact.accepted = accepted;
+              for (const [action, state] of [["reports.view", view], ["reports.download", download]]) {
+                const grant = f.trusted.reportGrants.find(g => g.reportKey === f.input.reportKey && g.operation === action);
+                if (state === "revoked") grant.active = false;
+                if (state === "stale-artifact") grant.artifactSha256 = "b".repeat(64);
+                if (state === "absent") f.trusted.reportGrants = f.trusted.reportGrants.filter(g => g !== grant);
+              }
+              if (entitlement === "ineligible") f.trusted.reportEntitlement.decision = "ineligible";
+              if (entitlement === "expired") f.trusted.reportEntitlement.validUntil = f.policy.asOf;
+              if (entitlement === "out-of-period") f.trusted.reportEntitlement.periodStart = "2026-10-02";
+              const shouldAllow = release === "released" && accepted && view === "current" &&
+                (operation === "reports.view" || download === "current") && entitlement === "eligible";
+              const label = JSON.stringify({ release, accepted, view, download, operation, entitlement });
+              if (shouldAllow) {
+                const result = read(f);
+                assert.equal(result.operation, operation, label);
+                assert.equal(result.reportKey, f.input.reportKey, label);
+                assert.deepEqual(result.artifact, { version: "synthetic-artifact-v1", sha256: "a".repeat(64) }, label);
+                allowed++;
+              } else {
+                assert.throws(() => read(f), error => error instanceof TypeError &&
+                  error.message === "Invalid company call/report projection evidence", label);
+              }
+              checked++;
+            }
+          }
+        }
+      }
+    }
+  }
+  assert.equal(checked, 768);
+  assert.equal(allowed, 5); // Four view cases ignore download state; only one download case is authorized.
+});
+
+test("report read: current entitlement is mandatory and display preferences do not substitute", () => {
+  const missing = [
+    f => { delete f.trusted.reportEntitlement; },
+    f => { delete f.policy.reportEntitlementPolicyRevision; },
+    f => { f.trusted.reportEntitlement.policyRevision = "synthetic-old-policy"; },
+    f => { f.trusted.reportEntitlement.principalId = "synthetic-principal-b"; },
+    f => { f.trusted.reportEntitlement.creatorAccountId = "synthetic-company-b"; },
+    f => { f.trusted.reportEntitlement.crmAccountId = "synthetic-crm-b"; },
+  ];
+  for (const mutate of missing) { const f = readFixture(); mutate(f); readDenied(f); }
+  const f = fixture();
+  f.input.preference.dateRange = { start: "2026-10-10", end: "2026-10-10" };
+  assert.equal(run(f).state, "no_matches");
+  f.input = { Account: f.input.Account, reportKey: "synthetic-report-first", operation: "reports.view" };
+  assert.equal(read(f).reportKey, f.input.reportKey); // A display filter is not an authorization rule.
+});
+
+test("report read: missing, hidden, unknown and unaccepted targets share one value-free denial", () => {
+  const mutations = [
+    f => { f.input.reportKey = "synthetic-not-found"; },
+    f => { f.evidence.items[1].releaseState = "draft"; },
+    f => { f.evidence.items[1].releaseState = "withdrawn"; },
+    f => { f.evidence.items[1].artifact = null; },
+    f => { f.evidence.items[1].artifact.accepted = false; },
+    f => { f.trusted.reportGrants = []; },
+    f => { f.evidence.items = []; },
+    f => { f.evidence = null; },
+    f => { f.trusted.sourceBinding = null; f.trusted.reportGrants = null; f.evidence = null; },
+  ];
+  for (const mutate of mutations) { const f = readFixture(); mutate(f); readDenied(f); }
+});
+
+test("report read: direct target selection cannot skip foreign, duplicated or malformed hidden rows", () => {
+  const mutations = [
+    f => { f.input.Account = "synthetic-company-b"; },
+    f => { f.trusted.company.companyMappings[0].active = false; },
+    f => { f.trusted.readGrant.operation = "calls.read"; },
+    f => { f.evidence.clientId = "synthetic-client-b"; },
+    f => { f.evidence.items[4].clientId = "synthetic-client-b"; },
+    f => { f.evidence.items[4].artifact = { version: "synthetic-artifact", sha256: "invalid", accepted: true }; },
+    f => { f.evidence.items[4].transcript = "synthetic-forbidden"; },
+    f => { f.evidence.items.push(structuredClone(f.evidence.items[4])); },
+    f => { f.trusted.reportGrants.push(structuredClone(f.trusted.reportGrants[0])); },
+    f => { f.evidence.complete = false; },
+    f => { f.trusted.complete = false; },
+    f => { f.evidence.observedAt = "2026-10-12T11:59:29.999Z"; },
+  ];
+  for (const mutate of mutations) { const f = readFixture(); mutate(f); readDenied(f); }
+  const a = readFixture(), b = readFixture("b");
+  a.evidence = b.evidence;
+  readDenied(a);
+  const result = read(b);
+  assert.equal(result.creatorAccountId, "synthetic-company-b");
+  assert.equal(result.clientId, "synthetic-client-b");
+});
+
+test("report read: selection covers the complete bounded snapshot, not only a first list page", () => {
+  const f = readFixture(), template = f.evidence.items[1], grant = f.trusted.reportGrants[1];
+  f.evidence.items = Array.from({ length: 1000 }, (_, i) => ({ ...template, reportKey: `synthetic-report-${String(i).padStart(4, "0")}` }));
+  f.trusted.reportGrants = f.evidence.items.map(r => ({ ...grant, reportKey: r.reportKey }));
+  f.input.reportKey = "synthetic-report-0999";
+  assert.equal(read(f).reportKey, f.input.reportKey);
+  f.evidence.items.reverse(); f.trusted.reportGrants.reverse();
+  assert.equal(read(f).reportKey, f.input.reportKey);
+  f.evidence.items.push({ ...template, reportKey: "synthetic-report-1000" });
+  readDenied(f);
+});
+
+test("report read: selector and operation are exact data; hints and previous plans confer no authority", () => {
+  let reads = 0;
+  const mutations = [
+    f => { f.input.operation = "reports.delete"; },
+    f => { f.input.operation = "GET"; },
+    f => { f.input.canDownload = true; },
+    f => { f.input.artifact = { version: "synthetic-artifact-v1", sha256: "a".repeat(64) }; },
+    f => { f.input.preference = fixture().input.preference; },
+    f => { f.input.cursor = null; },
+    f => { f.input[Symbol("extra")] = true; },
+    f => { f.input = Object.create(f.input); },
+    f => { Object.defineProperty(f.input, "reportKey", { get() { reads++; return "synthetic-report-first"; } }); },
+    f => { f.input.operation = { toString() { reads++; return "reports.view"; } }; },
+  ];
+  for (const mutate of mutations) { const f = readFixture(); mutate(f); readDenied(f); }
+  assert.equal(reads, 0);
+  const f = readFixture(); f.input = read(f); readDenied(f);
+  const plain = readFixture(); plain.input = Object.assign(Object.create(null), plain.input);
+  assert.equal(read(plain).operation, "reports.view");
+});
+
+test("report read: oldest current evidence observation is reported and freshness/expiry remain enforced", () => {
+  const f = readFixture();
+  f.trusted.reportEntitlement.observedAt = "2026-10-12T11:59:30.000Z";
+  assert.equal(read(f).observedAt, "2026-10-12T11:59:30.000Z");
+  f.trusted.reportEntitlement.observedAt = "2026-10-12T11:59:29.999Z";
+  readDenied(f);
+  const fresh = readFixture();
+  fresh.trusted.reportEntitlement.validUntil = "2026-10-12T12:00:30.001Z";
+  assert.equal(read(fresh).checkedAt, fresh.policy.asOf);
+  fresh.policy.asOf = fresh.trusted.reportEntitlement.validUntil;
+  readDenied(fresh);
+});
 
 test("restores a serialized company/user preference before pagination with inclusive whole-period dates", () => {
   const f = fixture(), before = structuredClone(f);
