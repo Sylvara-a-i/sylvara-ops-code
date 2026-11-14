@@ -223,3 +223,123 @@ test('the reader cannot retarget requested attribution during the await', async 
   assert.equal(output.status, 'verified');
   assert.equal(output.link.crmAccountId, 'synthetic_account');
 });
+
+test('an event-loop-blocking reader cannot verify after the monotonic deadline', async () => {
+  const input = fixture();
+  const output = await readBillingLink({ ...input, timeoutMs: 5, readSnapshot: () => {
+    const end = performance.now() + 20;
+    while (performance.now() < end) { /* Simulate synchronous dependency work. */ }
+    return input.snapshot;
+  } });
+  assert.equal(output.status, 'read_unavailable');
+  assert.equal(output.link, null);
+  noncharging(output);
+});
+
+test('a hanging snapshot reader receives cancellation and cannot schedule later work', async () => {
+  const input = fixture();
+  let request, release, laterReads = 0;
+  const output = await readBillingLink({ ...input, timeoutMs: 5, readSnapshot: async (r) => {
+    request = r;
+    await new Promise(resolve => { release = resolve; });
+    if (!r.signal?.aborted) laterReads += 1;
+    return input.snapshot;
+  } });
+  assert.equal(output.status, 'read_unavailable');
+  assert.ok(request.signal instanceof AbortSignal);
+  assert.equal(request.signal.aborted, true);
+  release();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(laterReads, 0);
+  noncharging(output);
+});
+
+test('a successful snapshot closes its shared read scope without changing the verified link', async () => {
+  const input = fixture(); let signal;
+  const output = await readBillingLink({ ...input, readSnapshot: async request => {
+    assert.ok(Object.isFrozen(request));
+    signal = request.signal;
+    assert.equal(signal.aborted, false);
+    return input.snapshot;
+  } });
+  assert.equal(output.status, 'verified');
+  assert.equal(signal.aborted, true);
+  noncharging(output);
+});
+
+test('a failed reader closes the shared signal and redacts its private error', async () => {
+  const input = fixture(); let signal, attempts = 0;
+  const output = await readBillingLink({ ...input, readSnapshot: async request => {
+    signal = request.signal; attempts += 1;
+    throw new Error('synthetic-private-marker');
+  } });
+  assert.equal(output.status, 'read_unavailable');
+  assert.equal(signal.aborted, true);
+  assert.equal(attempts, 1);
+  assert.doesNotMatch(JSON.stringify(output), /synthetic-private-marker/);
+  noncharging(output);
+});
+
+test('snapshot reconciliation itself cannot verify after the deadline', async () => {
+  const input = fixture();
+  const account = input.snapshot.crm.account;
+  Object.defineProperty(input.snapshot.crm, 'account', { get() {
+    const end = performance.now() + 20;
+    while (performance.now() < end) { /* Simulate expensive snapshot access. */ }
+    return account;
+  } });
+  const output = await readBillingLink({ ...input, timeoutMs: 5, readSnapshot: async () => input.snapshot });
+  assert.equal(output.status, 'read_unavailable');
+  assert.equal(output.link, null);
+  noncharging(output);
+});
+
+test('shared cancellation reaches the existing GET-only Billing transport', async () => {
+  const { createBillingReadAdapter } = require('../lib/billing-read-adapter');
+  const input = fixture(); let fetchSignal, requests = 0;
+  const reads = createBillingReadAdapter({ billingOrganizationId: '123456789' }, {
+    readAuthorizationProvider: async () => 'Zoho-oauthtoken synthetic_read_only_authorization',
+    fetchImpl: async (_url, request) => {
+      requests += 1; fetchSignal = request.signal;
+      return new Promise((_resolve, reject) => request.signal.addEventListener('abort',
+        () => reject(new Error('synthetic-private-marker')), { once: true }));
+    },
+  });
+  const output = await readBillingLink({ ...input, timeoutMs: 20, readSnapshot: async ({ signal }) => {
+    await reads.readOrganization({ signal });
+    return input.snapshot;
+  } });
+  assert.equal(output.status, 'read_unavailable');
+  assert.equal(requests, 1);
+  assert.equal(fetchSignal.aborted, true);
+  assert.doesNotMatch(JSON.stringify(output), /synthetic-private-marker|synthetic_read_only_authorization/);
+  noncharging(output);
+});
+
+test('queued microtasks cannot delay race settlement past the deadline and still verify', async () => {
+  const input = fixture();
+  const output = await readBillingLink({ ...input, timeoutMs: 5, readSnapshot: () => {
+    queueMicrotask(() => queueMicrotask(() => {
+      const end = performance.now() + 20;
+      while (performance.now() < end) { /* Delay the wrapper continuation. */ }
+    }));
+    return input.snapshot;
+  } });
+  assert.equal(output.status, 'read_unavailable');
+  assert.equal(output.link, null);
+  noncharging(output);
+});
+
+test('completion cleanup cannot exceed the deadline and still verify', async () => {
+  const input = fixture();
+  const output = await readBillingLink({ ...input, timeoutMs: 5, readSnapshot: ({ signal }) => {
+    signal.addEventListener('abort', () => {
+      const end = performance.now() + 20;
+      while (performance.now() < end) { /* Simulate synchronous reader cleanup. */ }
+    }, { once: true });
+    return input.snapshot;
+  } });
+  assert.equal(output.status, 'read_unavailable');
+  assert.equal(output.link, null);
+  noncharging(output);
+});
