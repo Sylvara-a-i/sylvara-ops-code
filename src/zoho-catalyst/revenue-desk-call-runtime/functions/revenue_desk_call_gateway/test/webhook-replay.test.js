@@ -351,3 +351,89 @@ for (const table of ['RevenueDeskCalls', 'RevenueDeskNotifications', 'AnalyticsS
     });
   }
 }
+
+// New source-only regressions. These do not recover an earlier patch or qualify
+// provider storage settings, private transcript capture, expiry or deletion.
+for (const event of ['call_ended', 'call_analyzed']) {
+  test(`artifact-only changes cannot rewrite a minimized ${event} receipt`, async () => {
+    for (const processJobs of [false, true]) {
+      const { f, payload } = await admitted();
+      const original = payload(event);
+      const marker = 'synthetic-private-artifact-replay-marker';
+      original.call.transcript = marker;
+      original.call.recording_url = `https://example.invalid/${marker}`;
+      const beforeInput = structuredClone(original);
+      const accepted = await invoke(f.listener, { url: '/retell/events',
+        payload: original, env: f.env, processJobs });
+      assert.equal(accepted.status, 200);
+      assert.deepEqual(original, beforeInput);
+      const before = structuredClone([...f.store.rows]);
+      const queueBefore = structuredClone(f.jobQueue);
+      for (const changedField of ['transcript', 'recording_url']) {
+        for (const remove of [false, true]) {
+          const changed = structuredClone(original);
+          if (remove) delete changed.call[changedField];
+          else changed.call[changedField] += '-changed';
+          const response = await invoke(f.listener, { url: '/retell/events',
+            payload: changed, env: f.env, processJobs: false });
+          assert.equal(response.status, 400);
+          assert.equal(response.body.code, 'DURABLE_IDEMPOTENCY_CONFLICT');
+          assert.deepEqual([...f.store.rows], before, 'conflicting raw bytes cannot mutate durable state');
+          assert.deepEqual(f.jobQueue, queueBefore, 'conflicts cannot enqueue additional work');
+          assert.equal(JSON.stringify(response.body).includes(marker), false);
+        }
+      }
+      const replay = await invoke(f.listener, { url: '/retell/events',
+        payload: original, env: f.env, processJobs: false });
+      assert.equal(replay.status, 200);
+      assert.equal(replay.body.duplicate, true);
+      assert.deepEqual([...f.store.rows], before);
+      assert.deepEqual(f.jobQueue, queueBefore);
+      assert.equal(JSON.stringify({ rows: [...f.store.rows], logs: f.logs }).includes(marker), false);
+      assert.equal(f.mailAccesses, 0);
+      assert.deepEqual(f.workerErrors, []);
+    }
+  });
+}
+
+test('repeated unsupported transcript updates quarantine only minimized metadata without poisoning terminal settlement', async () => {
+  const { f, payload } = await admitted();
+  const update = payload('transcript_updated');
+  const marker = 'synthetic-private-incremental-content-marker';
+  Object.assign(update.call, {
+    call_status: 'ongoing', end_timestamp: null,
+    transcript: marker, transcript_object: [{ role: 'user', content: marker }],
+    transcript_with_tool_calls: [{ role: 'tool', content: marker }],
+    recording_url: `https://example.invalid/${marker}`,
+  });
+  const responses = [];
+  for (let n = 0; n < 2; n += 1) {
+    const response = await invoke(f.listener, { url: '/retell/events',
+      payload: update, env: f.env, processJobs: false });
+    assert.equal(response.status, 400);
+    assert.equal(response.body.code, 'INVALID_SCHEMA');
+    responses.push(response.body);
+  }
+  const receipts = f.store.rows.get('RevenueDeskEventReceipts')
+    .filter(row => row.RECEIPT_KIND === 'provider_event');
+  assert.equal(receipts.length, 1);
+  const quarantine = receipts[0];
+  assert.match(quarantine.EVENT_KEY, /^evtq_/);
+  assert.equal(quarantine.EVENT_DATA_JSON, '{}');
+  assert.equal(quarantine.STATUS, 'TerminalFailure');
+  assert.equal(quarantine.DEPLOYMENT_ID, null);
+  assert.deepEqual(f.jobQueue, []);
+  assert.equal(f.store.rows.get('RevenueDeskCalls').length, 0);
+  assert.equal(f.store.rows.get('RevenueDeskNotifications').length, 0);
+  assert.equal(f.store.rows.get('RevenueDeskDeployments')[0].HANDLED_COUNT, 0);
+  const before = structuredClone(quarantine);
+  for (const event of ['call_ended', 'call_analyzed']) {
+    const response = await invoke(f.listener, { url: '/retell/events',
+      payload: payload(event), env: f.env });
+    assert.equal(response.status, 200);
+  }
+  assertSettled(f);
+  assert.deepEqual(quarantine, before);
+  assert.equal(JSON.stringify({ rows: [...f.store.rows], logs: f.logs, responses }).includes(marker), false);
+  assert.deepEqual(f.workerErrors, []);
+});
