@@ -74,15 +74,34 @@ function reportPreference(value, policy, company, accountId) {
   return saved;
 }
 
+function callFilters(value) {
+  const filters = record(value, ["outcome", "dateRange"]);
+  if (filters.outcome !== "all" && !OUTCOMES.includes(filters.outcome)) deny();
+  if (filters.dateRange !== null) {
+    filters.dateRange = record(filters.dateRange, ["start", "end"]);
+    date(filters.dateRange.start); date(filters.dateRange.end);
+    if (filters.dateRange.start > filters.dateRange.end) deny();
+  }
+  return filters;
+}
+
 // This is an offline server consistency boundary, NOT an authenticator. A
 // protected composition must supply fresh identity, grants and canonical source
 // receipts. Browser-created trusted/evidence/policy objects confer no authority.
-function project(resource, input, trusted, evidence, policy, withPreference = false) {
+function project(resource, input, trusted, evidence, policy, mode = "list") {
   try {
-    const request = record(input, ["Account", "limit", "cursor", ...(withPreference ? ["preference"] : [])]);
-    if (!Number.isSafeInteger(request.limit) || request.limit < 1 || request.limit > 100) deny();
+    const withPreference = mode === "preferred", withCallFilters = mode === "filtered", withRead = mode === "read";
+    const withEntitlement = withPreference || withRead;
+    const request = record(input, withRead ? ["Account", "reportKey", "operation"] :
+      ["Account", "limit", "cursor", ...(withPreference ? ["preference"] : []),
+      ...(withCallFilters ? ["filters"] : [])]);
+    if (withRead) {
+      id(request.reportKey);
+      if (!["reports.view", "reports.download"].includes(request.operation)) deny();
+    } else if (!Number.isSafeInteger(request.limit) || request.limit < 1 || request.limit > 100) deny();
+    const filters = withCallFilters ? callFilters(request.filters) : null;
     const p = record(policy, ["expectedEnvironment", "expectedOrganizationId", "asOf", "maxAgeMs",
-      ...(withPreference ? ["reportEntitlementPolicyRevision"] : [])]);
+      ...(withEntitlement ? ["reportEntitlementPolicyRevision"] : [])]);
     if (!["development", "stage", "production"].includes(p.expectedEnvironment) ||
         !Number.isSafeInteger(p.maxAgeMs) || p.maxAgeMs <= 0) deny();
     id(p.expectedOrganizationId);
@@ -95,7 +114,7 @@ function project(resource, input, trusted, evidence, policy, withPreference = fa
       return r;
     }
     const t = receipt(trusted, ["company", "readGrant", "sourceBinding", "reportGrants",
-      ...(withPreference ? ["reportEntitlement"] : [])]);
+      ...(withEntitlement ? ["reportEntitlement"] : [])]);
     const accountId = assertCompanyIdentity(t.company, request.Account);
     const crmAccountId = t.company.contact.accountId;
     // Also reject aliases of the canonical CRM account in the complete mapping.
@@ -108,8 +127,8 @@ function project(resource, input, trusted, evidence, policy, withPreference = fa
       t.company.contact.id, crmAccountId, grant.operation, grant.revision];
 
     let preference = null, entitlement = null, authorityObservedAt = t.observedAt;
-    if (withPreference) {
-      preference = reportPreference(request.preference, p, t.company, accountId);
+    if (withEntitlement) {
+      if (withPreference) preference = reportPreference(request.preference, p, t.company, accountId);
       id(p.reportEntitlementPolicyRevision);
       entitlement = receipt(t.reportEntitlement, ["principalId", "creatorAccountId", "crmAccountId",
         "resource", "decision", "revision", "policyRevision", "validUntil", "periodStart", "periodEnd"]);
@@ -124,7 +143,7 @@ function project(resource, input, trusted, evidence, policy, withPreference = fa
     }
 
     if (t.sourceBinding === null) {
-      if (evidence !== null || t.reportGrants !== null || request.cursor !== null) deny();
+      if (withRead || evidence !== null || t.reportGrants !== null || request.cursor !== null) deny();
       return freeze({ state: "unknown", sourceState: "unknown", observedAt: authorityObservedAt,
         watermark: null, items: null, hasMore: false, nextCursor: null });
     }
@@ -154,7 +173,7 @@ function project(resource, input, trusted, evidence, policy, withPreference = fa
     }
     reportGrants.sort((a, b) => compare(a.reportKey, b.reportKey) || compare(a.operation, b.operation));
     if (evidence === null) {
-      if (request.cursor !== null) deny();
+      if (withRead || request.cursor !== null) deny();
       return freeze({ state: "unknown", sourceState: "unknown", observedAt: authorityObservedAt,
         watermark: null, items: null, hasMore: false, nextCursor: null });
     }
@@ -201,25 +220,50 @@ function project(resource, input, trusted, evidence, policy, withPreference = fa
     });
     const key = resource === "calls" ? "callKey" : "reportKey";
     rows.sort((a, b) => compare(a[key], b[key]));
-    const bindingDigest = digest([resource, request.limit, p.expectedEnvironment, p.expectedOrganizationId,
-      p.maxAgeMs, identity, binding, reportGrants, preference, entitlement]);
-    const snapshotDigest = digest([source.snapshotId, source.observedAt, source.watermark, rows]);
     function permitted(row, operation) {
       return reportGrants.some(g => g.reportKey === row.reportKey && g.operation === operation && g.active &&
         g.releaseRevision === row.releaseRevision && g.artifactVersion === row.artifact.version &&
         g.artifactSha256 === row.artifact.sha256);
     }
+    function viewable(row) {
+      return row.releaseState === "released" && row.artifact !== null && row.artifact.accepted &&
+        permitted(row, "reports.view") && (entitlement === null ||
+          (row.periodStart >= entitlement.periodStart && row.periodEnd <= entitlement.periodEnd));
+    }
+    if (withRead) {
+      const target = rows.find(row => row.reportKey === request.reportKey);
+      // A list hint or key never authorizes this read. Unknown, hidden and absent
+      // targets all deny identically, after every source row has validated.
+      if (!target || !viewable(target) || !permitted(target, request.operation)) deny();
+      return freeze({ method: "GET", resource: "released-report-artifact", operation: request.operation,
+        environment: p.expectedEnvironment, organizationId: p.expectedOrganizationId,
+        principalId: t.company.principalId, creatorAccountId: accountId, crmAccountId,
+        clientId: binding.clientId, deploymentId: binding.deploymentId,
+        configurationVersion: binding.configurationVersion, sourceRevision: binding.sourceRevision,
+        snapshotId: source.snapshotId, reportKey: target.reportKey, releaseRevision: target.releaseRevision,
+        artifact: { version: target.artifact.version, sha256: target.artifact.sha256 }, checkedAt: p.asOf,
+        observedAt: new Date(Math.min(instant(authorityObservedAt), instant(source.observedAt))).toISOString() });
+    }
+    const bindingDigest = digest([resource, request.limit, p.expectedEnvironment, p.expectedOrganizationId,
+      p.maxAgeMs, identity, binding, reportGrants, preference, entitlement, filters]);
+    const snapshotDigest = digest([source.snapshotId, source.observedAt, source.watermark, rows]);
     const visible = resource === "calls" ? rows.map(c => ({ callKey: c.callKey, startedAt: c.startedAt,
-      endedAt: c.endedAt, outcome: c.outcome })) : rows.filter(r => r.releaseState === "released" &&
-        r.artifact !== null && r.artifact.accepted && permitted(r, "reports.view") &&
-        (entitlement === null || (r.periodStart >= entitlement.periodStart && r.periodEnd <= entitlement.periodEnd))).map(r => ({
+      endedAt: c.endedAt, outcome: c.outcome })) : rows.filter(viewable).map(r => ({
       reportKey: r.reportKey, periodStart: r.periodStart, periodEnd: r.periodEnd, releasedAt: r.releasedAt,
       canDownload: permitted(r, "reports.download"),
     }));
     // Whole reporting periods must fit both bounds. Saved dates only narrow the
     // current entitled/released/view-authorized set, after every source row validates.
     const range = preference === null ? null : preference.dateRange;
-    const items = range === null ? visible : visible.filter(r => r.periodStart >= range.start && r.periodEnd <= range.end);
+    let items = range === null ? visible : visible.filter(r => r.periodStart >= range.start && r.periodEnd <= range.end);
+    // Select from the fully validated snapshot BEFORE pagination. Filtering an
+    // already sliced page could hide later matches or issue misleading cursors.
+    // Dates are inclusive UTC call-start dates, not local dates or booking facts.
+    if (filters !== null) {
+      items = items.filter(c => (filters.outcome === "all" || c.outcome === filters.outcome) &&
+        (filters.dateRange === null || (c.startedAt.slice(0, 10) >= filters.dateRange.start &&
+          c.startedAt.slice(0, 10) <= filters.dateRange.end)));
+    }
     const timeKey = resource === "calls" ? "startedAt" : "releasedAt";
     items.sort((a, b) => compare(b[timeKey], a[timeKey]) || compare(a[key], b[key]));
     let start = 0;
@@ -250,11 +294,18 @@ function project(resource, input, trusted, evidence, policy, withPreference = fa
 function prepareCompanyCallsPage(input, trusted, evidence, policy) {
   return project("calls", input, trusted, evidence, policy);
 }
+function prepareFilteredCompanyCallsPage(input, trusted, evidence, policy) {
+  return project("calls", input, trusted, evidence, policy, "filtered");
+}
 function prepareReleasedReportsPage(input, trusted, evidence, policy) {
   return project("reports", input, trusted, evidence, policy);
 }
 function preparePreferredReleasedReportsPage(input, trusted, evidence, policy) {
-  return project("reports", input, trusted, evidence, policy, true);
+  return project("reports", input, trusted, evidence, policy, "preferred");
+}
+function prepareReleasedReportRead(input, trusted, evidence, policy) {
+  return project("reports", input, trusted, evidence, policy, "read");
 }
 
-module.exports = { prepareCompanyCallsPage, prepareReleasedReportsPage, preparePreferredReleasedReportsPage };
+module.exports = { prepareCompanyCallsPage, prepareFilteredCompanyCallsPage,
+  prepareReleasedReportsPage, preparePreferredReleasedReportsPage, prepareReleasedReportRead };

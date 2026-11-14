@@ -5,7 +5,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
-const { prepareCompanyCallsPage, prepareReleasedReportsPage } = require("../company-call-report-projection");
+const { prepareCompanyCallsPage, prepareFilteredCompanyCallsPage,
+  prepareReleasedReportsPage } = require("../company-call-report-projection");
 const ERROR = /^Invalid company call\/report projection evidence$/;
 
 function fixture(resource = "calls", suffix = "a") {
@@ -54,6 +55,176 @@ function frozen(value) {
     for (const child of Object.values(value)) frozen(child);
   }
 }
+
+function filteredFixture() {
+  const f = fixture();
+  f.input.filters = { outcome: "all", dateRange: null };
+  return f;
+}
+function filtered(f) {
+  return prepareFilteredCompanyCallsPage(f.input, f.trusted, f.evidence, f.policy);
+}
+function filterDenied(f) {
+  assert.throws(() => filtered(f), error => error instanceof TypeError && ERROR.test(error.message));
+}
+
+test("filtered calls: opt-in preserves the existing API and sanitized output", () => {
+  const original = fixture(), f = filteredFixture();
+  original.input.limit = f.input.limit = 100;
+  const before = structuredClone(f);
+  assert.deepEqual(filtered(f), run(original));
+  assert.deepEqual(f, before);
+  denied(f); // Existing entry points do not silently accept filtering options.
+  filterDenied(original); // The opt-in entry point requires explicit filters.
+});
+
+test("filtered calls: each canonical outcome is selected without inferring a booking", () => {
+  const outcomes = ["potential_job", "existing_customer", "urgent_potential_job", "spam",
+    "unsupported_service", "out_of_area", "other_general_inquiry", "sensitive_data_ended",
+    "configuration_failure", "caller_abandoned", "unresolved"];
+  for (const outcome of outcomes) {
+    const f = filteredFixture();
+    f.evidence.items[0].outcome = outcome;
+    f.evidence.items[1].outcome = f.evidence.items[2].outcome = outcome === "spam" ? "unresolved" : "spam";
+    f.input.filters.outcome = outcome;
+    const result = filtered(f);
+    assert.deepEqual(result.items.map(row => row.callKey), ["c".repeat(64)]);
+    assert.deepEqual(Object.keys(result.items[0]), ["callKey", "startedAt", "endedAt", "outcome"]);
+    assert.equal(result.items[0].outcome, outcome);
+    assert.equal(result.hasMore, false);
+  }
+});
+
+test("filtered calls: outcome and inclusive UTC start-date filters intersect before paging", () => {
+  const f = filteredFixture();
+  f.input.limit = 1;
+  f.input.filters = { outcome: "unresolved", dateRange: { start: "2026-10-10", end: "2026-10-11" } };
+  const template = f.evidence.items[0];
+  f.evidence.items = [
+    { ...template, callKey: "a".repeat(64), startedAt: "2026-10-10T00:00:00.000Z" },
+    { ...template, callKey: "b".repeat(64), startedAt: "2026-10-11T23:59:59.999Z",
+      endedAt: "2026-10-12T00:00:01.000Z" },
+    { ...template, callKey: "c".repeat(64), startedAt: "2026-10-12T00:00:00.000Z" },
+    { ...template, callKey: "d".repeat(64), startedAt: "2026-10-09T23:59:59.999Z" },
+    { ...template, callKey: "e".repeat(64), startedAt: "2026-10-11T23:59:59.999Z", outcome: "spam" },
+  ];
+  const first = filtered(f);
+  assert.equal(first.items[0].callKey, "b".repeat(64));
+  assert.equal(first.hasMore, true);
+  f.input.cursor = first.nextCursor;
+  f.evidence.items.reverse();
+  const second = filtered(f);
+  assert.equal(second.items[0].callKey, "a".repeat(64));
+  assert.equal(second.hasMore, false);
+  assert.equal(second.nextCursor, null);
+  assert.deepEqual(filtered(f), second);
+});
+
+test("filtered calls: unknown, certified empty and no matches remain different states", () => {
+  const f = filteredFixture();
+  f.input.filters.outcome = "spam";
+  assert.equal(filtered(f).state, "no_matches");
+  assert.equal(filtered(f).sourceState, "available");
+  assert.deepEqual(filtered(f).items, []);
+  assert.equal(filtered(f).hasMore, false);
+  assert.equal(filtered(f).nextCursor, null);
+  f.evidence.items = [];
+  assert.equal(filtered(f).state, "empty");
+  assert.equal(filtered(f).sourceState, "empty");
+  f.evidence = null;
+  assert.equal(filtered(f).state, "unknown");
+  assert.equal(filtered(f).items, null);
+  f.trusted.sourceBinding = null;
+  assert.equal(filtered(f).state, "unknown");
+  f.input.filters.dateRange = { start: "2026-10-13", end: "2026-10-12" };
+  filterDenied(f); // Missing data must not mask an invalid request.
+});
+
+test("filtered calls: excluded rows and current authority still validate before selection", () => {
+  const mutations = [
+    f => { f.evidence.items[0].clientId = "synthetic-other"; },
+    f => { f.evidence.items[0].outcome = "confirmed_booking"; },
+    f => { f.evidence.items[0].endedAt = "2026-10-12T09:59:59.999Z"; },
+    f => { f.evidence.items[0].transcript = "synthetic-forbidden"; },
+    f => { f.evidence.items.push({ ...f.evidence.items[0] }); },
+    f => { f.evidence.complete = false; },
+    f => { f.evidence.observedAt = "2026-10-12T11:59:29.999Z"; },
+    f => { f.trusted.readGrant.active = false; },
+    f => { f.trusted.readGrant.operation = "reports.read"; },
+    f => { f.input.Account = "synthetic-company-b"; },
+  ];
+  for (const mutate of mutations) {
+    const f = filteredFixture();
+    f.input.filters = { outcome: "spam", dateRange: { start: "2026-10-01", end: "2026-10-02" } };
+    mutate(f); filterDenied(f);
+  }
+});
+
+test("filtered calls: continuation binds filter values and cannot cross API modes", () => {
+  const mutations = [
+    f => { f.input.filters.outcome = "unresolved"; },
+    f => { f.input.filters.dateRange = { start: "2026-10-01", end: "2026-10-12" }; },
+    f => { f.trusted.readGrant.revision = "synthetic-read-v2"; },
+    f => { f.trusted.readGrant.active = false; },
+    f => { f.evidence.snapshotId = "synthetic-snapshot-v2"; },
+    f => { f.input.limit = 1; },
+  ];
+  for (const mutate of mutations) {
+    const f = filteredFixture();
+    f.input.cursor = filtered(f).nextCursor;
+    mutate(f); filterDenied(f);
+  }
+  const f = filteredFixture();
+  f.input.cursor = run(fixture()).nextCursor;
+  filterDenied(f);
+  const original = fixture();
+  original.input.cursor = filtered(filteredFixture()).nextCursor;
+  denied(original);
+  const same = filteredFixture();
+  same.input.cursor = filtered(same).nextCursor;
+  same.input.filters = { dateRange: null, outcome: "all" };
+  assert.equal(filtered(same).items[0].callKey, "c".repeat(64));
+});
+
+test("filtered calls: exact filter data rejects malformed dates and accessors without coercion", () => {
+  let reads = 0;
+  const getter = { dateRange: null };
+  Object.defineProperty(getter, "outcome", { get() { reads++; return "all"; } });
+  const nestedGetter = { end: "2026-10-12" };
+  Object.defineProperty(nestedGetter, "start", { get() { reads++; return "2026-10-01"; } });
+  const coercible = { toString() { reads++; return "all"; } };
+  const bad = [null, [], {}, { outcome: "all" }, { outcome: "All", dateRange: null },
+    { outcome: "confirmed_booking", dateRange: null }, { outcome: coercible, dateRange: null },
+    { outcome: "all", dateRange: null, extra: true },
+    { outcome: "all", dateRange: null, [Symbol("extra")]: true },
+    Object.create({ outcome: "all", dateRange: null }), getter,
+    { outcome: "all", dateRange: nestedGetter },
+    ...[
+      { start: "2026-10-12", end: "2026-10-01" },
+      { start: "2026-02-29", end: "2026-10-12" },
+      { start: "2026-10-01", end: "2026-10-12T00:00:00.000Z" },
+      { start: "2026-10-01", end: "2026-10-12", timeZone: "UTC" },
+      { start: "2026-1-1", end: "2026-10-12" },
+    ].map(dateRange => ({ outcome: "all", dateRange }))];
+  for (const filters of bad) {
+    const f = filteredFixture(); f.input.filters = filters; filterDenied(f);
+  }
+  assert.equal(reads, 0);
+  const f = filteredFixture();
+  f.input.filters = Object.assign(Object.create(null), { outcome: "all", dateRange: null });
+  assert.equal(filtered(f).state, "available");
+});
+
+test("filtered calls: immutable detached results do not mutate inputs or saved filters", () => {
+  const f = filteredFixture(), before = structuredClone(f), result = filtered(f);
+  frozen(result);
+  assert.deepEqual(f, before);
+  const snapshot = JSON.stringify(result);
+  f.evidence.items[1].outcome = "spam";
+  f.input.filters.outcome = "spam";
+  assert.equal(JSON.stringify(result), snapshot);
+  assert.throws(() => result.items.push({}), TypeError);
+});
 
 for (const resource of ["calls", "reports"]) {
   test(`${resource}: independent company projections expose only permitted list fields`, () => {

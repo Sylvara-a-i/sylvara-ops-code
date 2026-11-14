@@ -261,6 +261,13 @@ class VerifyEntrypointTests(unittest.TestCase):
         self.assertNotIn("if (", common_checks)
         self.assertTrue((ROOT / portal_path / "test" / "service-area-request-contract.test.js").is_file())
 
+    def test_call_report_suites_remain_in_the_canonical_portal_entrypoint(self) -> None:
+        portal = ROOT / "src/zoho-creator/client-portal"
+        entrypoint = (portal / "company-settings-requests/test/service-area-request-contract.test.js").read_text(encoding="utf-8")
+        for suite in ("company-call-report-projection", "saved-report-preferences"):
+            self.assertIn(f'require("../../calls-reports/test/{suite}.test");', entrypoint)
+            self.assertTrue((portal / f"calls-reports/test/{suite}.test.js").is_file())
+
     def test_ci_and_dependabot_use_only_the_new_revenue_desk_packages(self) -> None:
         canonical_paths = (
             "src/zoho-catalyst/revenue-desk-call-runtime/functions/revenue_desk_call_gateway",
