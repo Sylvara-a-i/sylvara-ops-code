@@ -29,7 +29,7 @@ function recordId(value) {
 }
 
 /**
- * Four fixed GET readers for collectBillingReadEvidence. Deliberately unwired.
+ * Five fixed GET readers for collectBillingReadEvidence. Deliberately unwired.
  * A configured organization is a request destination, not verified caller/tenant
  * identity, Billing mode, snapshot consistency or historical ownership.
  * Both dependencies must be supplied explicitly; no SDK or credential discovery.
@@ -109,6 +109,10 @@ function createBillingReadAdapter(configuration, dependencies) {
       page: request.page, per_page: request.perPage };
   }
   return Object.freeze({
+    readOrganization(request) {
+      const signal = signalFor(request, []);
+      return get(`/organizations/${binding.billingOrganizationId}`, 'organization', signal);
+    },
     readCustomerPage(request) {
       const signal = signalFor(request, ['page', 'perPage']);
       return get('/customers', 'customers', signal, pageQuery(request, false));
