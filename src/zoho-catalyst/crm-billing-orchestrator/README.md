@@ -18,7 +18,7 @@ customer-detail hydration using injected GET-only readers. It always returns
 `readStatus: incomplete`, including when an observed sweep ends. It cannot be
 substituted for a qualified snapshot or an effective historical mapping. See
 [the collector contract and qualification gates](tools/billing-read-collector.md).
-The accompanying `lib/billing-read-adapter.js` supplies four narrow, fixed-US-origin
+The accompanying `lib/billing-read-adapter.js` supplies five narrow, fixed-US-origin
 GET readers with explicit all-status filters and bounded body/cancellation handling.
 It is also unwired; its configured organization is a destination, not evidence of
 caller identity, Billing mode, snapshot consistency or historical ownership.
@@ -31,8 +31,14 @@ entitlement, commercial acceptance, current provider access, or charging authori
 Every result has null billable minutes/charge and `billingAuthority: false`.
 `readBillingLink` accepts an injected read-only `readSnapshot` and redacts read
 failures. It constructs no SDK, credential, write authority or lifecycle action.
-The read wrapper has a maximum three-second deadline and no retries. A timeout
-does not cancel an underlying read; adapters must also bound transport reads.
+The read wrapper has a maximum three-second monotonic deadline and no retries.
+It passes `readSnapshot({ scope, attribution, signal })` a shared AbortSignal and
+aborts it on timeout, failure or completion. Readers must propagate that signal
+and separately bound their transport, bytes and pagination. Cancellation is
+cooperative: synchronous work or a dependency that ignores the signal cannot be
+interrupted, but results returned after the deadline cannot verify a link. The
+deadline also covers snapshot reconciliation. This does not qualify the injected
+reader's identity, permissions, consistency or provider access.
 
 The normalized snapshot contract is intentionally not a guessed provider API:
 

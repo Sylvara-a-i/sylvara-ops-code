@@ -1,6 +1,6 @@
 'use strict';
 
-const { withOperationTimeout } = require('./operation-timeout');
+const { performance } = require('node:perf_hooks');
 
 // Deliberately independent of lifecycle-handler and the write-capable clients.
 // These are normalized read snapshots, not assumed live provider response shapes.
@@ -119,7 +119,8 @@ function reconcileBillingLink({ scope, snapshot, attribution } = {}) {
 }
 
 /** Inject only a bounded, read-only snapshot reader. No credentials/SDK/write
- * authority are created here. The reader owns timeout, pagination and attestation.
+ * authority are created here. The reader owns transport bounds, pagination and
+ * attestation, and must propagate the shared signal for cooperative cancellation.
  */
 async function readBillingLink({ scope, attribution, readSnapshot, timeoutMs = 3000 } = {}) {
   // Reject unresolved history before even asking for a present-day snapshot.
@@ -129,18 +130,47 @@ async function readBillingLink({ scope, attribution, readSnapshot, timeoutMs = 3
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 3000) {
     return result('conflict', 'read_deadline_invalid');
   }
+  const controller = new AbortController();
+  const deadlineAt = performance.now() + timeoutMs;
+  let timer;
+  let output;
   try {
     // Capture the request before awaiting; later caller/reader mutation must not
     // retarget the relationship being checked. A timed-out read is never retried.
     const selectedScope = Object.freeze(Object.fromEntries(SCOPE_FIELDS.map((key) => [key, scope[key]])));
     const selectedAttribution = structuredClone(attribution);
-    const snapshot = await withOperationTimeout(() => readSnapshot({ scope: selectedScope,
-      attribution: structuredClone(selectedAttribution) }), timeoutMs);
-    return reconcileBillingLink({ scope: selectedScope, attribution: selectedAttribution, snapshot });
+    const checkpoint = () => {
+      if (controller.signal.aborted || performance.now() >= deadlineAt) {
+        throw new Error('read_deadline_exceeded');
+      }
+    };
+    const work = async () => {
+      checkpoint();
+      const snapshot = await readSnapshot(Object.freeze({ scope: selectedScope,
+        attribution: structuredClone(selectedAttribution), signal: controller.signal }));
+      // A timer alone cannot reject a synchronous or microtask-only dependency
+      // before it returns. Never accept a snapshot or result after the deadline.
+      checkpoint();
+      const output = reconcileBillingLink({ scope: selectedScope, attribution: selectedAttribution, snapshot });
+      checkpoint();
+      return output;
+    };
+    output = await Promise.race([Promise.resolve().then(work), new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        reject(new Error('read_deadline_exceeded'));
+      }, Math.max(0, deadlineAt - performance.now()));
+    })]);
   } catch {
     // Do not expose dependency messages, response bodies, identifiers or URLs.
-    return result('read_unavailable', 'read_unavailable');
+    output = result('read_unavailable', 'read_unavailable');
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
   }
+  // Promise settlement and synchronous abort listeners can consume time after
+  // work's last checkpoint. Include them before selecting the final outcome.
+  return performance.now() >= deadlineAt ? result('read_unavailable', 'read_unavailable') : output;
 }
 
 module.exports = { reconcileBillingLink, readBillingLink };
