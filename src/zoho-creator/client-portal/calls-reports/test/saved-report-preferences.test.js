@@ -2,8 +2,9 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { createHash } = require("node:crypto");
 const { prepareReleasedReportsPage, preparePreferredReleasedReportsPage,
-  prepareReleasedReportRead } = require("../company-call-report-projection");
+  prepareReleasedReportRead, verifyReleasedReportReadBytes } = require("../company-call-report-projection");
 
 function fixture(suffix = "a") {
   const observedAt = "2026-10-12T12:00:00.000Z";
@@ -476,4 +477,236 @@ test("result is detached and contains no saved owner scope or entitlement metada
   f.input.preference.dateRange.start = "2026-10-11";
   f.trusted.reportEntitlement.decision = "ineligible";
   assert.equal(JSON.stringify(result), before);
+});
+
+
+function completionFixture(operation = "reports.view", bytes = Buffer.from("synthetic immutable report bytes")) {
+  const f = readFixture();
+  f.input.operation = operation;
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  f.evidence.items[1].artifact.sha256 = sha256;
+  for (const grant of f.trusted.reportGrants.filter(g => g.reportKey === f.input.reportKey)) {
+    grant.artifactSha256 = sha256;
+  }
+  const plan = read(f), current = structuredClone(f);
+  current.policy.asOf = "2026-10-12T12:00:32.000Z";
+  current.trusted.observedAt = current.trusted.reportEntitlement.observedAt =
+    current.evidence.observedAt = "2026-10-12T12:00:31.000Z";
+  return { f, plan, bytes, current };
+}
+function complete(c) {
+  return verifyReleasedReportReadBytes(c.plan, c.bytes, c.current.input,
+    c.current.trusted, c.current.evidence, c.current.policy);
+}
+function completionDenied(c) {
+  assert.throws(() => complete(c), error => error instanceof TypeError &&
+    error.message === "Invalid company call/report projection evidence");
+}
+
+test("report completion: current unchanged target verifies exact copied bytes for view and download", () => {
+  for (const operation of ["reports.view", "reports.download"]) {
+    const c = completionFixture(operation), before = structuredClone(c.current);
+    const result = complete(c);
+    assert.ok(Buffer.isBuffer(result));
+    assert.deepEqual(result, c.bytes);
+    assert.notEqual(result, c.bytes);
+    assert.notEqual(result.buffer, c.bytes.buffer);
+    assert.deepEqual(c.current, before);
+    const preserved = Buffer.from(result);
+    c.bytes.fill(0);
+    assert.deepEqual(result, preserved);
+    completionDenied(c);
+  }
+});
+
+test("report completion: refreshed snapshots and unrelated report grants may advance without changing the target", () => {
+  const c = completionFixture();
+  c.current.evidence.snapshotId = "synthetic-snapshot-v2";
+  c.current.evidence.watermark = c.current.evidence.observedAt;
+  c.current.evidence.items.reverse();
+  c.current.trusted.reportGrants.reverse();
+  c.current.trusted.reportGrants.find(g => g.reportKey === "synthetic-report-third").revision = "synthetic-unrelated-v2";
+  // A view does not acquire or depend on download permission.
+  c.current.trusted.reportGrants.find(g => g.operation === "reports.download").active = false;
+  assert.deepEqual(complete(c), c.bytes);
+});
+
+test("report completion: forged, copied and serialized plans cannot substitute for the issued plan", () => {
+  const c = completionFixture();
+  for (const plan of [null, {}, structuredClone(c.plan), JSON.parse(JSON.stringify(c.plan)),
+    Object.freeze({ ...c.plan }), Object.create(c.plan), c.f.input]) {
+    completionDenied({ ...c, plan });
+  }
+  assert.deepEqual(complete(c), c.bytes);
+});
+
+test("report completion: mandatory new evidence is not replaced by a formerly valid plan", () => {
+  const c = completionFixture();
+  for (const key of ["input", "trusted", "evidence", "policy"]) {
+    const current = { ...c.current, [key]: undefined };
+    completionDenied({ ...c, current });
+  }
+  completionDenied({ ...c, current: c.f }); // Still fresh, but collected before preparation.
+  c.current.policy.asOf = "2026-10-12T12:00:29.999Z";
+  completionDenied(c);
+});
+
+test("report completion: each observation must be at least preparation time and still fresh at completion", () => {
+  for (const path of ["authority", "entitlement", "source"]) {
+    const c = completionFixture();
+    const receipt = path === "authority" ? c.current.trusted : path === "entitlement"
+      ? c.current.trusted.reportEntitlement : c.current.evidence;
+    receipt.observedAt = c.plan.checkedAt;
+    if (path === "authority") c.current.trusted.reportEntitlement.observedAt = c.plan.checkedAt;
+    assert.deepEqual(complete(c), c.bytes);
+    receipt.observedAt = "2026-10-12T12:00:29.999Z";
+    completionDenied(c);
+  }
+  const c = completionFixture();
+  c.current.policy.asOf = "2026-10-12T12:01:31.000Z";
+  assert.deepEqual(complete(c), c.bytes); // Inclusive receipt age boundary.
+  c.current.policy.asOf = "2026-10-12T12:01:31.001Z";
+  completionDenied(c);
+});
+
+test("report completion: withdrawal, revocation and entitlement expiry after preparation deny uniformly", () => {
+  const mutations = [
+    f => { f.evidence.items[1].releaseState = "withdrawn"; },
+    f => { f.evidence.items[1].artifact.accepted = false; },
+    f => { f.trusted.readGrant.active = false; },
+    f => { f.trusted.reportGrants.find(g => g.reportKey === f.input.reportKey && g.operation === "reports.view").active = false; },
+    f => { f.trusted.reportGrants.find(g => g.operation === "reports.download").active = false; },
+    f => { f.trusted.reportEntitlement.decision = "ineligible"; },
+    f => { f.trusted.reportEntitlement.validUntil = f.policy.asOf; },
+    f => { f.trusted.reportEntitlement.periodStart = "2026-10-02"; },
+    f => { f.evidence.items = []; },
+    f => { f.evidence = null; },
+    f => { f.trusted.complete = false; },
+    f => { f.evidence.complete = false; },
+    f => { f.evidence.items[4].clientId = "synthetic-other-client"; },
+    f => { f.evidence.items[4].artifact.sha256 = "invalid"; },
+  ];
+  for (const mutate of mutations) {
+    const c = completionFixture("reports.download"); mutate(c.current); completionDenied(c);
+  }
+});
+
+test("report completion: both independently authorized operations cannot be exchanged mid-read", () => {
+  for (const operation of ["reports.view", "reports.download"]) {
+    const c = completionFixture(operation);
+    c.current.input.operation = operation === "reports.view" ? "reports.download" : "reports.view";
+    assert.equal(read(c.current).operation, c.current.input.operation);
+    completionDenied(c);
+  }
+});
+
+test("report completion: independently valid scope, revision and report changes require a new read", () => {
+  const mutations = [
+    f => { f.trusted.company.auditActorId = "synthetic-new-actor"; },
+    f => { f.trusted.company.contact.id = "synthetic-new-contact"; },
+    f => { f.trusted.readGrant.revision = "synthetic-read-v2"; },
+    f => { f.trusted.sourceBinding.revision = "synthetic-binding-v2"; },
+    f => { f.trusted.reportGrants.find(g => g.reportKey === f.input.reportKey && g.operation === "reports.view").revision = "synthetic-view-v2"; },
+    f => { f.trusted.reportEntitlement.revision = "synthetic-entitlement-v2"; },
+    f => { f.trusted.reportEntitlement.validUntil = "2026-10-12T14:00:00.000Z"; },
+    f => { f.trusted.reportEntitlement.periodStart = "2026-09-01"; },
+    f => { f.policy.reportEntitlementPolicyRevision = f.trusted.reportEntitlement.policyRevision = "synthetic-policy-v2"; },
+    f => { f.policy.maxAgeMs++; },
+    f => { f.evidence.items[1].periodStart = "2026-10-02"; },
+    f => { f.evidence.items[1].releasedAt = "2026-10-08T11:00:01.000Z"; },
+    f => { f.trusted.sourceBinding.sourceRevision = f.evidence.sourceRevision = "synthetic-source-v2"; },
+    f => {
+      f.evidence.items[1].reportKey = f.input.reportKey = "synthetic-new-report";
+      for (const grant of f.trusted.reportGrants.filter(g => g.reportKey === "synthetic-report-first")) grant.reportKey = f.input.reportKey;
+    },
+    f => {
+      f.evidence.items[1].releaseRevision = "synthetic-release-v2";
+      for (const grant of f.trusted.reportGrants.filter(g => g.reportKey === f.input.reportKey)) grant.releaseRevision = "synthetic-release-v2";
+    },
+    f => {
+      f.evidence.items[1].artifact.version = "synthetic-artifact-v2";
+      for (const grant of f.trusted.reportGrants.filter(g => g.reportKey === f.input.reportKey)) grant.artifactVersion = "synthetic-artifact-v2";
+    },
+  ];
+  for (const mutate of mutations) {
+    const c = completionFixture(); mutate(c.current);
+    assert.equal(read(c.current).operation, "reports.view");
+    completionDenied(c);
+  }
+});
+
+test("report completion: coherently changed tenant, principal, organization and partition still cannot replace the initial scope", () => {
+  const c = completionFixture();
+  for (const [from, to] of [
+    ["synthetic-principal-a", "synthetic-principal-b"],
+    ["synthetic-company-a", "synthetic-company-b"],
+    ["synthetic-crm-a", "synthetic-crm-b"],
+    ["synthetic-org", "synthetic-other-org"],
+    ["development", "stage"],
+    ["synthetic-client-a", "synthetic-client-b"],
+    ["synthetic-deployment-a", "synthetic-deployment-b"],
+    ["synthetic-config-v1", "synthetic-config-v2"],
+  ]) {
+    const current = JSON.parse(JSON.stringify(c.current).replaceAll(from, to));
+    assert.equal(read(current).operation, "reports.view");
+    completionDenied({ ...c, current });
+  }
+});
+
+test("report completion: replacement artifacts with fresh matching grants do not authorize old or replacement bytes on an old plan", () => {
+  const c = completionFixture(), replacement = Buffer.from("synthetic replacement report");
+  const sha256 = createHash("sha256").update(replacement).digest("hex");
+  c.current.evidence.items[1].artifact.sha256 = sha256;
+  for (const grant of c.current.trusted.reportGrants.filter(g => g.reportKey === c.current.input.reportKey)) {
+    grant.artifactSha256 = sha256;
+  }
+  assert.equal(read(c.current).artifact.sha256, sha256);
+  completionDenied(c);
+  c.bytes = replacement;
+  completionDenied(c);
+});
+
+test("report completion: byte integrity rejects truncation, changed data, empty values and implicit conversions", () => {
+  const c = completionFixture(); let invoked = 0;
+  for (const bytes of [Buffer.from("synthetic wrong bytes"), c.bytes.subarray(1), Buffer.alloc(0),
+    c.bytes.toString(), [...c.bytes], new Uint8Array(c.bytes), new DataView(new ArrayBuffer(10)),
+    new ArrayBuffer(10), null, undefined, { type: "Buffer", data: [...c.bytes] },
+    { valueOf() { invoked++; return c.bytes; }, toString() { invoked++; return c.bytes.toString(); } }]) {
+    completionDenied({ ...c, bytes });
+  }
+  assert.equal(invoked, 0);
+});
+
+test("report completion: accepts exact 2 MiB maximum but rejects oversized or shared bytes even with matching digests", () => {
+  const max = completionFixture("reports.view", Buffer.alloc(2 * 1024 * 1024, 1));
+  assert.deepEqual(complete(max), max.bytes);
+  completionDenied(completionFixture("reports.view", Buffer.alloc(2 * 1024 * 1024 + 1, 1)));
+  const shared = Buffer.from(new SharedArrayBuffer(64)); shared.fill(1);
+  completionDenied(completionFixture("reports.view", shared));
+});
+
+test("report completion: native byte accessors ignore caller-owned properties and copy only the actual byte range", () => {
+  const backing = Buffer.from("prefix|synthetic immutable report bytes|suffix");
+  const c = completionFixture("reports.view", backing.subarray(7, -7)); let invoked = 0;
+  for (const key of ["length", "byteLength", "byteOffset", "buffer"]) {
+    Object.defineProperty(c.bytes, key, { get() { invoked++; throw new Error("synthetic private error"); } });
+  }
+  const result = complete(c);
+  assert.equal(result.toString(), "synthetic immutable report bytes");
+  assert.equal(invoked, 0);
+  backing.fill(0);
+  assert.equal(result.toString(), "synthetic immutable report bytes");
+});
+
+
+test("report completion: simulated asynchronous resolution cannot reuse authority withdrawn while bytes were pending", async () => {
+  for (const mutate of [
+    f => { f.evidence.items[1].releaseState = "withdrawn"; },
+    f => { f.trusted.reportGrants.find(g => g.operation === "reports.download").active = false; },
+    f => { f.trusted.reportEntitlement.decision = "ineligible"; },
+  ]) {
+    const c = completionFixture("reports.download");
+    const bytes = await Promise.resolve().then(() => { mutate(c.current); return Buffer.from(c.bytes); });
+    completionDenied({ ...c, bytes });
+  }
 });

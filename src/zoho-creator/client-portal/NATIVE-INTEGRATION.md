@@ -21,7 +21,7 @@ provider-transport or real-session isolation gate below was closed by that work.
 | --- | --- | --- |
 | Billing history | [`produceBillingCustomerHistoryWithPayments`](billing-customer/billing-customer-history-producer.js), [history/status views](billing-customer/README.md) | Authenticated company/customer binding and qualified customer-scoped provider transport. The original producer still omits payments. |
 | Calls and released reports | [`prepareCompanyCallsPage` and `prepareReleasedReportsPage`](calls-reports/company-call-report-projection.js), [exact source/grant contract](calls-reports/README.md) | Complete scoped source receipts, current operation grants and protected report/artifact actions. |
-| Released-report read plan | [`prepareReleasedReportRead`](calls-reports/README.md#released-report-read-plan-offline-server-only) | Server-only GET descriptor rechecks current entitlement, release and artifact-specific action grants. Protected transport, exact byte verification and post-await reauthorization remain unimplemented. |
+| Released-report read plan | [`prepareReleasedReportRead`](calls-reports/README.md#released-report-read-plan-offline-server-only) | Server-only GET descriptor rechecks current entitlement, release and artifact-specific action grants. Offline byte completion validates supplied current evidence and copied bytes; protected transport and genuine post-await reauthorization remain unqualified. |
 | Read-only call filters | [`prepareFilteredCompanyCallsPage`](calls-reports/README.md#read-only-call-filters-offline-opt-in) | Same protected call boundary; outcome and inclusive UTC start-date filters run before pagination. No native UI, persisted preferences or additional data access. |
 | Saved report dates | [`preparePreferredReleasedReportsPage`](calls-reports/README.md#saved-report-date-preferences-offline-opt-in) | Authenticated save/load storage and current entitlement provenance. This stores no data and restores only a reporting-period range, not report-key selections. |
 | Pending service-area requests | [Scoped provider read plan and status-list projection](company-settings-requests/README.md#pending-request-read-contract) over existing Company_Settings_Requests | Independent `company-settings-requests.read` authority, provider-side Account predicate, terminal complete snapshot and protected native pagination. Does not create or approve requests. |
@@ -84,6 +84,14 @@ grants. Recheck those facts and exact artifact bytes at the actual protected
 view/download action. `canDownload` and an opaque report key grant no access.
 Do not expose raw records, canonical call JSON, recordings, transcripts or private
 artifact locations through native reports.
+
+The offline [`verifyReleasedReportReadBytes` completion check](calls-reports/README.md#released-report-byte-completion-offline-server-only)
+reuses full read authorization, rejects a changed selected target and hashes an
+independent bounded byte copy. Its branded plan and supplied timestamps do not
+prove identity or post-await collection. The protected adapter must obtain new
+authority/source observations after reading bytes and use an honest current clock;
+it must not relabel cached facts. This check creates no portal-to-ReportRuns mapping,
+provider transport, native permission, response headers or delivery authorization.
 
 Save/load preferences under a server-derived owner key covering organization,
 environment, principal, Creator/CRM company and resource; validate the stored

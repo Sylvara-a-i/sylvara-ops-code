@@ -178,10 +178,64 @@ action. After asynchronous resolution, recheck current authority/release/artifac
 identity, freshness and expiry before any delivery, and verify the exact fetched
 bytes against the accepted immutable identity. A cached plan, prior list hint or
 old successful read cannot establish those facts. Deadline/cancellation handling,
-live revocation, immutable storage resolution, actual byte hashing, client-safe
-response headers, audit policy and real-session acceptance remain unimplemented
-native gates. No download, grant, invitation, customer delivery or native access
+live revocation, immutable storage resolution, client-safe response headers,
+audit policy and real-session acceptance remain unimplemented native gates. The
+offline completion check below covers supplied bytes and evidence only. No download, grant, invitation, customer delivery or native access
 is enabled by this source increment.
+
+### Released-report byte completion (offline, server-only)
+
+`verifyReleasedReportReadBytes(plan, bytes, input, trusted, evidence, policy)`
+checks an already-read artifact against freshly supplied current authorization.
+It returns a private copy of the verified Buffer, not an HTTP response or delivery
+authorization. It performs no provider read, lookup, write, clock acquisition,
+logging or customer action. Existing preparation and list output shapes do not
+change.
+
+The initial `plan` must be the exact frozen object issued by
+`prepareReleasedReportRead` in this process. A private WeakMap binds it to the
+validated identity, actor/contact, source configuration, selected report and
+release, artifact, relevant action-grant revisions, entitlement and policy.
+Copied, serialized, forged or cross-process plans reject. This process-local
+brand prevents accidental substitution; it does not authenticate the facts used
+to issue a plan and is not a bearer capability.
+
+Completion reruns full read preparation with all four current envelopes. The
+current operation and private binding must match the original. A new source
+snapshot ID, watermark or observation time may advance when the selected target
+is unchanged and every row remains valid. Unrelated report grants may change;
+view completion does not depend on download permission. Changes to the selected
+report, release, artifact, actor/contact, company, source binding, relevant grants,
+entitlement revision/bounds or freshness policy require restarting preparation.
+Revoked, withdrawn, unaccepted, incomplete, stale, expired or hidden malformed
+facts reject with the same value-free error as other projection failures.
+
+The supplied completion time cannot precede preparation. The oldest current
+source/authority/entitlement observation must be no earlier than preparation time,
+and all normal current freshness and exclusive entitlement-expiry checks still
+apply. **These timestamp checks do not prove post-read collection.** A protected
+adapter must perform the actual read first, then independently collect new
+current authority and source facts, and use an honest current clock. Relabeling
+cached evidence is never sufficient. No timer, deadline, cancellation, live
+revocation protocol or atomic delivery fence is implemented by this synchronous
+function. A further await or delay before delivery needs another current check.
+
+`bytes` must be a nonempty Buffer of at most 2 MiB, matching the existing
+immutable report-delivery reader's maximum. SharedArrayBuffer-backed values,
+strings, arrays, other typed arrays and implicit conversions reject. Native byte
+accessors ignore caller-owned `length`, `buffer` and offset properties. The
+function copies the exact byte range into independent, non-shared storage and
+hashes that copy against the accepted SHA-256 before returning it. It never
+returns the provider's original mutable buffer. The returned Buffer itself is
+mutable; downstream code must not change it or substitute other bytes after
+verification. A protected reader must separately bound bytes while fetching,
+rather than relying on this post-read size check to bound transport memory.
+
+This does not qualify a portal-to-ReportRuns mapping or replace the existing
+immutable WorkDrive reader. Provider identity, immutable version resolution,
+complete source provenance, native sessions, response headers, content-type
+handling and customer-delivery authority remain separate integration gates. The
+synthetic completion tests do not establish native access or TOCTOU closure.
 
 ## Stable pagination
 
