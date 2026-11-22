@@ -1,11 +1,32 @@
 # Revenue Desk Current Delivery State
 
-- Reviewed: **2026-11-10**
+- Reviewed: **2026-11-22** (earlier dated evidence retained)
 - Scope: sanitized repository decisions, completed source work, and remaining qualification
 - Overall classification: **v0.5 completion and live acceptance remain open**
 - This record grants no deployment, activation, spending, charging, customer-delivery, or launch authority.
 
 Use this record for the current delivery checkpoint. The [release contract](../product/free-revenue-leak-test-release-contract.md) defines required target behavior, not installed state. Dated deployment records remain evidence only for their recorded revision, environment, observation, and limits. A source merge, offline test, or green CI run does not prove native deployment or acceptance.
+
+## November 22 Qualification Update
+
+The first priority remains the shared v0.5 foundation and the assisted trial workflow. Keep the existing Development project and reviewed containment as the operating boundary; do not create parallel delivery infrastructure to make a qualification result easier to obtain. Calendar and noncharging Billing preparation may advance independently. The remainder of this runbook preserves earlier dated source and acceptance context; this update controls where the status differs.
+
+| Area | Verified or decided | Still open |
+| --- | --- | --- |
+| Foundation artifact | The existing held Development export matched the retained reference byte for byte and passed complete member verification. This was artifact readback only. | A new candidate still needs independent install/readback evidence if the selected test requires a function update. A connector inspection or a post-pull working tree does not replace complete exported-package evidence. |
+| Native claim | Use the existing synthetic Development table. NoSQL is the candidate for this specific test, not an adopted production replacement. The serial runner and separate contention evidence checks passed offline. | The provider serial and concurrent runs have not occurred. Short-lived authorization, cost review, first real response classification, and independent persisted state still need to qualify. |
+| Assisted Form 2 | The prepared function package and independent inventory checks can be reused. Native saved-configuration reads narrowed the work to field behavior, sender/route contract, and isolation checks. | Retain the existing hold. Saved mapping and wiring do not establish effective authentication, actual webhook behavior, or safe activation. |
+| Voice and reporting | Retained internal-call evidence now ties one historical call to its exact canonical projection and interim private HTML. This closes that historical correlation gap without repeating the call. Offline capture-ordering and composition-inventory checks passed. | Current gateway composition, exact deployment and assignment, final PDF version/readback, Analytics settlement, and delivery remain unverified. The HTML is not the final PDF. |
+| Calendar | Apple remains the operator interface and Bookings remains the confirmed-appointment authority. Retained native evidence supports Bookings-originated export, not reverse appointment mutation or all-calendar conflict coverage. | Qualify the remaining strict-blocking sources and notification ownership. A private attendee-free control event is a candidate, not a selected or deployed integration. |
+| Billing | A read-only metadata check independently confirmed the selected organization is in TEST mode. Existing preview work remains noncharging. | TEST does not establish Usage Billing entitlement or notification isolation. Verify the feature and exact API contract before any authorized synthetic posting. No invoicing or collection is admitted. |
+
+### Qualification Decisions
+
+- **Native ownership:** Begin with a serial conditional claim, a duplicate attempt, and a consistent readback. An unrecognized response is inconclusive, not a rejection or proof of absence. Only then test two distinct, observably overlapping attempts for the same new synthetic key. Require one attributable success, one definitive rejection, and independent readback of exactly the stored winner. Write intent is recorded before dispatch; an unknown write outcome does not trigger a retry. A local simulation, a serial result, or one remaining row alone does not prove atomicity. The database proof does not qualify the deployed workflow.
+- **Form configuration:** Coordinate the work as one decision package without treating changes as atomic. Reversible field settings, irreversible field encryption, sender configuration, route enforcement, and internal acceptance have separate preconditions and recovery boundaries. Reuse reviewed bytes; resolve the demonstrated configuration and isolation questions before any live change.
+- **Transcript and report:** The authenticated gateway is the composition boundary for private capture before event minimization and queue admission. Keep raw transcript content out of downstream jobs, receipts, and Analytics. An exact replay may resume pending work but must not dispatch a second effect. Qualification must cover missing or interrupted capture and a lost acknowledgment. Reuse the existing reporting implementation and verify the authorized final artifact and settled receivers rather than paying to repeat historical evidence.
+- **Booking lifecycle:** Distinguish availability blocks from host intent. Preserve original calendar events; an ordinary Busy change must not mutate a booking or send a notice. A host move proposes a replacement without changing the confirmed booking until acceptance. Keep guest invitations separate from any private host-controlled event. If the workflow cannot establish one notification owner, use native Bookings for host appointment actions.
+- **Commercial and release controls:** Keep billing preview, usage submission, invoice creation, collection, and communication as separate effects. Document uncertainty and independently reconcile receiver state before retrying. Existing permissions, historic receipts, source merges, and this checkpoint grant no new native access, spending, deployment, customer effects, or launch authority.
 
 ## Completed Repository Work
 
@@ -50,7 +71,7 @@ is approved here.
 
 Provider-support guidance reviewed on 2026-11-10 states that conditional ZCQL updates are not guaranteed atomic under concurrent requests. A predicate, affected-row count, or read-then-update sequence is not proof of compare-and-set or an exclusive claim. Existing native qualification holds remain required.
 
-Provider-recommended NoSQL conditional updates are a candidate for investigation, not a selected or deployed replacement. Qualify the exact contract, concurrent winner/loser behavior, retry and ambiguous-outcome semantics, persistence, access controls, limits, and cost before choosing an operational route. Do not weaken a safety guard or assume free capacity to make a test pass. Spending remains separately authorized.
+Provider NoSQL conditional operations are the qualification candidate described in the November 22 update, not a selected or deployed production replacement. Qualify the exact contract, concurrent winner/loser behavior, retry and ambiguous-outcome semantics, persistence, access controls, limits, and cost before choosing an operational route. Do not weaken a safety guard or assume free capacity to make a test pass. Spending remains separately authorized.
 
 The [Catalyst standard](../zoho/standards/catalyst.md#native-atomicity-qualification) owns the reusable concurrency requirement. This checkpoint publishes no private topology, security analysis, or native artifact.
 
