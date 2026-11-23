@@ -7,10 +7,16 @@ No deployment, acceptance migration or merge is authorized by this document.
 
 ## Existing source and smallest gap
 
-The commercial source of truth is `docs/product/README.md`: $0.40 per connected
-AI minute for Launch/Growth/Scale, with no bundled minutes. It explicitly requires
-the exact minute definition, rounding, exclusions, corrections and dispute rules
-before invoicing. Commercial approval is not provider/runtime acceptance.
+The [commercial reconciliation boundary](../../../../docs/product/README.md#commercial-reconciliation-boundary)
+marks the repository's published prices and pricing rules as historical, not
+current offer authority. Replacement commercial terms are not published here.
+The exact minute definition, rounding, exclusions, corrections and dispute rules
+still require approval and implementation before invoicing. Commercial approval
+is not provider/runtime acceptance.
+
+The [v1.0 allowance preview](usage-allowance-preview.md) adds explicitly synthetic
+whole-unit examples while retaining commercial approval holds. It does not
+change the existing evidence-only v1/v2 contracts described here.
 
 The existing `lib/commercial-terms.js` terms-v1 digest binds currency, recurring
 interval, connected-minute price, management prices and setup prices. The paid

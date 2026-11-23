@@ -97,6 +97,14 @@ Duplicate, conflicting, unknown-duration, incomplete-snapshot and cross-period
 observations retain the existing conservative handling. V1 exports and output
 semantics remain available unchanged. Neither path is imported by a runtime route.
 
+The separate [v1.0 allowance preview](usage-allowance-preview.md) composes this
+evidence with explicitly synthetic whole-minute and SMS-segment scenarios. Its
+exact-cent examples retain all commercial approval and policy holds; they do not
+make raw durations billable or establish current Sylvara prices. Unknown SMS
+segmentation, fractional minutes, incomplete evidence and conflicting revisions
+withhold the affected scenario amounts. The existing v1/v2 outputs above remain
+unchanged.
+
 ## Invoice corrections and late usage qualification
 
 Official vendor behavior reviewed on 2026-11-10 remains **Reference**, not verified
