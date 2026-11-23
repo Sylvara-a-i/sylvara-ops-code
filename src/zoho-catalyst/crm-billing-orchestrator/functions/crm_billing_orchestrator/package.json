@@ -15,7 +15,7 @@
     "ci": "npm run check && npm run check:billing-read && npm run check:commercial-preview && npm test",
     "artifact:build": "node ../../scripts/build-development-artifact.js",
     "artifact:deploy-development": "node ../../scripts/build-development-artifact.js --deploy",
-    "check:commercial-preview": "node --check lib/commercial-terms-v2.js && node --check ../../tools/preview-usage-period.js"
+    "check:commercial-preview": "node --check lib/commercial-terms-v2.js && node --check ../../tools/preview-usage-period.js && node --check ../../tools/usage-allowance-scenario.js"
   },
   "dependencies": {
     "zcatalyst-sdk-node": "3.4.0"
