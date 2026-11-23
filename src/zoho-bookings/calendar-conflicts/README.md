@@ -8,6 +8,12 @@ calendar verification is included. Bookings remains the appointment and offered
 availability owner. Source providers remain the owners of personal busy time.
 This tool neither copies nor changes those records.
 
+The adjacent [offline v1.0 availability reconciler](availability-reconciler.md)
+adds synthetic-only private Busy projection planning and a local destination
+simulation. It preserves originals and keeps Apple as the daily interface,
+Google as proposed transport, and Bookings as appointment authority. It does not
+qualify a bridge or change this checker's provider-access boundary.
+
 The practical question is whether every calendar in the supplied complete source
 inventory contributes to a selected conflict calendar and whether any offered
 Bookings slot overlaps source busy time, including service duration and buffers.
