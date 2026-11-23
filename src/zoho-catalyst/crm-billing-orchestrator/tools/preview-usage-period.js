@@ -4,6 +4,7 @@
 const crypto = require("node:crypto");
 const { parsePaidCommercialTerms } = require("../functions/crm_billing_orchestrator/lib/commercial-terms");
 const { parseCommercialTermsV2, selectCommercialTermsV2 } = require("../functions/crm_billing_orchestrator/lib/commercial-terms-v2");
+const { validateScenarioInput, previewAllowanceScenario, freeze } = require("./usage-allowance-scenario");
 
 const POLICY_KEYS = Object.freeze([
   "connectedTimeDefinition", "rounding", "exclusions", "periodAttribution",
@@ -79,6 +80,35 @@ function previewUsagePeriodV2(input) {
   if (!exact(input, ["scope", "period", "snapshot", "commercialTermsJson", "plan", "frequency", "policy", "records"])) fail();
   const policy = deriveUsagePolicyReviewContractV2(input.commercialTermsJson, input.plan, input.frequency, input.policy);
   return previewUsageEvidence(input, policy, true);
+}
+
+/**
+ * v1.0 product preparation: hypothetical monthly allowance arithmetic only.
+ * A caller must explicitly select synthetic mode. No policy text or reference
+ * grants approval, and neither exact cents nor complete fixtures enable billing.
+ */
+function previewUsageAllowancePeriod(input) {
+  validateScenarioInput(input, POLICY_KEYS);
+  const { scenarioBasis, allowancePeriodMonths, smsSnapshot, smsRecords, ...projection } = input;
+  const evidence = previewUsagePeriodV2(projection);
+  const { scenario, canonicalSmsRows } = previewAllowanceScenario(input, evidence);
+  return freeze({
+    ...evidence,
+    status: "held_synthetic_scenario",
+    previewVersion: "1.0",
+    previewRevision: `usage-allowance-preview-v1:${hash([evidence.previewRevision, scenarioBasis,
+      allowancePeriodMonths, smsSnapshot.revision, smsSnapshot.complete, canonicalSmsRows,
+      smsRecords.length - canonicalSmsRows.length])}`,
+    // Supplied period boundaries describe a fixture, not an approved reset rule.
+    period: { startMs: input.period.startMs, endMs: input.period.endMs },
+    allowanceScenario: scenario,
+    holds: [...new Set([...evidence.holds, ...scenario.holds, "synthetic_scenario_only",
+      "allowance_window_unverified", "fractional_voice_rounding_unresolved",
+      "late_events_and_corrections_unresolved", "sms_eligibility_unverified"])].sort(),
+    postingCapability: false,
+    paidExecutionEligible: false,
+    billingAuthority: false,
+  });
 }
 
 function previewUsageEvidence(input, policy, version2) {
@@ -162,4 +192,4 @@ function previewUsageEvidence(input, policy, version2) {
 }
 
 module.exports = { POLICY_KEYS, deriveUsagePolicyReviewContract, previewUsagePeriod,
-  deriveUsagePolicyReviewContractV2, previewUsagePeriodV2 };
+  deriveUsagePolicyReviewContractV2, previewUsagePeriodV2, previewUsageAllowancePeriod };
