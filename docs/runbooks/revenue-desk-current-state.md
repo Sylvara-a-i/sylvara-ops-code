@@ -1,15 +1,22 @@
 # Revenue Desk Current Delivery State
 
-- Reviewed: **2026-11-22** (earlier dated evidence retained)
+- Reviewed: **2026-11-23** (earlier dated evidence retained)
 - Scope: sanitized repository decisions, completed source work, and remaining qualification
 - Overall classification: **v0.5 completion and live acceptance remain open**
 - This record grants no deployment, activation, spending, charging, customer-delivery, or launch authority.
 
 Use this record for the current delivery checkpoint. The [release contract](../product/free-revenue-leak-test-release-contract.md) defines required target behavior, not installed state. Dated deployment records remain evidence only for their recorded revision, environment, observation, and limits. A source merge, offline test, or green CI run does not prove native deployment or acceptance.
 
-## November 22 Qualification Update
+## November 23 Foundation Evidence
 
-The first priority remains the shared v0.5 foundation and the assisted trial workflow. Keep the existing Development project and reviewed containment as the operating boundary; do not create parallel delivery infrastructure to make a qualification result easier to obtain. Calendar and noncharging Billing preparation may advance independently. The remainder of this runbook preserves earlier dated source and acceptance context; this update controls where the status differs.
+- **Live serial SQL check passed in Development.** On a dedicated synthetic-only Data Store table, the first claim succeeded, a distinct attempt for the same required UNIQUE key returned a key-specific duplicate error, and a separate terminal read found the original row unchanged.
+- **Live two-writer connector check produced one winner.** Two distinct calls were outstanding at the connector caller before either completed. Catalyst accepted one claim and returned a key-specific duplicate error for the other. A separate terminal read confirmed one unchanged winner for the new key and an unchanged original serial test row.
+- **Provider request overlap remains unverified.** The connector does not expose physical dispatch and response-start timings or prove that it did not serialize or replay calls. Do not promote this result to full native contention, ambiguous-effect recovery, production authority, or customer acceptance. The next evidence is one bounded contention pair with observable request dispatch and response timing at the API boundary, not another opaque connector rerun.
+- This evidence applies to the relational Data Store path only. It does not qualify the independent NoSQL candidate or change any product hold.
+
+## November 22 Qualification Update (Historical)
+
+The first priority remains the shared v0.5 foundation and the assisted trial workflow. Keep the existing Development project and reviewed containment as the operating boundary; do not create parallel delivery infrastructure to make a qualification result easier to obtain. Calendar and noncharging Billing preparation may advance independently. The remainder of this runbook preserves earlier dated source and acceptance context; the newer dated evidence above controls where the status differs.
 
 | Area | Verified or decided | Still open |
 | --- | --- | --- |
