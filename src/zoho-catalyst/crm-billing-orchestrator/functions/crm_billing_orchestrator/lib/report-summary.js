@@ -219,6 +219,31 @@ function validateReportOperation(config, operation, dealId) {
   return Object.freeze({ summary, identity });
 }
 
+// CRM DateTime fields persist at whole-second resolution; signed evidence does not.
+function projectReportCrmDateTime(value) {
+  if (typeof value !== "string" || !TIMESTAMP.test(value)
+    || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString() !== value) {
+    fail("CRM report datetime is invalid");
+  }
+  return value.slice(0, 19) + "+00:00";
+}
+function crmSecond(value) {
+  if (typeof value !== "string") return NaN;
+  const match = /^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.\d{1,3})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.exec(value);
+  if (!match) return NaN;
+  const local = Date.parse(match[1] + ".000Z");
+  if (!Number.isFinite(local) || new Date(local).toISOString().slice(0, 19) !== match[1]) return NaN;
+  return Math.floor(Date.parse(value) / 1000);
+}
+function reportCrmPatchMatches(deal, patch) {
+  return Object.entries(patch).every(([field, expected]) => (
+    expected === null ? Object.hasOwn(deal, field) && deal[field] === null
+      : ["Test_Start_At", "Test_End_At"].includes(field)
+        ? crmSecond(deal[field]) === crmSecond(expected)
+        : deal[field] === expected
+  ));
+}
+
 function reportSummaryPatch(config, summary) {
   const boundedInteger = (value, mode = "round") => {
     if (value === null) return null;
@@ -241,8 +266,8 @@ function reportSummaryPatch(config, summary) {
   }
   return Object.freeze({
     Test_Status: summary.testStatus === "Rolled Back" ? "Rolled Back" : config.testCompletedStatusValue,
-    Test_Start_At: summary.testStartAt,
-    Test_End_At: summary.testEndAt,
+    Test_Start_At: projectReportCrmDateTime(summary.testStartAt),
+    Test_End_At: projectReportCrmDateTime(summary.testEndAt),
     Test_End_Reason: summary.testEndReason,
     Call_Totals_Reconciled: true,
     Test_Calls_Reaching_Route: boundedInteger(summary.callsCaptured),
@@ -283,5 +308,6 @@ module.exports = {
   reportSummaryIdentity,
   reportSummaryOperationKey,
   reportSummaryPatch,
+  reportCrmPatchMatches,
   validateReportOperation,
 };

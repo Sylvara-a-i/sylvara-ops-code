@@ -57,7 +57,9 @@ test('manual zero-call and settled early-stop closeouts preserve rollback and re
     assert.deepEqual(deployment(h), before);
     const crm = h.crm.contexts.get(h.configurations[0].crmDealId).deal;
     assert.equal(crm.Test_Status, 'Rolled Back'); assert.equal(crm.Stage, 'Closed Lost');
-    assert.equal(crm.Test_End_At, before.STOPPED_AT); assert.equal(crm.Rollback_Completed_At, before.STOPPED_AT);
+    assert.match(crm.Test_End_At, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00$/);
+    assert.equal(Date.parse(crm.Test_End_At), Date.parse(before.STOPPED_AT));
+    assert.equal(crm.Rollback_Completed_At, before.STOPPED_AT);
   }
 });
 

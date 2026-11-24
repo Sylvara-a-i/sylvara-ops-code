@@ -21,6 +21,8 @@ const REPORT_RECONCILIATION_OUTCOMES = new Set([
   "report_binding_stale",
   "report_revision_protected",
   "report_summary_readback_required",
+  "report_write_acknowledged",
+  "report_write_rejected",
   "report_test_status_conflict",
 ]);
 const CLAIM_ACTION_SET = new Set([...ACTIONS, TEST_CUSTOMER_PROVISIONING_ACTION]);

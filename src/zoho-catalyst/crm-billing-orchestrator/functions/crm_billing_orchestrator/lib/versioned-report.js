@@ -5,9 +5,11 @@ const { isExpiryClosurePredecessor } = require("./expiry-closure");
 const { isReportSummaryPreWrite } = require("./idempotency");
 const {
   ReportSummaryError, isNewerReport, reportSummaryPatch, validateReportOperation,
+  reportCrmPatchMatches: patchMatches,
 } = require("./report-summary");
 
 const CONFIRMED = "report_summary_readback_confirmed";
+const WRITE_ACK = "report_write_acknowledged";
 const PROTECTED_FIELDS = Object.freeze([
   "Results_Review_At", "Subscription_Acceptance_Status", "Subscription_Accepted_At",
   "Subscription_Acceptance_Version", "Subscription_Start_Date", "Subscription_Status",
@@ -18,15 +20,6 @@ function fail() {
   throw new ReportSummaryError("Terminal report revision requires reconciliation", {
     ambiguous: true, publicCode: "reconciliation_required", status: 503,
   });
-}
-
-function patchMatches(deal, patch) {
-  return Object.entries(patch).every(([field, expected]) => (
-    expected === null ? Object.hasOwn(deal, field) && deal[field] === null
-      : ["Test_Start_At", "Test_End_At"].includes(field)
-        ? Number.isFinite(Date.parse(deal[field])) && Date.parse(deal[field]) === Date.parse(expected)
-        : deal[field] === expected
-  ));
 }
 
 /** Serialize terminal revisions without re-opening a test or retrying an unknown write.
@@ -56,10 +49,10 @@ async function syncVersionedReport({
   const rolledBack = summary.schemaVersion === 3 && summary.testStatus === "Rolled Back";
   const exactRollback = (deal) => deal.Test_Status === "Rolled Back" && deal.Stage === "Closed Lost"
     && deal.Test_End_Reason === summary.testEndReason
-    && ["Test_Start_At", "Test_End_At", "Rollback_Completed_At"].every((field) => (
-      typeof deal[field] === "string" && Number.isFinite(Date.parse(deal[field]))
-      && Date.parse(deal[field]) === Date.parse(field === "Test_Start_At" ? summary.testStartAt : summary.testEndAt)
-    ));
+    && patchMatches(deal, { Test_Start_At: patch.Test_Start_At, Test_End_At: patch.Test_End_At })
+    && typeof deal.Rollback_Completed_At === "string"
+    && Number.isFinite(Date.parse(deal.Rollback_Completed_At))
+    && Date.parse(deal.Rollback_Completed_At) === Date.parse(summary.testEndAt);
   // Rollback is already an authoritative CRM terminal state. Add derived report
   // totals only; never use a summary to create, reclassify or reopen a rollback.
   const protectedState = (deal) => (rolledBack ? !exactRollback(deal)
@@ -85,7 +78,9 @@ async function syncVersionedReport({
     return { row, summary: parsed, patch: reportSummaryPatch(config, parsed) };
   };
   const finish = async (cursor) => {
-    if (!patchMatches((await freshState()).deal, patch)) await contain(cursor);
+    const fresh = await freshState();
+    if (protectedState(fresh.deal)) await contain(cursor, "report_revision_protected");
+    if (!patchMatches(fresh.deal, patch)) await contain(cursor);
     let completed = cursor;
     if (cursor.STATUS !== "completed") {
       const result = await operationStore.transitionReportSummary(cursor, "completed", CONFIRMED, nowIso());
@@ -103,10 +98,6 @@ async function syncVersionedReport({
   const previous = await head(guard);
   if (operation.STATUS === "completed") {
     const fresh = await freshState();
-    if (guard?.inflightOperationKey === key && patchMatches(fresh.deal, patch)) {
-      await finish(operation);
-      return success(true);
-    }
     if (guard?.inflightOperationKey) fail();
     if (previous && patchMatches(fresh.deal, previous.patch)
       && (previous.row.OPERATION_KEY === key || isNewerReport(summary, previous.summary))) {
@@ -117,7 +108,7 @@ async function syncVersionedReport({
   const readbackOnly = operation.STATUS === "reconciliation_required"
     || (operation.STATUS === "processing" && !isReportSummaryPreWrite(operation));
   if (readbackOnly) {
-    if (guard?.inflightOperationKey !== key) fail();
+    if (guard?.inflightOperationKey !== key || operation.LAST_OUTCOME !== WRITE_ACK) fail();
     await finish(operation);
     return success(true);
   }
@@ -160,11 +151,17 @@ async function syncVersionedReport({
   const started = await operationStore.beginReportSummaryWrite(claim.row, claimToken, nowIso());
   if (!started.started) fail();
   try {
-    await crmClient.updateDealReportSummary(refreshed.deal, patch);
-  } catch {
-    await contain(started.row);
+    await crmClient.updateDealReportSummary(refreshed.deal, patch, { requireExactAck: true });
+  } catch (error) {
+    await contain(started.row, error?.publicCode === "record_stale"
+      ? "report_write_rejected" : "report_summary_readback_required");
   }
-  await finish(started.row);
+  const acknowledged = await operationStore.transitionReportSummary(
+    started.row, "reconciliation_required", WRITE_ACK, nowIso(),
+  );
+  if (!acknowledged.transitioned || acknowledged.row?.STATUS !== "reconciliation_required"
+    || acknowledged.row.LAST_OUTCOME !== WRITE_ACK) fail();
+  await finish(acknowledged.row);
   return success(false);
 }
 

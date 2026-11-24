@@ -304,18 +304,19 @@ test('duplicate signed event has one intended effect and cannot cross company ow
     'client_B', 'deployment_A', h.runtime.clock.value), { code: 'REPORT_OWNERSHIP_CONFLICT' });
 }));
 
-test('ambiguous CRM write is reconciled by exact readback, never blindly rewritten', () => guarded(async () => {
+test('ambiguous CRM write with matching readback stays held and never resends', () => guarded(async () => {
   const h = await settledOneCall({ ambiguousWrite: true });
   const operation = h.runtime.store.rows.get('CRMBillingOperations')[0];
   await assert.rejects(() => h.dispatcher.dispatch(operation.CRM_DEAL_ID, operation.OPERATION_KEY),
     { code: 'CRM_REPORT_DISPATCH_UNAVAILABLE' });
   assert.equal(operation.STATUS, 'reconciliation_required');
   assert.equal(h.crm.effects.writes, 1);
-  const result = await h.dispatcher.dispatch(operation.CRM_DEAL_ID, operation.OPERATION_KEY);
-  assert.equal(result.duplicate, true);
-  assert.equal(operation.STATUS, 'completed');
+  const readsBeforeReplay = h.crm.effects.reads;
+  await assert.rejects(() => h.dispatcher.dispatch(operation.CRM_DEAL_ID, operation.OPERATION_KEY),
+    { code: 'CRM_REPORT_DISPATCH_UNAVAILABLE' });
+  assert.equal(operation.STATUS, 'reconciliation_required');
   assert.equal(h.crm.effects.writes, 1);
-  assert.ok(h.crm.effects.reads >= 4);
+  assert.ok(h.crm.effects.reads > readsBeforeReplay);
 }));
 
 test('stale operation cursor cannot steal the report write claim', () => guarded(async () => {
@@ -379,7 +380,7 @@ test('two concurrent deliveries of a newer report produce one conditional CRM ef
   assert.equal(revision.STATUS, 'completed');
 }));
 
-test('ambiguous newer Completed write requires readback and never a duplicate update', () => guarded(async () => {
+test('ambiguous newer Completed write leaves the original confirmed and never resends', () => guarded(async () => {
   const options = {};
   const { h, original, revision } = await pendingLateRevision(options);
   options.ambiguousWrite = true;
@@ -387,9 +388,12 @@ test('ambiguous newer Completed write requires readback and never a duplicate up
     { code: 'CRM_REPORT_DISPATCH_UNAVAILABLE' });
   assert.equal(h.crm.effects.writes, 2);
   assert.equal(revision.STATUS, 'reconciliation_required');
-  assert.equal((await h.dispatcher.dispatch(revision.CRM_DEAL_ID, revision.OPERATION_KEY)).duplicate, true);
-  assert.equal(revision.STATUS, 'completed');
+  const readsBeforeReplay = h.crm.effects.reads;
+  await assert.rejects(() => h.dispatcher.dispatch(revision.CRM_DEAL_ID, revision.OPERATION_KEY),
+    { code: 'CRM_REPORT_DISPATCH_UNAVAILABLE' });
+  assert.equal(revision.STATUS, 'reconciliation_required');
   assert.equal(h.crm.effects.writes, 2);
+  assert.ok(h.crm.effects.reads > readsBeforeReplay);
   assert.equal(h.crm.contexts.get('400000001').deal.Test_Calls_Reaching_Route, 2);
   assert.deepEqual(h.runtime.store.rows.get('CRMBillingOperations')
     .find((row) => row.OPERATION_KEY === original.OPERATION_KEY), original);
