@@ -1,11 +1,23 @@
 # Revenue Desk Current Delivery State
 
-- Reviewed: **2026-11-23** (earlier dated evidence retained)
+- Reviewed: **2026-11-24** (earlier dated evidence retained)
 - Scope: sanitized repository decisions, completed source work, and remaining qualification
 - Overall classification: **v0.5 completion and live acceptance remain open**
 - This record grants no deployment, activation, spending, charging, customer-delivery, or launch authority.
 
 Use this record for the current delivery checkpoint. The [release contract](../product/free-revenue-leak-test-release-contract.md) defines required target behavior, not installed state. Dated deployment records remain evidence only for their recorded revision, environment, observation, and limits. A source merge, offline test, or green CI run does not prove native deployment or acceptance.
+
+## November 24 Qualification Checkpoint
+
+| Area | Verified | Still held |
+| --- | --- | --- |
+| v0.5 Foundation | One storage-only Development run verified a scoped synthetic insert and independent complete readback; previously observed test rows were preserved. Earlier single-winner contention evidence remains valid within its observed scope. | The product closure path, real operation-ledger durability, CRM mutation, and ambiguous-effect recovery have not qualified. Do not repeat the synthetic run as a substitute. |
+| v0.5 assisted setup | The existing Form 2 build was independently matched to its Development installation and remains inactive. | Effective provider authentication, saved field behavior and sender/route isolation still need qualification before assisted acceptance. |
+| v0.5 voice and reporting | Retained internal call evidence was matched to the canonical projection. The CRM timestamp/report change passed its component suite; canonical repository verification on the composed change is pending. Historical PDF readback and verification of returned bytes have offline evidence only. | Native PDF version readback and CRM/Analytics reporting parity remain open. No customer delivery or additional call is implied. |
+| v1 Calendar | Offline reconciliation is merged on main. | Live Family and iCloud visibility, supported collector coverage, and Bookings behavior remain unqualified. |
+| v1 Billing | Noncharging usage preview is merged on main. | Exact provider lookup, TEST qualification and commercial approvals remain open; no usage posting, invoices, collection, or customer notification is authorized. |
+
+Nothing in this checkpoint authorizes enablement, delivery or launch.
 
 ## November 23 Foundation Evidence
 
