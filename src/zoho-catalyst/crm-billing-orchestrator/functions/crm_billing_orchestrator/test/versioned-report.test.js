@@ -147,7 +147,7 @@ test("same-call late analysis revises Completed; old/latest replay preserve hist
   const receipt = structuredClone(h.rows.get(operation(first).OPERATION_KEY));
   assert.equal((await h.run(newer)).duplicate, false);
   assert.equal(h.state.deal.Test_Status, "Completed");
-  assert.equal(h.state.deal.Test_End_At, first.testEndAt);
+  assert.equal(h.state.deal.Test_End_At, reportSummaryPatch(config, first).Test_End_At);
   assert.equal(h.state.deal.Test_Bookable_Opportunities, 1);
   assert.equal((await h.run(first)).duplicate, true);
   assert.equal((await h.run(newer)).duplicate, true);
@@ -208,7 +208,7 @@ test("untrusted Completed state, prior patch edits, missing receipt and Account 
   await assert.rejects(h.run(summary(2))); assert.equal(h.writes, 0);
 });
 
-test("ambiguous persistence reconciles through exact readback with no resend; stale unknown stays held", async () => {
+test("unknown acknowledgement holds with or without persistence and never resends", async () => {
   for (const persisted of [true, false]) {
     const h = harness(); await h.run(summary());
     const changed = summary(2, { qualifiedOpportunities: 0 });
@@ -219,14 +219,9 @@ test("ambiguous persistence reconciles through exact readback with no resend; st
     await assert.rejects(h.run(changed));
     const blockedKey = operation(changed).OPERATION_KEY;
     assert.equal(h.guard.inflightOperationKey, blockedKey);
-    if (persisted) {
-      assert.equal((await h.run(changed)).duplicate, true);
-      assert.equal(h.guard.inflightOperationKey, null);
-    } else {
-      await assert.rejects(h.run(changed));
-      await assert.rejects(h.run(summary(3)));
-      assert.equal(h.guard.inflightOperationKey, blockedKey);
-    }
+    await assert.rejects(h.run(changed), { publicCode: "reconciliation_required" });
+    await assert.rejects(h.run(summary(3)));
+    assert.equal(h.guard.inflightOperationKey, blockedKey);
     assert.equal(h.writes, 2);
   }
 });
@@ -255,7 +250,9 @@ test("verified rollback accepts derived totals and source revisions while preser
   assert.equal((await h.run(first)).duplicate, true);
   assert.equal((await h.run(newer)).duplicate, true);
   for (const field of ["Stage", "Test_Status", "Test_Start_At", "Test_End_At", "Test_End_Reason", "Rollback_Completed_At"]) {
-    assert.equal(h.state.deal[field], original[field]);
+    if (field === "Test_Start_At" || field === "Test_End_At") {
+      assert.equal(Date.parse(h.state.deal[field]), Date.parse(original[field]));
+    } else assert.equal(h.state.deal[field], original[field]);
   }
   assert.equal(h.writes, 2);
 });
@@ -284,4 +281,74 @@ test("rollback proof drifting after a write never completes an operation or retr
   await assert.rejects(h.run(selected)); await assert.rejects(h.run(selected));
   assert.equal(h.writes, 1);
   assert.notEqual(h.rows.get(operation(selected).OPERATION_KEY).STATUS, "completed");
+});
+
+test("fractional projection, historic signed identity, and unknown acknowledgement hold without resend", async () => {
+  const h = harness();
+  const selected = summary(1, { testStartAt: "2026-09-01T00:00:00.117Z", testEndAt: "2026-09-08T00:00:00.987Z" });
+  const historical = operation(selected);
+  h.rows.set(historical.OPERATION_KEY, structuredClone(historical));
+  h.updateBehavior((state, patch) => {
+    assert.equal(patch.Test_Start_At, "2026-09-01T00:00:00+00:00");
+    assert.equal(patch.Test_End_At, "2026-09-08T00:00:00+00:00");
+    assert.equal("Stage" in patch || "Results_Review_At" in patch || "Rollback_Completed_At" in patch, false);
+    Object.assign(state.deal, patch, { Test_Start_At: "2026-08-31T19:00:00-05:00", Test_End_At: "2026-09-07T19:00:00-05:00" });
+    throw Error("synthetic lost ack");
+  });
+  await assert.rejects(h.run(selected));
+  await assert.rejects(h.run(selected), { publicCode: "reconciliation_required" });
+  await assert.rejects(h.run(selected), { publicCode: "reconciliation_required" });
+  assert.equal(h.guard.inflightOperationKey, historical.OPERATION_KEY);
+  const row = h.rows.get(historical.OPERATION_KEY);
+  assert.equal(row.OPERATION_PAYLOAD_JSON, historical.OPERATION_PAYLOAD_JSON);
+  assert.equal(row.OPERATION_FINGERPRINT, historical.OPERATION_FINGERPRINT);
+  assert.notEqual(reportSummaryIdentity(config, { ...selected, testEndAt: "2026-09-08T00:00:00.988Z" }).operationFingerprint, historical.OPERATION_FINGERPRINT);
+  assert.equal(h.writes, 1);
+});
+
+test("fractional projection, historic signed identity, and positive ACK tolerate equivalent whole-second readback", async () => {
+  const h = harness();
+  const selected = summary(1, { testStartAt: "2026-09-01T00:00:00.117Z", testEndAt: "2026-09-08T00:00:00.987Z" });
+  const historical = operation(selected);
+  h.rows.set(historical.OPERATION_KEY, structuredClone(historical));
+  h.updateBehavior((state, patch) => {
+    assert.equal(patch.Test_Start_At, "2026-09-01T00:00:00+00:00");
+    assert.equal(patch.Test_End_At, "2026-09-08T00:00:00+00:00");
+    assert.equal("Stage" in patch || "Results_Review_At" in patch || "Rollback_Completed_At" in patch, false);
+    Object.assign(state.deal, patch, { Test_Start_At: "2026-08-31T19:00:00-05:00", Test_End_At: "2026-09-07T19:00:00-05:00" });
+  });
+  await h.run(selected);
+  assert.equal((await h.run(selected)).duplicate, true);
+  assert.equal((await h.run(selected)).duplicate, true);
+  const row = h.rows.get(historical.OPERATION_KEY);
+  assert.equal(row.OPERATION_PAYLOAD_JSON, historical.OPERATION_PAYLOAD_JSON);
+  assert.equal(row.OPERATION_FINGERPRINT, historical.OPERATION_FINGERPRINT);
+  assert.notEqual(reportSummaryIdentity(config, { ...selected, testEndAt: "2026-09-08T00:00:00.988Z" }).operationFingerprint, historical.OPERATION_FINGERPRINT);
+  assert.equal(h.writes, 1);
+});
+
+test("adjacent second, impossible calendar, date-only or numeric readback never completes and never resends", async () => {
+  for (const wrong of ["2026-09-08T00:00:01+00:00", "2026-08-39T00:00:00+00:00", "2026-09-08", 1788825600000]) {
+    const h = harness(), selected = summary(1, { testEndAt: "2026-09-08T00:00:00.987Z" });
+    h.updateBehavior((state, patch) => { Object.assign(state.deal, patch, { Test_End_At: wrong }); });
+    await assert.rejects(h.run(selected));
+    await assert.rejects(h.run(selected));
+    assert.equal(h.writes, 1);
+  }
+});
+
+test("report-sent rollback timestamps compare at CRM precision, rollback evidence remains exact", async () => {
+  const selected = summary(1, { testStatus: "Rolled Back", testEndReason: "Sylvara Stopped", testStartAt: "2026-09-01T00:00:00.117Z", testEndAt: "2026-09-08T00:00:00.987Z" });
+  for (const [clock, ok] of [[selected.testEndAt, true], ["2026-09-08T00:00:00+00:00", false]]) {
+    const h = harness();
+    Object.assign(h.state.deal, { Stage: "Closed Lost", Test_Status: "Rolled Back", Test_Start_At: "2026-08-31T19:00:00-05:00", Test_End_At: "2026-09-08T00:00:00+00:00", Test_End_Reason: selected.testEndReason, Rollback_Completed_At: clock });
+    if (ok) {
+      await h.run(selected);
+      assert.equal(h.state.deal.Rollback_Completed_At, clock);
+      assert.equal(h.writes, 1);
+    } else {
+      await assert.rejects(h.run(selected));
+      assert.equal(h.writes, 0);
+    }
+  }
 });

@@ -1,5 +1,6 @@
 """Synthetic contract tests; these never contact calendar or booking providers."""
 
+from contextlib import closing
 import copy
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
@@ -641,7 +642,7 @@ class OfflineStoreTests(unittest.TestCase):
         return reconciler.run_offline(self.plan, self.snapshot, self.db, now=now)
 
     def read_store(self):
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             row = connection.execute("SELECT state_json, events_json FROM offline_reconciliation").fetchone()
         return tuple(json.loads(item) for item in row)
 
@@ -687,7 +688,7 @@ class OfflineStoreTests(unittest.TestCase):
         drifted = copy.deepcopy(original_events)
         drifted.pop()
         drifted[0]["body"].update(visibility="public", attendees=["fixture@example.invalid"])
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute("UPDATE offline_reconciliation SET events_json = ?",
                                (json.dumps(drifted),))
         result = self.run_store()
@@ -702,7 +703,7 @@ class OfflineStoreTests(unittest.TestCase):
             source["observed_at"] = NOW
             source["upstream_observed_at"] = NOW
             source["events"] = []
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute("CREATE TRIGGER fixture_abort BEFORE INSERT ON offline_reconciliation "
                                "BEGIN SELECT RAISE(ABORT, 'synthetic failure'); END")
         result = self.run_store(now=shifted(NOW, 60))
@@ -720,7 +721,7 @@ class OfflineStoreTests(unittest.TestCase):
     def test_corrupt_checkpoint_is_held_without_resetting_destination(self):
         self.assertEqual(self.run_store()["status"], "ready")
         _, before_events = self.read_store()
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute("UPDATE offline_reconciliation SET state_json = ?", ('{"broken":true}',))
         result = self.run_store()
         self.assertEqual(result["status"], "held", result)
@@ -734,7 +735,7 @@ class OfflineStoreTests(unittest.TestCase):
             source["upstream_observed_at"] = NOW
             source["events"] = []
         self.assertEqual(self.run_store(now=shifted(NOW, 60))["status"], "ready")
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute("UPDATE offline_reconciliation SET state_json = 'null'")
         self.snapshot = old_snapshot
         result = self.run_store(now=shifted(NOW, 60))
@@ -743,7 +744,7 @@ class OfflineStoreTests(unittest.TestCase):
 
     def test_blob_checkpoint_is_held_without_uncaught_traceback(self):
         self.assertEqual(self.run_store()["status"], "ready")
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute("UPDATE offline_reconciliation SET state_json = ?", (b"{}",))
         result = self.run_store()
         self.assertEqual(result["status"], "held", result)
@@ -751,32 +752,32 @@ class OfflineStoreTests(unittest.TestCase):
 
     def test_missing_durable_singleton_cannot_be_silently_reinitialized(self):
         self.assertEqual(self.run_store()["status"], "ready")
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute("DELETE FROM offline_reconciliation")
         result = self.run_store()
         self.assertEqual(result["status"], "held", result)
         self.assertEqual(result["operations"], [])
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             self.assertEqual(connection.execute("SELECT * FROM offline_reconciliation").fetchall(), [])
 
     def test_dropped_checkpoint_table_cannot_reset_initialized_database(self):
         self.assertEqual(self.run_store()["status"], "ready")
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute("DROP TABLE offline_reconciliation")
         result = self.run_store()
         self.assertEqual(result["status"], "held", result)
         self.assertEqual(result["operations"], [])
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             self.assertEqual(connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
                              .fetchall(), [])
 
     def test_unrelated_database_is_held_without_adding_simulator_state(self):
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             connection.execute("CREATE TABLE fixture_original (value TEXT)")
             connection.execute("INSERT INTO fixture_original VALUES ('synthetic original')")
         result = self.run_store()
         self.assertEqual(result["status"], "held", result)
-        with sqlite3.connect(self.db) as connection:
+        with closing(sqlite3.connect(self.db)) as connection, connection:
             self.assertEqual(connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
                              .fetchall(), [("fixture_original",)])
             self.assertEqual(connection.execute("SELECT value FROM fixture_original").fetchall(),

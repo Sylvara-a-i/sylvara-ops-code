@@ -17,6 +17,7 @@ const {
   REPORT_SUMMARY_ACTION,
   reportSummaryPatch,
   validateReportOperation,
+  reportCrmPatchMatches,
 } = require("./report-summary");
 const { CANONICAL_PLAN_BY_CRM_API_VALUE } = require("./crm-client");
 const { syncVersionedReport } = require("./versioned-report");
@@ -445,14 +446,7 @@ function createLifecycleHandler(
       });
     };
     const patch = reportSummaryPatch(config, summary);
-    const patchMatches = (deal) => Object.entries(patch).every(([field, expected]) => (
-      expected === null
-        ? Object.hasOwn(deal, field) && deal[field] === null
-        : new Set(["Test_Start_At", "Test_End_At"]).has(field)
-          ? Number.isFinite(Date.parse(deal[field]))
-            && Date.parse(deal[field]) === Date.parse(expected)
-          : deal[field] === expected
-    ));
+    const patchMatches = (deal) => reportCrmPatchMatches(deal, patch);
     const freshReportMatches = async () => {
       try {
         const refreshed = validateCommon(await crmClient.getContext(state.deal.id), config);

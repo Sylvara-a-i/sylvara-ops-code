@@ -1,6 +1,7 @@
 "use strict";
 
 const { HttpBoundaryError, requestJson } = require("./http");
+const { reportCrmPatchMatches } = require("./report-summary");
 
 const RECORD_ID = /^[1-9][0-9]{7,29}$/;
 // CRM returns the picklist's immutable API value, not its current UI label.
@@ -312,7 +313,7 @@ function createCrmClient(config, {
     return readback;
   }
 
-  async function updateDealReportSummary(deal, patch) {
+  async function updateDealReportSummary(deal, patch, { requireExactAck = false } = {}) {
     if (!plainObject(deal) || !plainObject(patch)) {
       fail("CRM report-summary update is malformed", { publicCode: "configuration_invalid" });
     }
@@ -347,8 +348,12 @@ function createCrmClient(config, {
           skip_feature_execution: [{ name: "cadences" }],
         }),
       }, { write: true, sideEffecting: true });
+      if (requireExactAck && response.status !== 200) {
+        fail("CRM rejected the report write", classifyStatus(response.status, true));
+      }
       if (response.status === 200) parseUpdate(response.json, deal.id);
-    } catch {
+    } catch (error) {
+      if (requireExactAck) throw error;
       // A write timeout is ambiguous. The exact Deal readback below is the only
       // authority and prevents a retry from fabricating a second state transition.
     }
@@ -361,18 +366,10 @@ function createCrmClient(config, {
         publicCode: "reconciliation_required",
       });
     }
-    for (const [field, expected] of entries) {
-      const matches = expected === null
-        ? Object.hasOwn(readback, field) && readback[field] === null
-        : new Set(["Test_Start_At", "Test_End_At"]).has(field)
-          ? Number.isFinite(Date.parse(readback[field]))
-            && Date.parse(readback[field]) === Date.parse(expected)
-          : readback[field] === expected;
-      if (!matches) fail("CRM report-summary readback does not match", {
-        ambiguous: true,
-        publicCode: "reconciliation_required",
-      });
-    }
+    if (!reportCrmPatchMatches(readback, patch)) fail("CRM report-summary readback does not match", {
+      ambiguous: true,
+      publicCode: "reconciliation_required",
+    });
     return readback;
   }
 
