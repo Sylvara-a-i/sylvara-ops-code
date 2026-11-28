@@ -122,12 +122,15 @@ operating threshold or permission for a day of stale availability.
 
 ## Short native proof note: Family, iCloud and freshness
 
-Still unproven: the **exact Family calendar object**, owning iCloud account,
-sharing membership and effective read permission of the proposed collector;
-complete enumeration/read access for every designated personal, shared,
-subscribed and hidden iCloud calendar. Apple displaying these calendars together
-does not prove Google can see them. Neither a provider capability nor the word
-“Family” establishes the account, object or access path.
+Still unproven: each exact provider/account/calendar object, its owner, sharing
+membership and effective read permission of the proposed collector. The Apple
+allowlist and the separately authorized Google Family Free requirement are
+different source sets. An Apple family calendar is not the Google Family object.
+Keep the exact approved labels and object mapping in the private execution packet;
+never infer identity, authorization or provider from a display name. Inventory
+hidden, shared and subscribed calendars to establish identity, but include only
+explicitly authorized objects in the blocking plan. Apple displaying calendars
+together does not prove that Google or the collector can read them.
 
 With separately authorized synthetic native probes, prove Free events, moved
 and cancelled recurrence instances, deletion and all-day/DST intervals reach the
@@ -143,6 +146,117 @@ collection and restarted reconciliation. Establish and approve an operating
 freshness threshold, detection interval and failure response for every Family/
 iCloud source. A fresh Google read does not establish fresh upstream coverage.
 No native visibility, latency or end-to-end availability claim is made here.
+
+## First isolated Bookings availability test
+
+This is a prepared native procedure, **not an executed test or write approval**.
+The planner has no provider adapter. Do not improvise one from a browser session,
+public feed, inferred API payload or successful offline result. Source collection,
+owned projection writes/readback and Bookings availability reads must first have
+qualified contracts. An unavailable source remains held; never substitute an
+empty successful snapshot or clear its checkpoint to get a baseline.
+
+### Scope and admission
+
+1. Bind the private packet to the source revision, actual integration identity,
+   exact source objects, private Google destination, Bookings staff/service and
+   saved conflict selections. Four approved Apple sources and the separate Google
+   Family source require independent results. Other visible calendars are not
+   implicitly authorized. Keep personal Google visibility evidence separate from
+   permission to use it as an additional blocking source.
+2. Prove metadata enumeration and an authorized minimal event read as the
+   **collector**, separately from owner/client visibility. For Free/private
+   intervals, read only identity, status, availability, interval and recurrence
+   fields needed for normalization. A free/busy response is insufficient to prove
+   that a Free event was collected. Missing fields or masked intervals hold.
+3. Obtain separate authorization for exactly one attendee-free, private synthetic
+   fixture per unproved source, processed serially. The approval must bind actual
+   source/destination IDs, test window, write operations, expiry, cleanup and
+   notification suppression. Do not modify an existing source event. If private
+   visibility or suppression cannot be guaranteed, do not create the fixture.
+4. Confirm the test cannot affect prospect/customer availability: use an already
+   isolated staff/service or an explicitly approved contained window. Read both
+   the staff and public booking surfaces without submitting a booking. If the
+   chosen service is live and no isolation boundary exists, hold; do not change
+   Bookings or create another service to make the test possible.
+5. Capture current duration, buffers, timezone, scheduling increments, lead-time
+   rules and complete offered slots for the same fixed UTC window on both
+   surfaces. Keep that window sufficiently in the future that notice thresholds
+   cannot cross it during the approved test. Approve the maximum propagation
+   wait and freshness limits in advance; elapsed time is never success.
+
+### Baseline -> block -> restore, once per source
+
+Let `B_staff` and `B_public` be each surface's baseline offered UTC starts. They
+must agree for the same staff/service and window; otherwise hold. Choose a shared
+offered start `s`, observed duration `d`, buffers `b_before`/`b_after`, and fixture
+interval `F = [s, s + d)`. For each surface calculate:
+
+```text
+affected(B) = { t in B : t - b_before < F.end
+                        and F.start < t + d + b_after }
+expected_blocked(B) = B minus affected(B)
+expected_restored(B) = B
+```
+
+The affected set must be nonempty. Include neighboring starts in the readback
+window to detect excess blocking and buffer errors. Compute the entire expected
+set from observed rules; do not accept a single vanished slot as proof.
+
+| Phase | Exact action and readback | Acceptance |
+| --- | --- | --- |
+| Baseline | Fresh complete source, destination and checkpoint reads; then staff and public slot reads. Save the destination's existing IDs/version digests privately, including unrelated overlapping events. Run the planner without dispatching writes. | Baseline plan is `ready` with zero operations; no prior fixture/projection for this run; the chosen interval is offered on both surfaces. Existing source holds, repairs or unrelated conflicts stop admission. |
+| Block | After scoped approval, create one new private source fixture with zero attendees, no reminders/invitations and suppressed notifications. Use Free for the separate Google Family case and for a source whose Free visibility is unproved. Record the returned exact fixture identity privately. Read the direct source, collector snapshot, planned operation, destination projection, then both slot surfaces. | Before dispatch, the entire plan contains only one upsert for this fixture's derived owned projection, and its ID is absent from baseline. After dispatch, exactly that private Busy projection exists with zero attendees and no copied source details; each surface equals its own `expected_blocked(B)`. Every pre-existing source and unrelated destination event remains unchanged. |
+| Restore | Remove only the fixture whose returned identity, version and ownership match the private receipt. Obtain a fresh complete source snapshot and plan without writes. Dispatch only after the entire plan is exactly one deletion of the recorded fixture-owned projection. Read the exact projection and both slot surfaces again. | Fixture and its projection are absent; each surface equals its own baseline. Every unrelated event and booking survives unchanged. A second reconciliation proposes zero operations. |
+
+Keep the plan binding and complete source set unchanged across all three phases.
+Revalidate freshness and the exact source/destination versions immediately before
+dispatch. Hold the whole test if the planner proposes any unrelated repair,
+deletion or additional projection, or if readback differs outside the fixture.
+Never filter a broader plan into a supposedly safe subset. The provider adapter
+must enforce version/ownership preconditions; a post-write preservation check
+does not make an unguarded write safe.
+
+Record actual source-change, upstream-read, collector-read, projection-readback
+and staff/public observation times for both block and restore. Stop at the
+approved deadline on disagreement or incomplete evidence. Treat a write timeout
+as unknown: inspect the exact recorded identity before any retry. Never delete
+by title, date range or whole-calendar selection, and never remove a projection
+solely because a source failed to read. If the fixture is gone but cleanup cannot
+be proven, retain the block and checkpoint, stop the isolated test, and reconcile
+under the same ownership boundary. Do not hide the uncertainty by restoring an
+old whole-calendar snapshot.
+
+Run the next source only after exact restoration and a fresh baseline. A source
+that passes Busy but not Free/private visibility remains held for strict blocking.
+Retain only aliases, observation times, counts, availability-set comparisons and
+preservation verdicts in the sanitized receipt. Keep IDs, version digests and
+minimal interval evidence private; omit titles, notes, attendees and event bodies.
+
+### Appointment lifecycle remains separate
+
+For this availability test the notification owner is **none**: no booking,
+appointment move/cancel or message is admitted. For a later appointment lifecycle
+test, the single proposed notification owner is **native Zoho Bookings**; the
+adapter must never send an additional email, invitation or cancellation.
+
+The required order is: observe conflict -> keep the confirmed appointment and
+ordinary source event unchanged -> record an explicit host change proposal ->
+obtain customer acceptance of an exact replacement -> re-read current appointment
+version and offered availability -> perform one separately authorized native
+Bookings transition -> independently read back that appointment and verify one
+attributable native notice. Host cancellation has its own explicit authorization
+and must not be inferred from a missing source event. An ambiguous transition or
+notice is reconciled before any retry. If native Bookings cannot prove pending
+proposal state, acceptance-before-confirmation and one notice owner, lifecycle
+automation remains held and host actions stay in native Bookings. This order is
+a qualification requirement, not a claim that those provider semantics passed.
+
+The existing recurrence, cancellation, stale/incomplete snapshot and durable
+checkpoint tests remain the offline evidence. The overlap lifecycle regression
+additionally removes one of two independently owned overlapping projections,
+proves the other and unrelated destination records remain unchanged, then removes
+the last owned projection and proves exact baseline restoration plus no-op replay.
 
 ## Boundary and containment
 

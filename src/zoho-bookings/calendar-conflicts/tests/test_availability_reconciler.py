@@ -242,6 +242,64 @@ class ReconcilerTests(unittest.TestCase):
         self.assertEqual(len(matching), 2)
         self.assertNotEqual(matching[0]["id"], matching[1]["id"])
 
+    def test_overlapping_owners_release_only_after_each_source_event_is_removed(self):
+        for identity_case in ("same_source", "different_sources"):
+            for removal in ("tombstone", "complete_omission"):
+                with self.subTest(identity_case=identity_case, removal=removal):
+                    self.setUp()
+                    for source in self.snapshot["sources"]:
+                        source["events"] = []
+                    foreign = {
+                        "id": "fixture-foreign-overlap", "projection": None,
+                        "body": {"summary": "Synthetic original", "transparency": "opaque",
+                                 "start": {"dateTime": at(23, 13)},
+                                 "end": {"dateTime": at(23, 14)},
+                                 "attendees": ["fixture@example.invalid"]},
+                    }
+                    baseline = json.dumps([foreign], sort_keys=True)
+                    self.target["events"] = [copy.deepcopy(foreign)]
+                    first = event("fixture-overlap", at(23, 13), at(23, 14))
+                    self.snapshot["sources"][0]["events"] = [first]
+                    initial = self.establish()
+                    self.assertEqual(len(initial["operations"]), 1)
+                    first_id = initial["operations"][0]["event"]["id"]
+
+                    # Equal intervals are independent obligations, even when the
+                    # provider reuses an event reference across source calendars.
+                    survivor_source = 0 if identity_case == "same_source" else 1
+                    survivor_ref = ("fixture-overlap-second" if survivor_source == 0
+                                    else "fixture-overlap")
+                    survivor = event(survivor_ref, at(23, 13), at(23, 14))
+                    self.snapshot["sources"][survivor_source]["events"].append(survivor)
+                    self.advance()
+                    added = self.establish()
+                    self.assertEqual(len(added["operations"]), 1)
+                    self.assertEqual(added["operations"][0]["op"], "upsert")
+                    survivor_projection = copy.deepcopy(added["operations"][0]["event"])
+                    self.assertNotEqual(first_id, survivor_projection["id"])
+
+                    self.advance()
+                    if removal == "tombstone":
+                        first.update(status="cancelled", start=None, end=None)
+                    else:
+                        self.snapshot["sources"][0]["events"].remove(first)
+                    removed = self.establish()
+                    self.assertEqual(removed["operations"], [{"op": "delete", "id": first_id}])
+                    self.assertEqual(self.target["events"], [foreign, survivor_projection])
+                    self.assertEqual(json.dumps(self.target["events"][:1], sort_keys=True),
+                                     baseline)
+
+                    self.advance()
+                    survivor.update(status="cancelled", start=None, end=None)
+                    restored = self.establish()
+                    self.assertEqual(restored["operations"],
+                                     [{"op": "delete", "id": survivor_projection["id"]}])
+                    self.assertEqual(json.dumps(self.target["events"], sort_keys=True), baseline)
+                    replay = self.run_check()
+                    self.assert_ready(replay)
+                    self.assertEqual(replay["operations"], [])
+                    self.assertEqual(json.dumps(self.target["events"], sort_keys=True), baseline)
+
     def test_equivalent_duplicate_instances_and_utc_spellings_collapse(self):
         self.establish()
         duplicate = copy.deepcopy(self.snapshot["sources"][0]["events"][1])
